@@ -2306,6 +2306,23 @@ main() {
             spec.assert_true(b.wait_for_text("No comments"), "deleted")
             g.command("view.panel name=none")
         }
+        spec.it("Protect Sheet from the Edit panel: a locked cell refuses what is typed, an unlocked one takes it") callback {
+            g.command("sheet.add name=Guarded")
+            g.command("view.panel name=edit")
+            g.pick("B", 2)
+            b.click("Unlock cells")
+            spec.assert_true(b.wait_for_text("Guarded not protected"), "B2 unlocked, the sheet not yet protected")
+            b.click("Protect sheet")
+            spec.assert_true(b.wait_for_text("Guarded protected"), "protected")
+            g.enter("A1", "5")
+            spec.assert_true(b.wait_for_text("on a protected sheet"), "the refusal said")
+            spec.assert_eq(string.length(g.cell_text("A", 1)), 0, "A1 unchanged")
+            g.enter("B2", "6")
+            spec.assert_true(g.wait_cell("B", 2, "6"), "B2, unlocked, took it")
+            b.click("Unprotect sheet")
+            spec.assert_true(b.wait_for_text("Guarded not protected"), "unprotected")
+            g.command("view.panel name=none")
+        }
     }
     return spec.run_summary(fw)
 }

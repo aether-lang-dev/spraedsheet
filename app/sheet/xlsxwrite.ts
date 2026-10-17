@@ -20,6 +20,7 @@ import { threadLine } from "./notes.ts";
 import type { CommentThread } from "./notes.ts";
 import { drawingXml } from "./xlsxdrawings.ts";
 import { ROLES } from "./themes.ts";
+import { rangeName } from "./rules.ts";
 
 // A colour as SpreadsheetML writes one: a theme's role by its number (Excel
 // numbers its first four light, dark, light, dark), else ARGB.
@@ -113,7 +114,8 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
       names.push(`<definedName name="${escapeXml(n)}" localSheetId="${i}">${escapeXml(r.startsWith("=") ? r.slice(1) : absolute(prefix + r))}</definedName>`);
     }
   });
-  const book = `${HEAD}<workbook xmlns="${MAIN}" xmlns:r="${REL}"><workbookPr${wb.dateSystem === 1904 ? ' date1904="1"' : ""}/><sheets>${
+  const book = `${HEAD}<workbook xmlns="${MAIN}" xmlns:r="${REL}"><workbookPr${wb.dateSystem === 1904 ? ' date1904="1"' : ""}/>${
+    wb.bookProtection ? `<workbookProtection${wb.bookProtection.hash ? ` workbookPassword="${wb.bookProtection.hash}"` : ""} lockStructure="1"/>` : ""}<sheets>${
     pages.map((p, i) => `<sheet name="${escapeXml(p.name)}" sheetId="${i + 1}"${p.hiddenSheet ? ' state="hidden"' : ""} r:id="rId${i + 1}"/>`).join("")}</sheets>${
     names.length ? `<definedNames>${names.join("")}</definedNames>` : ""}</workbook>`;
   const n = pages.length;
@@ -131,7 +133,8 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
   };
   const xfXml = xfs.map((x) => {
     const id = fmtId(x.code), al = x.look.align || x.look.wrap ? `<alignment${x.look.align ? ` horizontal="${({ start: "left", center: "center", end: "right" } as Record<string, string>)[x.look.align]}"` : ""}${x.look.wrap ? ' wrapText="1"' : ""}/>` : "";
-    return `<xf numFmtId="${id}" fontId="${x.font}" fillId="${x.fill}" borderId="${x.border}" xfId="0"${id ? ' applyNumberFormat="1"' : ""}${x.font ? ' applyFont="1"' : ""}${x.fill ? ' applyFill="1"' : ""}${x.border ? ' applyBorder="1"' : ""}${al ? ' applyAlignment="1">' + al + "</xf>" : "/>"}`;
+    const unlocked = (x.look as { unlocked?: boolean }).unlocked, pr = unlocked ? '<protection locked="0"/>' : "";
+    return `<xf numFmtId="${id}" fontId="${x.font}" fillId="${x.fill}" borderId="${x.border}" xfId="0"${id ? ' applyNumberFormat="1"' : ""}${x.font ? ' applyFont="1"' : ""}${x.fill ? ' applyFill="1"' : ""}${x.border ? ' applyBorder="1"' : ""}${al ? ' applyAlignment="1"' : ""}${pr ? ' applyProtection="1"' : ""}${al || pr ? `>${al}${pr}</xf>` : "/>"}`;
   }).join("");
   const styles = `${HEAD}<styleSheet xmlns="${MAIN}">${ownCodes.length ? `<numFmts count="${ownCodes.length}">${ownCodes.map((c, i) => `<numFmt numFmtId="${164 + i}" formatCode="${escapeXml(c)}"/>`).join("")}</numFmts>` : ""}<fonts count="${fonts.length}">${fonts.join("")}</fonts><fills count="${fills.length}">${fills.join("")}</fills><borders count="${borders.length}">${borders.join("")}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfXml}</cellXfs>${dxfs.length ? `<dxfs count="${dxfs.length}">${dxfs.join("")}</dxfs>` : ""}</styleSheet>`;
   const shared = `${HEAD}<sst xmlns="${MAIN}" count="${strings.length}" uniqueCount="${strings.length}">${strings.map((s) => `<si><t${/^\s|\s$|\n/.test(s) ? ' xml:space="preserve"' : ""}>${escapeXml(s)}</t></si>`).join("")}</sst>`;
@@ -187,7 +190,8 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
     const a = addrOf(k)!, input = page.sheet.input(k), note = page.notes.get(k);
     const look = wb.lookOf(note) ?? {}, code = note.format || look.number || "";
     const { number: _n, ...drawn } = look;
-    const s = styleOf(/[#0?@]|general|[ymdhs]/i.test(code) ? code : "", JSON.parse(JSON.stringify(drawn)));
+    // An unlocked cell's xf says so (its protection), as part of its look.
+    const s = styleOf(/[#0?@]|general|[ymdhs]/i.test(code) ? code : "", { ...JSON.parse(JSON.stringify(drawn)), ...(note.unlocked ? { unlocked: true } : {}) });
     if (input === "" && !s) continue;
     const v: Value = page.sheet.value(k), attrS = s ? ` s="${s}"` : "";
     let c: string;
@@ -257,7 +261,7 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
   });
   const drawingRid = page.drawings.length ? relBase + tables.length + urls.length : 0;
   const threadRid = threads.length ? relBase + tables.length + urls.length + (drawingRid ? 1 : 0) : 0;
-  const xml = `${HEAD}<worksheet xmlns="${MAIN}" xmlns:r="${REL}"><sheetViews><sheetView${page.gridlines ? "" : ' showGridLines="0"'}${page.headings ? "" : ' showRowColHeaders="0"'} workbookViewId="0">${pane}</sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rowXml}</sheetData>${
+  const xml = `${HEAD}<worksheet xmlns="${MAIN}" xmlns:r="${REL}"><sheetViews><sheetView${page.gridlines ? "" : ' showGridLines="0"'}${page.headings ? "" : ' showRowColHeaders="0"'} workbookViewId="0">${pane}</sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rowXml}</sheetData>${protectionXml(page)}${
     merges ? `<mergeCells count="${page.merges.length}">${merges}</mergeCells>` : ""}${cf}${dvs.length ? `<dataValidations count="${dvs.length}">${dvs.join("")}</dataValidations>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}${breaksXml(page)}${drawingRid ? `<drawing r:id="rId${drawingRid}"/>` : ""}${comments.length ? '<legacyDrawing r:id="rId2"/>' : ""}${
     tables.length ? `<tableParts count="${tables.length}">${tables.map((_, i) => `<tablePart r:id="rId${relBase + i}"/>`).join("")}</tableParts>` : ""}</worksheet>`;
   return { xml, comments, tables, relBase, sparks, urls, drawingRid, threads, threadRid };
@@ -269,6 +273,15 @@ function breaksXml(page: Page): string {
   const { rows, cols } = page.breaks;
   const brk = (ids: readonly number[], max: number) => ids.map((i) => `<brk id="${i}" max="${max}" man="1"/>`).join("");
   return `${rows.length ? `<rowBreaks count="${rows.length}" manualBreakCount="${rows.length}">${brk(rows, 16383)}</rowBreaks>` : ""}${cols.length ? `<colBreaks count="${cols.length}" manualBreakCount="${cols.length}">${brk(cols, 1048575)}</colBreaks>` : ""}`;
+}
+
+// A protected sheet's sheetProtection (each allowance an attribute "0",
+// objects and scenarios "1" unless allowed) and its edit ranges.
+function protectionXml(page: Page): string {
+  const pr = page.protection, ranges = page.editRanges;
+  const sp = pr ? `<sheetProtection${pr.hash ? ` password="${pr.hash}"` : ""} sheet="1"${pr.allow.includes("objects") ? "" : ' objects="1"'}${pr.allow.includes("scenarios") ? "" : ' scenarios="1"'}${
+    pr.allow.filter((a) => a !== "objects" && a !== "scenarios").map((a) => ` ${a}="0"`).join("")}/>` : "";
+  return `${sp}${ranges.length ? `<protectedRanges>${ranges.map((r) => `<protectedRange${r.hash ? ` password="${r.hash}"` : ""} sqref="${rangeName(r.range)}" name="${escapeXml(r.title)}"/>`).join("")}</protectedRanges>` : ""}`;
 }
 
 // A rule as a dataValidation over its cells.

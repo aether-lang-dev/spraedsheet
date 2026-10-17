@@ -39,6 +39,7 @@ import { chartData, layout } from "./charts.ts";
 import { drawingShapes } from "./drawings.ts";
 import type { Drawing } from "./drawings.ts";
 import { imageOf } from "./functions.ts";
+import type { BookProtection, EditRange, SheetProtection } from "./protection.ts";
 import type { ChartData, ChartKind, ChartOptions, Shape } from "./charts.ts";
 import { rangeName } from "./rules.ts";
 import { sheetPrefix } from "./address.ts";
@@ -128,6 +129,12 @@ export interface Page {
   // Manual page breaks: the rows (0-based) a printed page begins at, and
   // the columns; Page Break Preview shows them (with the automatic ones).
   breaks: { readonly rows: readonly number[]; readonly cols: readonly number[] };
+  // Protect Sheet: on (with its password's hash, what it allows, its edit
+  // ranges) or null (protection.ts).
+  protection: SheetProtection | null;
+  // Allow Edit Ranges: ranges whose cells may be changed while it is
+  // protected (by a password of their own, when they have one).
+  editRanges: EditRange[];
 }
 
 export interface Scenario {
@@ -202,7 +209,7 @@ export interface Watch {
 // and the file's name and setup script. Not what is only looked at (the
 // clipboard, traces, watches, Show Formulas, Circle Invalid), and not
 // RexxJS's own state: what a setup script defined stays defined.
-interface Saved {
+export interface Saved {
   // What the change was, as Undo and Redo name it ("Merge Cells"); none for
   // the workbook saved before a change is known.
   readonly label?: string;
@@ -213,9 +220,10 @@ interface Saved {
   readonly setupScript: string;
   readonly styles: ReadonlyMap<string, Look>;
   readonly theme: Theme;
+  readonly bookProtection: BookProtection | null;
 }
 
-interface SavedPage {
+export interface SavedPage {
   readonly page: Page;
   readonly name: string;
   readonly sheet: SavedSheet;
@@ -230,7 +238,7 @@ const viewOf = (p: Omit<Page, "name" | "sheet" | "notes">): Omit<Page, "name" | 
   rules: [...p.rules], charts: [...p.charts], hiddenRows: new Set(p.hiddenRows), hiddenCols: new Set(p.hiddenCols),
   filtered: p.filtered && new Set(p.filtered), filter: p.filter, frozen: p.frozen, frozenCols: p.frozenCols, merges: [...p.merges],
   heights: new Map(p.heights), widths: new Map(p.widths), autoId: p.autoId, pivots: new Map(p.pivots),
-  tabColor: p.tabColor, hiddenSheet: p.hiddenSheet, rowLevels: new Map(p.rowLevels), colLevels: new Map(p.colLevels), slicers: [...p.slicers], scenarios: [...p.scenarios], drawings: [...p.drawings], gridlines: p.gridlines, headings: p.headings, breaks: p.breaks,
+  tabColor: p.tabColor, hiddenSheet: p.hiddenSheet, rowLevels: new Map(p.rowLevels), colLevels: new Map(p.colLevels), slicers: [...p.slicers], scenarios: [...p.scenarios], drawings: [...p.drawings], gridlines: p.gridlines, headings: p.headings, breaks: p.breaks, protection: p.protection, editRanges: [...p.editRanges],
 });
 
 // A name for the whole workbook: a range of one of its sheets, or a
@@ -351,6 +359,10 @@ export class Workbook {
   selection = "A1";
   // Who comments are signed by (File > Options > User name).
   userName = "User";
+  // Protect Workbook: its structure locked, with its password's hash (or
+  // null); and the edit ranges opened by their passwords this session.
+  bookProtection: BookProtection | null = null;
+  readonly openedRanges = new Set<string>();
   selecting = false;
   // How a URL is handed to the system (a hyperlink followed): "" when it
   // was, or why not. The app's view sets it to sae's shell.open.
@@ -461,7 +473,7 @@ export class Workbook {
       keys.add(key);
     };
     page = { name, sheet: new Sheet({ changed }, language, context), notes: new CellNotes(), rules: [], charts: [],
-      hiddenRows: new Set(), hiddenCols: new Set(), filtered: null, filter: null, frozen: 0, frozenCols: 0, merges: [], heights: new Map(), widths: new Map(), autoId: null, pivots: new Map(), tabColor: null, hiddenSheet: false, rowLevels: new Map(), colLevels: new Map(), slicers: [], scenarios: [], drawings: [], gridlines: true, headings: true, breaks: { rows: [], cols: [] } };
+      hiddenRows: new Set(), hiddenCols: new Set(), filtered: null, filter: null, frozen: 0, frozenCols: 0, merges: [], heights: new Map(), widths: new Map(), autoId: null, pivots: new Map(), tabColor: null, hiddenSheet: false, rowLevels: new Map(), colLevels: new Map(), slicers: [], scenarios: [], drawings: [], gridlines: true, headings: true, breaks: { rows: [], cols: [] }, protection: null, editRanges: [] };
     return page;
   }
 
@@ -571,6 +583,7 @@ export class Workbook {
     setDates(1900);
     this.styles = new Map(Object.entries(CELL_STYLES));
     this.theme = THEMES.Office;
+    this.bookProtection = null;
     this.carried = [];
     this.#pending.clear();
     this.#undo.length = 0;
@@ -582,7 +595,7 @@ export class Workbook {
     return {
       pages: this.#pages.map((p) => ({ page: p, name: p.name, sheet: p.sheet.saved(), notes: p.notes.saved(), view: viewOf(p) })),
       names: new Map(this.#names),
-      active: this.#active, name: this.name, setupScript: this.setupScript, styles: new Map(this.styles), theme: this.theme,
+      active: this.#active, name: this.name, setupScript: this.setupScript, styles: new Map(this.styles), theme: this.theme, bookProtection: this.bookProtection,
     };
   }
 
@@ -657,6 +670,14 @@ export class Workbook {
       this.#group.undone++;
       this.#group.low = Math.min(this.#group.low, this.#undo.length);
     }
+    return this.#apply(step);
+  }
+
+  // The workbook put back as `step` saved it, with no step of undo: a
+  // change refused after it was tried (a protected cell's).
+  putBack(step: Saved): Promise<string[]> { return this.#apply(step); }
+
+  async #apply(step: Saved): Promise<string[]> {
     const was = this.#active, before = this.sheet.keys();
     const ownNames = () => this.#pages.map((p) => JSON.stringify(p.sheet.names())).join("|");
     const namesBefore = ownNames();
@@ -671,6 +692,7 @@ export class Workbook {
     this.setupScript = step.setupScript;
     this.styles = new Map(step.styles);
     this.theme = step.theme;
+    this.bookProtection = step.bookProtection;
     let changed: string[] = [];
     for (const s of step.pages) {
       s.page.name = s.name;

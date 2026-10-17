@@ -47,3 +47,24 @@ export function editBar(v: SheetView): void {
     v.btn("Clear cells", () => v.run("range.clearAll", { range: v.range() }));
   });
 }
+
+// Review's protection: the selection locked or unlocked, the sheet
+// protected (with the password field's password and, when the box says
+// so, formatting allowed) or unprotected, the workbook's structure, and an
+// edit range over the selection; the line under them says what is so.
+export function protectBar(v: SheetView): void {
+  const password = state(""), said = state("");
+  const told = async () => { const o = await v.run("protect.state"); said.set(o.message); };
+  const pw = () => (password.value ? { password: password.value } : {});
+  ui.hstack(() => {
+    bind(ui.securefield("protection password", () => {}), password);
+    v.btn("Lock cells", async () => { await v.run("protect.lock", { range: v.range() }); await told(); });
+    v.btn("Unlock cells", async () => { await v.run("protect.lock", { range: v.range(), locked: "0" }); await told(); });
+    v.btn("Protect sheet", async () => { await v.run("protect.sheet", pw()); await told(); });
+    v.btn("Unprotect sheet", async () => { await v.run("protect.sheet", { off: "1", ...pw() }); await told(); });
+    v.btn("Protect workbook", async () => { await v.run("protect.workbook", pw()); await told(); });
+    v.btn("Unprotect workbook", async () => { await v.run("protect.workbook", { off: "1", ...pw() }); await told(); });
+    v.btn("Allow edit range", async () => { await v.run("protect.allowRange", { title: `Range${v.wb.page(v.wb.active)!.editRanges.length + 1}`, range: v.range(), ...pw() }); await told(); });
+  });
+  bind(ui.text(""), said);
+}

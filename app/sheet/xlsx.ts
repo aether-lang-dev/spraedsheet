@@ -14,6 +14,7 @@ import type { El } from "./xml.ts";
 import { COLS, ROWS, addrOf, colName, keyOf } from "./address.ts";
 import { moved } from "./excel.ts";
 import type { Look } from "./formats.ts";
+import { ALLOWS } from "./protection.ts";
 import { PASS_THROUGH, cfRulesOf, readThreads, tableOf, unmodelled } from "./xlsxparts.ts";
 import { readDrawings } from "./xlsxdrawings.ts";
 
@@ -162,7 +163,7 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
   if (parts.has(sstPath)) for (const si of kids(parseXml(utf8Text(parts.get(sstPath)!)), "si")) strings.push(stringOf(si));
   // Number formats and looks by style index (cellXfs); the differential
   // styles conditional formatting names (dxfs).
-  const formats: string[] = [], looks: (Look | null)[] = [];
+  const formats: string[] = [], looks: (Look | null)[] = [], unlocked: boolean[] = [];
   let dxfs: El[] = [];
   const stylesPath = [...wbRels.values()].find((p) => /styles\.xml$/i.test(p)) ?? "xl/styles.xml";
   if (parts.has(stylesPath)) {
@@ -175,8 +176,12 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
       const id = Number(attr(xf, "numFmtId") ?? 0);
       formats.push(own.get(id) ?? BUILTIN_FORMATS[id] ?? "");
       looks.push(lookOf(xf, fonts, fills, borders));
+      const pr = kid(xf, "protection");
+      unlocked.push(!!pr && ["0", "false"].includes(attr(pr, "locked") ?? ""));
     }
   }
+  // Protect Workbook: its structure locked.
+  const wp = kid(wb, "workbookProtection"), bookLock = wp && ["1", "true"].includes((attr(wp, "lockStructure") ?? "").toLowerCase()) ? wp : null;
   const date1904 = ["1", "true"].includes((attr(kid(wb, "workbookPr") ?? { name: "", attrs: {}, children: [] }, "date1904") ?? "").toLowerCase());
   const sheetEls = kids(kid(wb, "sheets") ?? { name: "", attrs: {}, children: [] }, "sheet");
   if (!sheetEls.length) throw new RangeError("an XLSX workbook with no sheets");
@@ -230,8 +235,8 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
         }
         const si = Number(attr(c, "s") ?? 0), format = formats[si] ?? "", look: Look = { ...(looks[si] ?? {}), ...(format && format !== "General" ? { number: format } : {}) };
         if (!key) { if (input !== "") off++; continue; }
-        if (input === "" && !Object.keys(look).length) continue;
-        cells[key] = Object.keys(look).length ? { content: input, look } : input;
+        if (input === "" && !Object.keys(look).length && !unlocked[si]) continue;
+        cells[key] = Object.keys(look).length || unlocked[si] ? { content: input, ...(Object.keys(look).length ? { look } : {}), ...(unlocked[si] ? { unlocked: true } : {}) } : input;
       }
     }
     for (const col of all(ws, "col")) {
@@ -325,7 +330,16 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
     const rules = cfRulesOf(ws, dxfs, name, report);
     const tables = [...sheetRels.values()].filter((t) => /tables\/table\d+\.xml$/i.test(t) && parts.has(t)).map((t) => tableOf(parseXml(utf8Text(parts.get(t)!)))).filter((t) => t);
     sheetXmls.push(utf8Text(xml));
-    sheets.push({ name, cells, view, merges, names: {}, rules, tables, ...(drawings.length ? { drawings } : {}) });
+    // Its protection: on, its password's hash, what it allows (an attribute
+    // "0" lifts that lock); its edit ranges.
+    const sp = kid(ws, "sheetProtection"), on = (e: El, a: string) => ["1", "true"].includes((attr(e, a) ?? "").toLowerCase());
+    const protection = sp && on(sp, "sheet") ? {
+      ...(attr(sp, "password") ? { hash: attr(sp, "password")!.toUpperCase() } : {}),
+      allow: ALLOWS.filter((a) => (a === "objects" || a === "scenarios" ? !on(sp, a) : ["0", "false"].includes((attr(sp, a) ?? "").toLowerCase()))),
+    } : null;
+    if (sp && attr(sp, "algorithmName")) report.push(`${name}: its protection's password is a hashed one (${attr(sp, "algorithmName")}) this app does not check: protected with none`);
+    const editRanges = all(ws, "protectedRange").map((r) => ({ title: attr(r, "name") ?? "Range", range: (attr(r, "sqref") ?? "").split(/\s+/)[0], ...(attr(r, "password") ? { hash: attr(r, "password")!.toUpperCase() } : {}) })).filter((r) => r.range);
+    sheets.push({ name, cells, view, merges, names: {}, rules, tables, ...(drawings.length ? { drawings } : {}), ...(protection ? { protection } : {}), ...(editRanges.length ? { editRanges } : {}) });
   });
   if (off) report.push(`${off} cell${off === 1 ? "" : "s"} past ${colName(COLS - 1)}${ROWS}, the sheet's edge, left out`);
   // The defined names: a sheet's own (localSheetId), the workbook's.
@@ -346,6 +360,7 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
   const file: Record<string, unknown> = {
     name: fileName.replace(/\.xlsx$/i, ""), formulas: "excel", sheetName: first.name, ...first,
     sheets: rest, ...(Object.keys(bookNames).length ? { bookNames } : {}), ...(date1904 ? { dateSystem: 1904 } : {}),
+    ...(bookLock ? { bookProtection: attr(bookLock, "workbookPassword") ? { hash: attr(bookLock, "workbookPassword")!.toUpperCase() } : {} } : {}),
   };
   delete file.name;
   file.name = fileName.replace(/\.xlsx$/i, "");

@@ -34,6 +34,9 @@ export interface Note {
   // A picture placed in the cell (Place in Cell): its bytes as base64, its
   // alternative text; drawn over the cell, fitted to it.
   readonly picture?: CellPicture;
+  // Format Cells > Protection > Locked unchecked: the cell may be changed
+  // on a protected sheet (every cell is locked until then).
+  readonly unlocked?: true;
 }
 
 export interface CellPicture {

@@ -96,7 +96,9 @@ export const MENUS: readonly Menu[] = [
     i("Comment", "cell.comment"), i("Number format", "cell.format"), "-",
     i("New comment", "comment.new"), i("Reply", "comment.reply"), i("Resolve thread", "comment.resolve"), i("Reopen thread", "comment.resolve"), i("Delete thread", "comment.delete"),
     i("Convert notes to comments", "comment.convertNotes"), i("Show comments", "comment.list"), "-",
-    i("Add watch", "formulas.watch"),
+    i("Add watch", "formulas.watch"), "-",
+    i("Lock cells", "protect.lock"), i("Unlock cells", "protect.lock"), i("Protect sheet", "protect.sheet"), i("Unprotect sheet", "protect.sheet"),
+    i("Protect workbook", "protect.workbook"), i("Unprotect workbook", "protect.workbook"), i("Allow edit range", "protect.allowRange"),
   ] },
   { label: "Script", items: [
     i("Run script", "page.script"), i("Run the setup script", "setup.run"), i("Commands", "page.commands"),
@@ -107,7 +109,7 @@ export const MENUS: readonly Menu[] = [
 // uses (setting and reading a cell), what a panel's own list runs on one
 // of its rows (a watch, a chart, a finding), and the getters.
 export const NOT_IN_MENUS: Readonly<Record<string, string>> = {
-  "cell.set": "typing in a cell", "cell.get": "a getter", "comment.get": "a getter (GETCOMMENTTHREAD)", "comment.author": "a setting (SETUSERNAME)", "cell.about": "a getter", "sheet.state": "a getter",
+  "cell.set": "typing in a cell", "cell.get": "a getter", "protect.state": "a getter (ISPROTECTED, ISLOCKED)", "protect.removeRange": "a script's (Allow Edit Ranges' Delete)", "protect.openRange": "asked for on a change (UNLOCKRANGE)", "comment.get": "a getter (GETCOMMENTTHREAD)", "comment.author": "a setting (SETUSERNAME)", "cell.about": "a getter", "sheet.state": "a getter",
   "cell.editor": "a script's (SETCELLEDITOR)", "cell.toggle": "the cell's editor", "edit.pasteText": "a paste from another app",
   "ids.configure": "a script's (the Tauri app's auto IDs)", "ids.find": "a script's", "columns.move": "a column's header dragged",
   "columns.width": "a column's edge dragged", "names.list": "the names bar lists them", "formulas.unwatch": "a watch's own button",

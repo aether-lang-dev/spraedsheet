@@ -25,7 +25,7 @@ import { validationBar } from "./sheet/view/validationbar.ts";
 import { editorBar } from "./sheet/view/editorbar.ts";
 import { sheetGrid, splitPane } from "./sheet/view/grid.ts";
 import { sheetTabs } from "./sheet/view/sheettabs.ts";
-import { editBar } from "./sheet/view/editbar.ts";
+import { editBar, protectBar } from "./sheet/view/editbar.ts";
 import { findBar } from "./sheet/view/findbar.ts";
 import { auditBar } from "./sheet/view/auditbar.ts";
 import { rulesBar } from "./sheet/view/rulesbar.ts";
@@ -58,7 +58,7 @@ statusBar(sheet);
 ui.divider();
 // The bars, as panels under the grid, one open at a time (view.panel).
 panelTabs(sheet);
-sheet.panel("edit", () => editBar(sheet));
+sheet.panel("edit", () => { editBar(sheet); protectBar(sheet); });
 sheet.panel("looks", () => { lookBar(sheet); notesBar(sheet); commentsBar(sheet); });
 sheet.panel("view", () => viewBar(sheet));
 sheet.panel("names", () => namesBar(sheet));

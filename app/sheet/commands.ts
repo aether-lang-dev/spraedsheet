@@ -73,6 +73,8 @@ import { infer, run as runFill } from "./flashfill.ts";
 const resolvedColour = (c: string | null): string | null => (c === null ? null : resolved(c));
 const NUMERIC_TEXT = /^\s*[-+]?(?:\d+\.?\d*|\.\d+)\s*$/;
 import { CellError } from "./values.ts";
+import { PROTECTED, STRUCTURE, allowsOf, needOf, opens, passwordHash, within } from "./protection.ts";
+import type { Saved } from "./workbook.ts";
 import type { Value } from "./values.ts";
 import type { Direction, Filter, LanguageName, Page, Pivot, Scenario, Workbook } from "./workbook.ts";
 import { statsLine } from "./workbook.ts";
@@ -389,6 +391,8 @@ async function open(wb: Workbook, file: SheetFile): Promise<Outcome> {
     page.slicers = [...s.slicers];
     page.scenarios = [...s.scenarios];
     page.drawings = [...s.drawings];
+    page.protection = s.protection;
+    page.editRanges = [...s.editRanges];
     page.autoId = s.autoId;
     page.pivots = new Map(s.pivots);
     page.merges = s.merges.map((m) => parseRange(m)!);
@@ -405,6 +409,7 @@ async function open(wb: Workbook, file: SheetFile): Promise<Outcome> {
     if (page && range) await wb.defineName(n, { page, range });
   }
   wb.activate(file.sheets[0].name);
+  wb.bookProtection = file.bookProtection;
   wb.name = file.name;
   wb.setupScript = file.setupScript;
   await wb.settle();
@@ -1179,6 +1184,99 @@ const SPECS: readonly Spec[] = [
     run: async (wb, p) => {
       wb.userName = p.name.trim() || refuse("a user name is not empty");
       return { ok: true, message: `comments by ${wb.userName}`, changed: [], output: wb.userName };
+    },
+  },
+  {
+    // Format Cells > Protection > Locked (locked=0 to unlock): what Protect
+    // Sheet guards. Not while the sheet is protected.
+    id: "protect.lock", label: "Locked", params: ["range"], optional: ["locked"], journaled: true,
+    run: async (wb, p) => {
+      const page = wb.page(wb.active)!, r = rangeOf(p.range), lock = flag(p.locked ?? "1");
+      if (page.protection) refuse(PROTECTED);
+      const keys = range(r[0], r[1]);
+      for (const k of keys) wb.notes.set(k, { unlocked: lock ? undefined : true });
+      return changedBy(wb, [], `${rangeName(r)} ${lock ? "locked" : "unlocked"}`);
+    },
+  },
+  {
+    // Protect Sheet, with a password and what it still allows (formatCells,
+    // insertRows, sort ...); off=1 Unprotect Sheet, by its password.
+    id: "protect.sheet", label: "Protect Sheet", params: [], optional: ["password", "allow", "off"], journaled: true,
+    run: async (wb, p) => {
+      const page = wb.page(wb.active)!;
+      if (flag(p.off ?? "0")) {
+        if (!page.protection) refuse(`${page.name} is not protected`);
+        if (!opens(page.protection!.hash, p.password ?? "")) refuse("The password you supplied is not correct.");
+        page.protection = null;
+        return changedBy(wb, [], `${page.name} unprotected`);
+      }
+      if (page.protection) refuse(`${page.name} is protected already`);
+      let allow: ReturnType<typeof allowsOf> = [];
+      try { allow = allowsOf(p.allow ?? ""); } catch (e) { refuse((e as Error).message); }
+      const hash = passwordHash(p.password ?? "");
+      page.protection = { ...(hash ? { hash } : {}), allow };
+      return changedBy(wb, [], `${page.name} protected${hash ? " with a password" : ""}${allow.length ? `, allowing ${allow.join(", ")}` : ""}`);
+    },
+  },
+  {
+    // Protect Workbook (its structure); off=1 to unprotect, by its password.
+    id: "protect.workbook", label: "Protect Workbook", params: [], optional: ["password", "off"], journaled: true,
+    run: async (wb, p) => {
+      if (flag(p.off ?? "0")) {
+        if (!wb.bookProtection) refuse("the workbook is not protected");
+        if (!opens(wb.bookProtection!.hash, p.password ?? "")) refuse("The password you supplied is not correct.");
+        wb.bookProtection = null;
+        return { ok: true, message: "the workbook unprotected", changed: [] };
+      }
+      if (wb.bookProtection) refuse("the workbook is protected already");
+      const hash = passwordHash(p.password ?? "");
+      wb.bookProtection = hash ? { hash } : {};
+      return { ok: true, message: `the workbook's structure protected${hash ? " with a password" : ""}`, changed: [] };
+    },
+  },
+  {
+    // Allow Edit Ranges: a range whose cells may be changed on the
+    // protected sheet, at once or (password=) once its password is given.
+    id: "protect.allowRange", label: "Allow Edit Ranges", params: ["title", "range"], optional: ["password"], journaled: true,
+    run: async (wb, p) => {
+      const page = wb.page(wb.active)!, title = p.title.trim() || refuse("an edit range has a title"), r = rangeOf(p.range);
+      if (page.protection) refuse(PROTECTED);
+      const hash = passwordHash(p.password ?? "");
+      const ranges = page.editRanges.filter((x) => x.title.toLowerCase() !== title.toLowerCase());
+      page.editRanges = [...ranges, { title, range: r, ...(hash ? { hash } : {}) }];
+      return changedBy(wb, [], `${title}: ${rangeName(r)} may be edited when ${page.name} is protected${hash ? ", by its password" : ""}`);
+    },
+  },
+  {
+    id: "protect.removeRange", label: "Delete Edit Range", params: ["title"], journaled: true,
+    run: async (wb, p) => {
+      const page = wb.page(wb.active)!, ranges = page.editRanges;
+      if (page.protection) refuse(PROTECTED);
+      if (!ranges.some((x) => x.title.toLowerCase() === p.title.trim().toLowerCase())) refuse(`no edit range ${p.title}`);
+      page.editRanges = ranges.filter((x) => x.title.toLowerCase() !== p.title.trim().toLowerCase());
+      return changedBy(wb, [], `edit range ${p.title} deleted`);
+    },
+  },
+  {
+    // An edit range's password given, as Excel asks for it on the first
+    // change: its cells may be changed until the workbook is closed.
+    id: "protect.openRange", label: "Unlock Range", params: ["title", "password"], journaled: false,
+    run: async (wb, p) => {
+      const page = wb.page(wb.active)!, er = page.editRanges.find((x) => x.title.toLowerCase() === p.title.trim().toLowerCase()) ?? refuse(`no edit range ${p.title}`);
+      if (!opens(er.hash, p.password)) refuse("The password you supplied is not correct.");
+      wb.openedRanges.add(`${page.name}!${er.title}`);
+      return { ok: true, message: `${er.title} may be edited`, changed: [] };
+    },
+  },
+  {
+    // What is protected: the sheet (and what it allows), its edit ranges,
+    // the workbook's structure; and whether a cell is locked.
+    id: "protect.state", label: "Protection", params: [], optional: ["cell"], journaled: false,
+    run: async (wb, p) => {
+      const page = wb.page(wb.active)!, pr = page.protection;
+      const ranges = page.editRanges.map((r) => `${r.title}=${rangeName(r.range)}${r.hash ? " (password)" : ""}`);
+      const out = { sheet: pr ? 1 : 0, password: pr?.hash ? 1 : 0, allow: pr?.allow ?? [], ranges, workbook: wb.bookProtection ? 1 : 0, ...(p.cell ? { locked: wb.notes.get(cellOf(p.cell)).unlocked ? 0 : 1 } : {}) };
+      return { ok: true, message: `${pr ? `${page.name} protected${out.allow.length ? `, allowing ${out.allow.join(", ")}` : ""}` : `${page.name} not protected`}${ranges.length ? `; edit ranges ${ranges.join(", ")}` : ""}${wb.bookProtection ? "; the workbook's structure protected" : ""}`, changed: [], output: out };
     },
   },
   {
@@ -3869,12 +3967,24 @@ export class Commands {
       // The workbook as it was, kept as a step to undo once the command has
       // changed it.
       const before = spec!.journaled && !spec!.unstepped ? this.#wb.saved() : null;
+      // Protection: what a protected sheet does not allow refused at once;
+      // a change that may touch a locked cell, or the workbook's guarded
+      // structure, tried and taken back if it did.
+      const guarded = spec!.journaled ? this.#guard(id) : null;
+      const tried = guarded ? before ?? this.#wb.saved() : null;
       // Several areas ("A1:B2,D4:D9", a multiple selection): the command
       // over each, every one read first, as one step and one line.
       const areas = AREAS.has(id) && params.range?.includes(",") ? params.range.split(",").map((a) => a.trim()) : null;
       if (areas) for (const a of areas) rangeOf(a);
       if (!AREAS.has(id) && !OWN_AREAS.has(id) && params.range?.includes(",")) refuse(`${spec!.label} cannot be used on several areas (${params.range})`);
       const outcome = areas ? await this.#overAreas(spec!, params, areas) : await spec!.run(this.#wb, params, this.#store);
+      if (outcome.ok && guarded && tried) {
+        const why = this.#breach(tried, guarded);
+        if (why) {
+          await this.#wb.putBack(tried);
+          refuse(why);
+        }
+      }
       if (outcome.ok && before) this.#wb.changed(before, spec!.label);
       if (outcome.ok && spec!.journaled) this.#journal.push(lineOf(id, params));
       return outcome;
@@ -3882,6 +3992,45 @@ export class Commands {
       if (e instanceof Refused || e instanceof RangeError) return { ok: false, message: e.message, changed: [] };
       throw e;
     }
+  }
+
+  // What a command must be checked for: "cells" (a protected sheet's
+  // locked cells and the rest of it), "looks" (the same, its formatting let
+  // through), "book" (the workbook's structure alone), or null; or refused
+  // now, for what the sheet's protection does not allow.
+  #guard(id: string): { readonly cells: boolean; readonly looks: boolean } | null {
+    const page = this.#wb.page(this.#wb.active)!, pr = page.protection, book = !!this.#wb.bookProtection;
+    if (!pr) return book ? { cells: false, looks: false } : null;
+    const need = needOf(id);
+    if (need === "free") return book ? { cells: false, looks: false } : null;
+    if (need === "never") refuse(PROTECTED);
+    if (need === "cells") return { cells: true, looks: false };
+    if (!pr.allow.includes(need)) refuse(PROTECTED);
+    return need === "formatCells" ? { cells: true, looks: true } : book ? { cells: false, looks: false } : null;
+  }
+
+  // Why a change tried must be taken back, or "": a protected sheet's
+  // locked cell changed (its value, or its look unless that is allowed),
+  // the rest of that sheet changed, or the protected workbook's sheets.
+  #breach(was: Saved, g: { readonly cells: boolean; readonly looks: boolean }): string {
+    const wb = this.#wb, sheets = (pages: readonly { readonly name: string; readonly view: { readonly hiddenSheet: boolean } }[]) => pages.map((p) => `${p.name}${p.view.hiddenSheet ? "(hidden)" : ""}`).join("|");
+    if (wb.bookProtection && sheets(was.pages) !== sheets(wb.pages().map((p) => ({ name: p.name, view: p })))) return STRUCTURE;
+    if (!g.cells) return "";
+    const page = wb.page(wb.active)!, old = was.pages.find((s) => s.page === page);
+    if (!old || !page.protection) return "";
+    const now = page.sheet.saved(), looks = new Set(["look", "format", "style", "cellStyle", "styleExpression"]);
+    const noteText = (n: object | undefined) => JSON.stringify(Object.entries(n ?? {}).filter(([k]) => !(g.looks && looks.has(k))).sort());
+    const open = (k: string) => page.editRanges.some((r) => within(cellAddr(k)!, r.range) && (!r.hash || wb.openedRanges.has(`${page.name}!${r.title}`)));
+    const keys = new Set([...old.sheet.inputs.keys(), ...now.inputs.keys(), ...old.notes.keys(), ...page.notes.keys()]);
+    for (const k of keys) {
+      const changed = (old.sheet.inputs.get(k) ?? "") !== (now.inputs.get(k) ?? "") || noteText(old.notes.get(k)) !== noteText(page.notes.get(k));
+      if (changed && !old.notes.get(k)?.unlocked && !open(k)) return PROTECTED;
+    }
+    // The rest of the sheet (rows, merges, rules, charts ...), but for its
+    // conditional formats when formatting is allowed.
+    const viewText = (v: object) => JSON.stringify(v, (key, x) => (key === "filtered" || (g.looks && key === "rules") ? undefined : x instanceof Map || x instanceof Set ? [...x] : x));
+    const { name: _n, sheet: _s, notes: _o, ...view } = page;
+    return viewText(old.view) !== viewText(view) ? PROTECTED : "";
   }
 
   async #overAreas(spec: Spec, params: Params, areas: readonly string[]): Promise<Outcome> {

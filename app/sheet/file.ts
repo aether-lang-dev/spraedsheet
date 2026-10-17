@@ -41,6 +41,8 @@ import type { AutoId, Filter, Page, Pivot, Workbook } from "./workbook.ts";
 import { AGGREGATES } from "./pivot.ts";
 import { SHAPES } from "./drawings.ts";
 import type { Drawing } from "./drawings.ts";
+import { ALLOWS } from "./protection.ts";
+import type { Allow, BookProtection, EditRange, SheetProtection } from "./protection.ts";
 import { AUTOMATIC } from "./sheet.ts";
 import type { Calc } from "./sheet.ts";
 import type { Aggregate } from "./pivot.ts";
@@ -67,6 +69,8 @@ export interface FileSheet {
   readonly slicers: readonly Slicer[];
   readonly scenarios: readonly Scenario[];
   readonly drawings: readonly Drawing[];
+  readonly protection: SheetProtection | null;
+  readonly editRanges: readonly EditRange[];
   readonly tables: readonly TableDef[];
   readonly autoId: AutoId | null;
   readonly pivots: readonly [string, Pivot][];
@@ -84,6 +88,8 @@ export interface SheetFile {
   readonly cellStyles: readonly [string, Look][];
   // Its theme, whole (themes.ts), when not Office.
   readonly theme: Theme;
+  // Protect Workbook (its structure), with its password's hash: or null.
+  readonly bookProtection: BookProtection | null;
 }
 
 interface FileCell {
@@ -102,6 +108,7 @@ interface FileCell {
   readonly hyperlink?: unknown;
   readonly picture?: unknown;
   readonly thread?: unknown;
+  readonly unlocked?: unknown;
 }
 
 type Cells = Record<string, string | FileCell>;
@@ -137,6 +144,7 @@ function noteOf(c: string | FileCell): Note {
   if (c.ignoreError === true) note.ignoreError = true;
   const pic = c.picture as { data?: unknown; alt?: unknown } | undefined;
   if (pic && typeof pic === "object" && typeof pic.data === "string" && pic.data) note.picture = { data: pic.data, ...(typeof pic.alt === "string" && pic.alt ? { alt: pic.alt } : {}) };
+  if (c.unlocked === true) note.unlocked = true;
   const h = c.hyperlink as { target?: unknown; tip?: unknown } | undefined;
   const t = c.thread as { author?: unknown; text?: unknown; replies?: unknown; resolved?: unknown } | undefined;
   const remark = (r: any) => (r && typeof r.author === "string" && typeof r.text === "string" ? { author: r.author, text: r.text } : null);
@@ -226,6 +234,8 @@ function sheetOf(name: string, s: any): FileSheet {
     scenarios: Array.isArray(s?.scenarios) ? s.scenarios.filter((x: any) => x && typeof x.name === "string" && Array.isArray(x.cells) && Array.isArray(x.values))
       .map((x: any): Scenario => ({ name: x.name, cells: x.cells.map(String), values: x.values.map(String), ...(x.comment ? { comment: String(x.comment) } : {}) })) : [],
     drawings: drawingsOf(s?.drawings),
+    protection: protectionOf(s?.protection),
+    editRanges: editRangesOf(s?.editRanges),
     autoId: autoIdOf(s?.autoId),
     pivots: pivotsOf(s?.pivots),
   };
@@ -251,6 +261,16 @@ function autoIdOf(a: any): AutoId | null {
   return at && Number.isInteger(next) ? { column: at.col, next, prefix: String(a?.prefix ?? "") } : null;
 }
 
+// A sheet's protection as written: its hash, what it allows, its edit
+// ranges; what is not one of Excel's allowances is left out.
+function protectionOf(x: any): SheetProtection | null {
+  if (!x || typeof x !== "object") return null;
+  const allow = Array.isArray(x.allow) ? x.allow.filter((a: unknown): a is Allow => (ALLOWS as readonly unknown[]).includes(a)) : [];
+  return { ...(typeof x.hash === "string" && x.hash ? { hash: x.hash } : {}), allow };
+}
+const editRangesOf = (x: unknown): EditRange[] => (Array.isArray(x) ? x.filter((r: any) => r && typeof r.title === "string" && parseRange(String(r.range)))
+  .map((r: any): EditRange => ({ title: r.title, range: parseRange(String(r.range))!, ...(typeof r.hash === "string" && r.hash ? { hash: r.hash } : {}) })) : []);
+
 export function readSheetFile(data: any): SheetFile {
   const others = Array.isArray(data?.sheets) ? data.sheets : [];
   return {
@@ -265,6 +285,7 @@ export function readSheetFile(data: any): SheetFile {
     calculation: calcOf(data?.calculation),
     dateSystem: Number(data?.dateSystem) === 1904 ? 1904 : 1900,
     theme: themeOf(data?.theme),
+    bookProtection: data?.bookProtection && typeof data.bookProtection === "object" ? { ...(typeof data.bookProtection.hash === "string" && data.bookProtection.hash ? { hash: data.bookProtection.hash } : {}) } : null,
     cellStyles: data?.cellStyles && typeof data.cellStyles === "object" && !Array.isArray(data.cellStyles)
       ? Object.entries(data.cellStyles as Record<string, unknown>).filter(([, l]) => l && typeof l === "object").map(([n, l]): [string, Look] => [n, l as Look]) : [],
   };
@@ -327,6 +348,8 @@ const viewIn = (page: Page) => ({
 // A sheet's parts as the file has them.
 const sheetIn = (p: Page) => ({
   cells: cellsOf(p), names: namesOf(p), rules: rulesIn(p), charts: chartsIn(p), view: viewIn(p), merges: p.merges.map(rangeName), tables: tablesIn(p), ...(p.slicers.length ? { slicers: p.slicers } : {}), ...(p.scenarios.length ? { scenarios: p.scenarios } : {}), ...(p.drawings.length ? { drawings: p.drawings.map((d) => ({ ...d, at: keyOf(d.at) })) } : {}),
+  ...(p.protection ? { protection: { ...(p.protection.hash ? { hash: p.protection.hash } : {}), allow: p.protection.allow } } : {}),
+  ...(p.editRanges.length ? { editRanges: p.editRanges.map((r) => ({ title: r.title, range: rangeName(r.range), ...(r.hash ? { hash: r.hash } : {}) })) } : {}),
   ...(p.autoId ? { autoId: { column: colName(p.autoId.column), next: p.autoId.next, prefix: p.autoId.prefix } } : {}),
   ...(p.pivots.size ? {
     pivots: [...p.pivots].map(([id, pv]) => ({
@@ -350,6 +373,7 @@ export function writeSheetFile(wb: Workbook) {
     ...calcIn(wb.calculation),
     ...(wb.dateSystem === 1904 ? { dateSystem: 1904 } : {}),
     ...(ownStyles(wb).length ? { cellStyles: Object.fromEntries(ownStyles(wb)) } : {}),
+    ...(wb.bookProtection ? { bookProtection: wb.bookProtection } : {}),
     ...(JSON.stringify(wb.theme) !== JSON.stringify(THEMES.Office) ? { theme: THEMES[wb.theme.name] === wb.theme ? wb.theme.name : wb.theme } : {}),
   };
 }

@@ -414,6 +414,16 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   LISTCOMMENTS: async (exec) => stem((await must(exec, "comment.list")).output as string[]),
   CONVERTNOTES: async (exec, r) => (await must(exec, "comment.convertNotes", text(r) ? { range: text(r) } : {})).message,
   SETUSERNAME: async (exec, n) => String((await must(exec, "comment.author", { name: text(n) })).output),
+  // Protection (Review > Protect Sheet, Protect Workbook, Allow Edit Ranges).
+  LOCKCELLS: async (exec, r, l) => (await must(exec, "protect.lock", { range: text(r), ...(text(l) ? { locked: text(l) } : {}) })).message,
+  PROTECTSHEET: async (exec, pw, allow) => (await must(exec, "protect.sheet", { ...(text(pw) ? { password: text(pw) } : {}), ...(text(allow) ? { allow: text(allow) } : {}) })).message,
+  UNPROTECTSHEET: async (exec, pw) => (await must(exec, "protect.sheet", { off: "1", ...(text(pw) ? { password: text(pw) } : {}) })).message,
+  PROTECTWORKBOOK: async (exec, pw) => (await must(exec, "protect.workbook", text(pw) ? { password: text(pw) } : {})).message,
+  UNPROTECTWORKBOOK: async (exec, pw) => (await must(exec, "protect.workbook", { off: "1", ...(text(pw) ? { password: text(pw) } : {}) })).message,
+  ALLOWEDITRANGE: async (exec, t, r, pw) => (await must(exec, "protect.allowRange", { title: text(t), range: text(r), ...(text(pw) ? { password: text(pw) } : {}) })).message,
+  UNLOCKRANGE: async (exec, t, pw) => (await must(exec, "protect.openRange", { title: text(t), password: text(pw) })).message,
+  ISPROTECTED: async (exec) => ((await must(exec, "protect.state")).output as { sheet: number }).sheet,
+  ISLOCKED: async (exec, c) => ((await must(exec, "protect.state", { cell: text(c) })).output as { locked: number }).locked,
   FORECASTSHEET: async (exec, t, v, end, opts) => (await must(exec, "data.forecastSheet", { timeline: text(t), values: text(v), end: text(end), ...pairs(opts) })).message,
   // Data Analysis: ANALYZE("regression", "A1:C20", "E1", "labels=1;alpha=0.05").
   ANALYZE: async (exec, tool, input, output, opts) => (await must(exec, "data.analyze", { tool: text(tool), input: text(input), output: text(output), ...pairs(opts) })).message,
