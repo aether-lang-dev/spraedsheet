@@ -84,6 +84,9 @@ export function sheetGrid(v: SheetView): void {
   // a formula held back for it: its cell (row, model column) and text.
   let pointing = false;
   let held: { r: number; c: number; text: string } | null = null;
+  // While the editor is opened again on the held cell: the move that makes
+  // tells on_cell_select, which is not a click to point.
+  let reopening = false;
   const typed = (text: string | null) => {
     v.wb.typing(text);
     ui.datagrid_refresh(v.grid);
@@ -113,11 +116,17 @@ export function sheetGrid(v: SheetView): void {
         v.follow();
         return;
       }
+      if (reopening) return;
       const key = keyAt(r, ui.datagrid_col_model(v.grid, c));
       if (key && held) {
         const { r: hr, c: hc } = held;
         held = { ...held, text: held.text + key };
-        ui.datagrid_edit(v.grid, hr, v.viewCol(hc));
+        reopening = true;
+        try {
+          ui.datagrid_edit(v.grid, hr, v.viewCol(hc));
+        } finally {
+          reopening = false;
+        }
         held = null;
         return;
       }

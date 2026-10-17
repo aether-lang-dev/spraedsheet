@@ -48,6 +48,34 @@ cursor_boxes() -> int {
     return n
 }
 
+// How many in-cell editors are over the grid (text fields with no
+// placeholder: the page's own fields all have one). One while a cell is
+// edited, none after.
+open_editors() -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 - 1 }
+    n = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(w, "type"), "textfield") == 1 && string.length(uidriver.field_str(w, "placeholder")) == 0 { n = n + 1 }
+        i = i + 1
+    }
+    json.json_free(v)
+    return n
+}
+
+// 1 once `want` editors are open.
+wait_editors(want: int) -> int {
+    i = 0
+    while i < 40 {
+        if open_editors() == want { return 1 }
+        sleep(50)
+        i = i + 1
+    }
+    return 0
+}
+
 // 1 once the cursor's box is on one cell alone.
 wait_one_box() -> int {
     i = 0
@@ -1803,6 +1831,69 @@ main() {
             g.command("view.split off=1")
             g.pick("D", 9)
             spec.assert_true(wait_one_box(), "after split and unsplit, one box (${cursor_boxes()})")
+        }
+        spec.it("no editor left over the grid: points clicked in, then Return, a click away, Escape, the focus elsewhere, another sheet, undo") callback {
+            g.command("sheet.add name=Editors")
+            g.command("cell.set cell=B3 input=5")
+            g.command("cell.set cell=C4 input=1000")
+            g.goto("A1")
+            g.pick("A", 1)
+            spec.assert_eq(open_editors(), 0, "no editor to begin with")
+            // Two references pointed in, then Return.
+            g.pick("D", 5)
+            g.key("equal")
+            g.pick("B", 3)
+            spec.assert_true(uidriver.wait_body_contains("/widget/${g.editor()}", "=B3", 40), "pointed at B3")
+            spec.assert_true(wait_editors(1), "one editor while pointing (${open_editors()})")
+            uidriver.post_ok("/widget/${g.editor()}/set_text?v=%3DB3%2B", "typed +")
+            sleep(150)
+            g.pick("C", 4)
+            spec.assert_true(uidriver.wait_body_contains("/widget/${g.editor()}", "=B3+C4", 40), "and at C4")
+            spec.assert_true(wait_editors(1), "still one editor (${open_editors()})")
+            uidriver.post_ok("/widget/${g.editor()}/submit", "Return in the editor")
+            spec.assert_true(g.wait_cell("D", 5, "1005"), "entered: =B3+C4")
+            spec.assert_true(wait_editors(0), "Return: no editor left (${open_editors()})")
+            spec.assert_true(wait_one_box(), "and one cursor box (${cursor_boxes()})")
+            spec.assert_eq(g.cell_has("B", 3, "1f6fd1"), 0, "B3's outline gone")
+            // A reference pointed in, then a click away commits it.
+            g.pick("E", 6)
+            g.key("equal")
+            g.pick("B", 3)
+            spec.assert_true(uidriver.wait_body_contains("/widget/${g.editor()}", "=B3", 40), "pointed at B3 again")
+            g.pick("F", 9)
+            spec.assert_true(g.wait_cell("E", 6, "5"), "a click away entered =B3")
+            spec.assert_true(wait_editors(0), "a click away: no editor left (${open_editors()})")
+            // Escape mid-point.
+            g.pick("E", 7)
+            g.key("equal")
+            g.pick("C", 4)
+            g.key("Escape")
+            spec.assert_true(wait_editors(0), "Escape: no editor left (${open_editors()})")
+            spec.assert_true(wait_one_box(), "one cursor box (${cursor_boxes()})")
+            spec.assert_eq(g.cell_has("C", 4, "1f6fd1"), 0, "C4's outline gone")
+            // The focus to the Name Box.
+            g.pick("E", 8)
+            g.key("equal")
+            g.pick("B", 3)
+            spec.assert_true(uidriver.wait_body_contains("/widget/${g.editor()}", "=B3", 40), "pointed once more")
+            uidriver.post_ok("/widget/${g.field("cell")}/click", "click the Name Box")
+            uidriver.post_ok("/widget/${g.field("cell")}/focus", "the focus to the Name Box")
+            spec.assert_true(wait_editors(0), "the focus elsewhere: no editor left (${open_editors()})")
+            // Another sheet's tab, mid-edit, and back.
+            g.pick("E", 9)
+            g.key("equal")
+            g.pick("C", 4)
+            b.click("Sheet1")
+            spec.assert_true(wait_editors(0), "another sheet: the edit closed, no editor left (${open_editors()})")
+            g.command("sheet.activate name=Editors")
+            spec.assert_true(wait_editors(0), "back: none (${open_editors()})")
+            spec.assert_eq(g.cell_has("C", 4, "1f6fd1"), 0, "no outline back on this sheet")
+            // Undo.
+            g.pick("F", 3)
+            g.key("Ctrl+Z")
+            sleep(200)
+            spec.assert_true(wait_editors(0), "undo: no editor (${open_editors()})")
+            spec.assert_true(wait_one_box(), "undo: one cursor box (${cursor_boxes()})")
         }
         spec.it("the formula bar's row: Name Box, fx, the formula taking the rest of the row and growing with the window, R1C1") callback {
             nb = g.field("cell")

@@ -208,6 +208,13 @@ export class SheetView {
 
   // The workbook shown again, in one batch (after a command, or a script).
   refresh(): void {
+    // Another sheet while a cell was being edited (its tab clicked, a
+    // script): the editor closed unstored, as Escape closes it, and its
+    // reference outlines with it, rather than left over the other sheet.
+    if (this.wb.active !== this.active.value && this.grid && ui.datagrid_editor(this.grid) !== 0) {
+      ui.datagrid_edit_cancel(this.grid);
+      this.wb.typing(null);
+    }
     batch(() => {
       this.problems.set(this.wb.sheet.problems());
       this.sheets.set(this.wb.sheetNames());
