@@ -12,7 +12,7 @@ import { complete, completed, cycleRef } from "../complete.ts";
 import type { SheetView } from "./view.ts";
 
 export function formulaBar(v: SheetView): void {
-  ui.hstack(() => {
+  v.formulaRow = ui.hstack(() => {
     const cell = ui.tooltip(bind(ui.textfield("cell", () => {}), v.address), "Name Box: a cell, or a name, to go to");
     ui.text("fx");
     const formula = ui.tooltip(bind(ui.textfield("formula", () => {}), v.input), "Formula bar: Return sets the cell");

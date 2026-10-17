@@ -61,7 +61,7 @@ export function buildPane(v: SheetView): void {
       });
       cell_style((r: number, c: number) => {
         const key = keyAt(r, c);
-        return key ? v.wb.styleOf(key) : "color: #6a6f7a; text-align: end";
+        return key ? gridded(v) + v.wb.styleOf(key) : "color: #6a6f7a; text-align: end";
       });
       on_cell_select((r: number, c: number) => {
         const key = keyAt(r, ui.datagrid_col_model(v.pane, c));
@@ -75,6 +75,20 @@ export function buildPane(v: SheetView): void {
     ui.datagrid_set_col_width(v.pane, 0, 34);
   });
 }
+
+// View > Gridlines: each cell's right and bottom edge in Excel's light grey,
+// under its own borders (which come after, and win).
+export const GRIDLINES = "border-right: 1px solid #e1e1e1; border-bottom: 1px solid #e1e1e1; ";
+export const gridded = (v: SheetView): string => (v.wb.page(v.wb.active)?.gridlines ? GRIDLINES : "");
+
+// Page Break Preview: each printed page's last row and column edged in
+// blue, a manual break heavier; worked out once a refresh (view.ts).
+export const previewed = (v: SheetView, key: string): string => {
+  const e = v.edges, a = addrOf(key);
+  if (!e || !a) return "";
+  const r = e.rows.get(a.row), c = e.cols.get(a.col);
+  return [r === undefined ? "" : `border-bottom: ${r ? 3 : 2}px solid #1f4e9e`, c === undefined ? "" : `border-right: ${c ? 3 : 2}px solid #1f4e9e`].filter((x) => x).map((x) => `${x}; `).join("");
+};
 
 export function sheetGrid(v: SheetView): void {
   const { cells, headers, edit_text, cell_style, on_cell_select, on_cell_edit, on_col_resize, column_width } = ui;
@@ -107,7 +121,7 @@ export function sheetGrid(v: SheetView): void {
     });
     cell_style((r: number, c: number) => {
       const key = keyAt(r, c);
-      return key ? v.wb.styleOf(key) : v.wb.dark ? "color: #6a6f7a; text-align: end; background: #e6e8ec" : "color: #6a6f7a; text-align: end";
+      return key ? [gridded(v) + v.wb.styleOf(key), v.edges ? previewed(v, key) : ""].filter((x) => x).join("; ") : v.wb.dark ? "color: #6a6f7a; text-align: end; background: #e6e8ec" : "color: #6a6f7a; text-align: end";
     });
     on_cell_select((r: number, c: number) => {
       // A row's number: the whole row, as Excel's row header.

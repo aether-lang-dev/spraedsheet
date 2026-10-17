@@ -1608,7 +1608,7 @@ main() {
             spec.assert_true(uidriver.wait_body_contains("/widget/${g.cell_id("B", 2)}", "\"borderTop\":\"3 #000000\"", 40), "drawn 3px wide")
             g.command("format.border range=D2:D4 edge=bottom style=medium color=red")
             spec.assert_true(uidriver.wait_body_contains("/widget/${g.cell_id("D", 4)}", "\"borderBottom\":\"2 #ff0000\"", 40), "the range's bottom, medium and red")
-            spec.assert_eq(g.cell_has("D", 2, "borderBottom"), 0, "not every cell's")
+            spec.assert_eq(g.cell_has("D", 2, "\"borderBottom\":\"2 #ff0000\""), 0, "not every cell's")
             g.command("view.panel name=none")
         }
         spec.it("conditional rules: a formula's rule from the Rules panel, moved to each cell; Stop If True") callback {
@@ -2216,6 +2216,46 @@ main() {
             g.command("view.appearance mode=system")
             spec.assert_true(uidriver.wait_body_contains("/widget/${nb}", "\"bg\":\"#ffffff\"", 40), "the system's again")
             g.command("range.clear range=A1")
+        }
+        spec.it("View: the gridlines drawn and hidden, the headings hidden and shown, the formula bar hidden and shown") callback {
+            g.command("sheet.add name=Views")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${g.cell_id("C", 3)}", "\"borderBottom\":\"1 #e1e1e1\"", 40), "gridlines: a cell's light grey edge")
+            g.command("view.panel name=view")
+            b.click("Gridlines")
+            spec.assert_true(b.wait_for_console("sheet: Views's gridlines hidden"), "hidden")
+            i = 0
+            while i < 40 && g.cell_has("C", 3, "#e1e1e1") == 1 { sleep(50); i = i + 1 }
+            spec.assert_eq(g.cell_has("C", 3, "#e1e1e1"), 0, "no grey edge")
+            y0 = uidriver.widget_int_field_by_id(g.cell_id("B", 1), "y")
+            b.click("Headings")
+            spec.assert_true(b.wait_for_console("sheet: Views's headings hidden"), "headings hidden")
+            i = 0
+            while i < 40 && uidriver.widget_int_field_by_id(g.cell_id("B", 1), "y") == y0 { sleep(50); i = i + 1 }
+            spec.assert_true(y0 - uidriver.widget_int_field_by_id(g.cell_id("B", 1), "y") >= 20, "the rows move up into the headers' place")
+            b.click("Headings")
+            b.click("Gridlines")
+            fb = g.formula_field()
+            b.click("Formula bar")
+            spec.assert_true(b.wait_for_console("sheet: the formula bar hidden"), "the formula bar hidden")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${fb}", "\"visible\":false", 40), "not shown")
+            b.click("Formula bar")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${fb}", "\"visible\":true", 40), "shown again")
+            g.command("view.panel name=none")
+        }
+        spec.it("Page Break Preview: each printed page's edge drawn blue, a manual break heavier") callback {
+            g.command("sheet.add name=Pages")
+            g.command("cell.set cell=A50 input=end")
+            g.command("view.panel name=view")
+            g.goto("A10")
+            b.click("Insert page break")
+            spec.assert_true(b.wait_for_console("sheet: page breaks: row 10"), "a break above row 10")
+            b.click("Page break preview")
+            spec.assert_true(b.wait_for_console("sheet: Page Break Preview"), "previewed")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${g.cell_id("A", 9)}", "\"borderBottom\":\"3 #1f4e9e\"", 40), "the manual break under row 9, heavier")
+            b.click("Page break preview")
+            spec.assert_true(b.wait_for_console("sheet: Normal view"), "back to Normal")
+            g.command("page.resetBreaks")
+            g.command("view.panel name=none")
         }
     }
     return spec.run_summary(fw)

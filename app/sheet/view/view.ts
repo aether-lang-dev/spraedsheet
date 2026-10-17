@@ -5,7 +5,7 @@
 // its outcome (what specs read), and shows the workbook again, in one batch.
 import { COLS, addrOf, keyOf, parseRange } from "../address.ts";
 import type { Addr } from "../address.ts";
-import { Commands } from "../commands.ts";
+import { Commands, pageEdges } from "../commands.ts";
 import type { Outcome, Params } from "../commands.ts";
 import type { Problem } from "../sheet.ts";
 import { Workbook } from "../workbook.ts";
@@ -52,6 +52,12 @@ export class SheetView {
   readonly slicers = state<SlicerView[]>([]);
   readonly drawings = state<DrawingView[]>([]);
   grid = 0;
+  // The formula bar's row (formulabar.ts), shown or hidden by View.
+  formulaRow = 0;
+  // Page Break Preview's page edges (commands.ts's pageEdges), or null.
+  edges: { rows: Map<number, boolean>; cols: Map<number, boolean> } | null = null;
+  #shownHeadings: boolean | null = null;
+  #shownFormulaBar = true;
   // The split pane (grid.ts's splitPane), its box, and whether it shows.
   pane = 0;
   paneBox = 0;
@@ -304,6 +310,19 @@ export class SheetView {
       if (this.pane) ui.datagrid_selection_glide(this.pane, glide);
       this.#shownGlide = glide;
       print(`sheet: animations ${glide ? `on (${glide} ms)` : "off"}`);
+    }
+    // View > Headings: the column letters and the row numbers; the
+    // formula bar.
+    const headings = this.wb.page(this.wb.active)?.headings ?? true;
+    if (this.grid && headings !== this.#shownHeadings) {
+      ui.datagrid_show_header(this.grid, headings ? 1 : 0);
+      ui.datagrid_hide_col(this.grid, 0, headings ? 0 : 1);
+      this.#shownHeadings = headings;
+    }
+    this.edges = this.wb.breakPreview ? pageEdges(this.wb, this.wb.page(this.wb.active)!) : null;
+    if (this.formulaRow && this.wb.formulaBar !== this.#shownFormulaBar) {
+      ui.set_visible(this.formulaRow, this.wb.formulaBar);
+      this.#shownFormulaBar = this.wb.formulaBar;
     }
     if (this.grid) {
       this.#showView();

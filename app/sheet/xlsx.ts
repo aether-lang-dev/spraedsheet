@@ -238,6 +238,13 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
         if (attr(col, "customWidth") === "1" && attr(col, "width")) (view.colWidths as [number, number][]).push([k, Math.round(Number(attr(col, "width")) * 7 + 5)]);
       }
     }
+    // Its manual page breaks.
+    const brks = (tag: string) => (kid(ws, tag) ? kids(kid(ws, tag)!, "brk") : []).filter((b) => ["1", "true"].includes(attr(b, "man") ?? "1")).map((b) => Number(attr(b, "id") ?? 0) | 0).filter((n) => n > 0);
+    if (kid(ws, "rowBreaks") || kid(ws, "colBreaks")) view.breaks = { rows: brks("rowBreaks"), cols: brks("colBreaks") };
+    // Its view: gridlines and headings shown or not.
+    const sv = all(ws, "sheetView")[0];
+    if (sv && ["0", "false"].includes(attr(sv, "showGridLines") ?? "")) view.gridlines = false;
+    if (sv && ["0", "false"].includes(attr(sv, "showRowColHeaders") ?? "")) view.headings = false;
     const pane = all(ws, "pane")[0];
     if (pane && (attr(pane, "state") === "frozen" || attr(pane, "state") === "frozenSplit")) {
       view.frozenRows = Number(attr(pane, "ySplit") ?? 0) | 0;

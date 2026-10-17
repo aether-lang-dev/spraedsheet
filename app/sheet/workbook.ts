@@ -121,6 +121,12 @@ export interface Page {
   scenarios: Scenario[];
   // Its pictures, text boxes and shapes (drawings.ts).
   drawings: Drawing[];
+  // View > Gridlines and Headings, as this sheet shows them (saved with it).
+  gridlines: boolean;
+  headings: boolean;
+  // Manual page breaks: the rows (0-based) a printed page begins at, and
+  // the columns; Page Break Preview shows them (with the automatic ones).
+  breaks: { readonly rows: readonly number[]; readonly cols: readonly number[] };
 }
 
 export interface Scenario {
@@ -223,7 +229,7 @@ const viewOf = (p: Omit<Page, "name" | "sheet" | "notes">): Omit<Page, "name" | 
   rules: [...p.rules], charts: [...p.charts], hiddenRows: new Set(p.hiddenRows), hiddenCols: new Set(p.hiddenCols),
   filtered: p.filtered && new Set(p.filtered), filter: p.filter, frozen: p.frozen, frozenCols: p.frozenCols, merges: [...p.merges],
   heights: new Map(p.heights), widths: new Map(p.widths), autoId: p.autoId, pivots: new Map(p.pivots),
-  tabColor: p.tabColor, hiddenSheet: p.hiddenSheet, rowLevels: new Map(p.rowLevels), colLevels: new Map(p.colLevels), slicers: [...p.slicers], scenarios: [...p.scenarios], drawings: [...p.drawings],
+  tabColor: p.tabColor, hiddenSheet: p.hiddenSheet, rowLevels: new Map(p.rowLevels), colLevels: new Map(p.colLevels), slicers: [...p.slicers], scenarios: [...p.scenarios], drawings: [...p.drawings], gridlines: p.gridlines, headings: p.headings, breaks: p.breaks,
 });
 
 // A name for the whole workbook: a range of one of its sheets, or a
@@ -359,6 +365,10 @@ export class Workbook {
   animations = true;
   glideMs = 120;
   dark = false;
+  // View > Formula Bar shown (a view of the window, not saved); View >
+  // Page Break Preview.
+  formulaBar = true;
+  breakPreview = false;
   // The panel open under the grid (menus.ts's PANELS), or null: a view.
   panel: string | null = null;
   // Show Formulas: the grid shows inputs rather than values.
@@ -448,7 +458,7 @@ export class Workbook {
       keys.add(key);
     };
     page = { name, sheet: new Sheet({ changed }, language, context), notes: new CellNotes(), rules: [], charts: [],
-      hiddenRows: new Set(), hiddenCols: new Set(), filtered: null, filter: null, frozen: 0, frozenCols: 0, merges: [], heights: new Map(), widths: new Map(), autoId: null, pivots: new Map(), tabColor: null, hiddenSheet: false, rowLevels: new Map(), colLevels: new Map(), slicers: [], scenarios: [], drawings: [] };
+      hiddenRows: new Set(), hiddenCols: new Set(), filtered: null, filter: null, frozen: 0, frozenCols: 0, merges: [], heights: new Map(), widths: new Map(), autoId: null, pivots: new Map(), tabColor: null, hiddenSheet: false, rowLevels: new Map(), colLevels: new Map(), slicers: [], scenarios: [], drawings: [], gridlines: true, headings: true, breaks: { rows: [], cols: [] } };
     return page;
   }
 

@@ -51,6 +51,9 @@ interface State {
   readonly zoom: number;
   readonly appearance: string;
   readonly animations: number;
+  readonly gridlines: number;
+  readonly headings: number;
+  readonly formulaBar: number;
   readonly hiddenSheets: readonly string[];
   readonly tabColors: Readonly<Record<string, string>>;
   readonly dateSystem: number;
@@ -278,6 +281,27 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // View > Animations: SETANIMATIONS(0) the selection jumps, 1 it glides.
   SETANIMATIONS: async (exec, on) => (await must(exec, "view.animations", yes(on) ? {} : { off: "1" })).output,
   GETANIMATIONS: async (exec) => (await state(exec)).animations,
+  // Page breaks: INSERTPAGEBREAK("A10") (a page begins at its row and its
+  // column), REMOVEPAGEBREAK, RESETPAGEBREAKS(), LISTPAGEBREAKS() (the
+  // printed pages' ranges, a stem).
+  INSERTPAGEBREAK: async (exec, c) => (await must(exec, "page.break", { cell: text(c) })).message,
+  REMOVEPAGEBREAK: async (exec, c) => (await must(exec, "page.break", { cell: text(c), off: "1" })).message,
+  RESETPAGEBREAKS: async (exec) => (await must(exec, "page.resetBreaks")).message,
+  LISTPAGEBREAKS: async (exec) => stem((await must(exec, "page.breaks")).output as string[]),
+  // View > Show: SETVIEW("gridlines", 0), "headings", "formulabar", "pagebreaks";
+  // GETVIEW("gridlines") 1 or 0.
+  SETVIEW: async (exec, w, on) => {
+    const shown = on === undefined || text(on) === "" || yes(on);
+    if (/^page\s*breaks?$/i.test(text(w).trim())) return (await must(exec, "view.pageBreakPreview", shown ? {} : { off: "1" })).output;
+    return (await must(exec, "view.show", { what: text(w), on: shown ? "1" : "0" })).output;
+  },
+  GETVIEW: async (exec, w) => {
+    const st = await state(exec), k = text(w).trim().toLowerCase().replace(/[\s_-]+/g, "");
+    if (k === "gridlines") return st.gridlines;
+    if (k === "headings") return st.headings;
+    if (k === "formulabar") return st.formulaBar;
+    throw new Error(`GETVIEW: ${text(w)} is not gridlines, headings or formulabar`);
+  },
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,

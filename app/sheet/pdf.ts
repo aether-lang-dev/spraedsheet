@@ -34,6 +34,10 @@ export interface PdfSheet {
   readonly firstCol: number;
   readonly colWidth: (col: number) => number;    // pt
   readonly rowHeight: (row: number) => number;   // pt
+  // Manual page breaks: the rows (columns), by their index here, a page
+  // begins at.
+  readonly rowBreaks?: readonly number[];
+  readonly colBreaks?: readonly number[];
 }
 
 export interface PageSetup {
@@ -51,12 +55,14 @@ const pdfText = (s: string) => `(${[...s].map((ch) => { const c = ch.charCodeAt(
 const rgb = (c: string) => { const h = c.replace("#", ""); return [0, 2, 4].map((i) => (parseInt(h.slice(i, i + 2), 16) / 255).toFixed(3)).join(" "); };
 const n = (x: number) => (Math.round(x * 100) / 100).toString();
 
-// The pages: each a run of rows and of columns that fit, down then over.
-export function paginate(sizes: readonly number[], room: number): [number, number][] {
+// The pages: each a run of rows and of columns that fit, down then over;
+// a manual break (an index in `breaks`) begins a page there whatever fits.
+export function paginate(sizes: readonly number[], room: number, breaks: readonly number[] = []): [number, number][] {
   const out: [number, number][] = [];
   let start = 0, used = 0;
+  const forced = new Set(breaks);
   sizes.forEach((s, i) => {
-    if (used + s > room && i > start) { out.push([start, i - 1]); start = i; used = 0; }
+    if ((used + s > room || forced.has(i)) && i > start) { out.push([start, i - 1]); start = i; used = 0; }
     used += s;
   });
   if (sizes.length) out.push([start, sizes.length - 1]);
@@ -69,7 +75,7 @@ export function writePdf(sheets: readonly PdfSheet[], setup: PageSetup): { bytes
   const streams: string[] = [];
   for (const sh of sheets) {
     const widths = Array.from({ length: sh.cols }, (_, c) => sh.colWidth(c)), heights = Array.from({ length: sh.rows }, (_, r) => sh.rowHeight(r));
-    const rowPages = paginate(heights, ph - 2 * setup.margin - foot - (setup.headings ? 14 : 0)), colPages = paginate(widths, pw - 2 * setup.margin - head);
+    const rowPages = paginate(heights, ph - 2 * setup.margin - foot - (setup.headings ? 14 : 0), sh.rowBreaks), colPages = paginate(widths, pw - 2 * setup.margin - head, sh.colBreaks);
     for (const [c1, c2] of colPages) for (const [r1, r2] of rowPages) {
       const ops: string[] = [];
       const x0 = setup.margin + head, top = ph - setup.margin - (setup.headings ? 14 : 0);

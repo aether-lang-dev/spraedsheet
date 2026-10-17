@@ -59,6 +59,9 @@ export interface FileSheet {
     readonly filter: Filter | null;
     readonly tabColor: string | null;
     readonly hidden: boolean;
+    readonly gridlines: boolean;
+    readonly headings: boolean;
+    readonly breaks: { readonly rows: readonly number[]; readonly cols: readonly number[] };
   };
   readonly merges: readonly string[];
   readonly slicers: readonly Slicer[];
@@ -180,7 +183,9 @@ function viewOf(v: any): FileSheet["view"] {
     frozenCols: Number.isInteger(v?.frozenCols) && v.frozenCols > 0 ? v.frozenCols : 0,
     rowHeights: sizes(v?.rowHeights), colWidths: sizes(v?.colWidths), filter,
     rowLevels: sizes(v?.rowLevels).filter(([, l]) => l <= 8), colLevels: sizes(v?.colLevels).filter(([, l]) => l <= 8),
-    tabColor: /^#[0-9a-f]{6}$/i.test(String(v?.tabColor ?? "")) ? String(v.tabColor).toLowerCase() : null, hidden: v?.hidden === true };
+    tabColor: /^#[0-9a-f]{6}$/i.test(String(v?.tabColor ?? "")) ? String(v.tabColor).toLowerCase() : null, hidden: v?.hidden === true,
+    gridlines: v?.gridlines !== false, headings: v?.headings !== false,
+    breaks: { rows: indexes(v?.breaks?.rows).filter((n) => n > 0), cols: indexes(v?.breaks?.cols).filter((n) => n > 0) } };
 }
 
 // Tables as written ({ name, range, headers, columns }), read back.
@@ -308,6 +313,8 @@ const viewIn = (page: Page) => ({
   // The filter's rows are worked out again when the file is opened.
   ...(page.filter ? { filter: { range: rangeName(page.filter.range), column: colName(page.filter.column), criterion: page.filter.criterion } } : {}),
   ...(page.tabColor ? { tabColor: page.tabColor } : {}), ...(page.hiddenSheet ? { hidden: true } : {}),
+  ...(page.gridlines ? {} : { gridlines: false }), ...(page.headings ? {} : { headings: false }),
+  ...(page.breaks.rows.length || page.breaks.cols.length ? { breaks: { rows: [...page.breaks.rows], cols: [...page.breaks.cols] } } : {}),
 });
 
 // A sheet's parts as the file has them.

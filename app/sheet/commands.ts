@@ -18,7 +18,7 @@ import { readXlsx } from "./xlsx.ts";
 import { readOds } from "./ods.ts";
 import { readXls } from "./xls.ts";
 import { decryptPackage, isEncrypted } from "./encrypted.ts";
-import { PAPER, writePdf } from "./pdf.ts";
+import { PAPER, paginate, writePdf } from "./pdf.ts";
 import type { PdfSheet } from "./pdf.ts";
 import { writeXlsx } from "./xlsxwrite.ts";
 import type { XlsxRead } from "./xlsx.ts";
@@ -309,6 +309,9 @@ async function open(wb: Workbook, file: SheetFile): Promise<Outcome> {
     page.frozenCols = s.view.frozenCols;
     page.tabColor = s.view.tabColor;
     page.hiddenSheet = s.view.hidden;
+    page.gridlines = s.view.gridlines;
+    page.breaks = s.view.breaks;
+    page.headings = s.view.headings;
     page.heights = new Map(s.view.rowHeights);
     page.widths = new Map(s.view.colWidths);
     page.rowLevels = new Map(s.view.rowLevels);
@@ -556,6 +559,7 @@ function pdfSheet(wb: Workbook, page: Page, r: [Addr, Addr] | null): PdfSheet {
   const was = wb.active;
   return {
     name: page.name, rows: rows.length, cols: cols.length, firstRow: r0, firstCol: c0,
+    rowBreaks: page.breaks.rows.map((x) => rows.indexOf(x)).filter((i) => i > 0), colBreaks: page.breaks.cols.map((x) => cols.indexOf(x)).filter((i) => i > 0),
     colWidth: (c) => (page.widths.get(cols[c]) ?? PDF_COLUMN_PX) * 0.75, rowHeight: (x) => (page.heights.get(rows[x]) ?? PDF_ROW_PX) * 0.75,
     cells: (ri, ci) => {
       const key = keyOf({ col: cols[ci], row: rows[ri] }), note = page.notes.get(key), look = wb.lookOf(note) ?? {}, v = page.sheet.value(key);
@@ -571,6 +575,36 @@ function pdfSheet(wb: Workbook, page: Page, r: [Addr, Addr] | null): PdfSheet {
   };
 }
 const PDF_COLUMN_PX = 80, PDF_ROW_PX = 24;
+
+// A sheet's manual breaks, as words: "row 10, row 20, column D", or "none".
+const breaksSaid = (page: Page): string => [...page.breaks.rows.map((r) => `row ${r + 1}`), ...page.breaks.cols.map((c) => `column ${colName(c)}`)].join(", ") || "none";
+
+// The ranges a sheet prints as, page by page (down, then over), with
+// file.exportPdf's margins: "A1:F45", ...
+function printedPages(wb: Workbook, page: Page, paper: string, landscape: boolean): string[] {
+  const sh = pdfSheet(wb, page, null);
+  if (!(paper in PAPER)) refuse(`${paper} is not a paper size (${Object.keys(PAPER).join(", ")})`);
+  const [w0, h0] = PAPER[paper], [pw, ph] = landscape ? [h0, w0] : [w0, h0], margin = 36;
+  const used = page.sheet.keys().map((k) => cellAddr(k)!);
+  const lastCol = Math.max(0, ...used.map((x) => x.col)), lastRow = Math.max(0, ...used.map((x) => x.row));
+  const cols = Array.from({ length: lastCol + 1 }, (_, i) => i).filter((c) => !page.hiddenCols.has(c));
+  const rows = Array.from({ length: lastRow + 1 }, (_, i) => i).filter((x) => !page.hiddenRows.has(x) && !page.filtered?.has(x));
+  const rp = paginate(Array.from({ length: sh.rows }, (_, i) => sh.rowHeight(i)), ph - 2 * margin - 18, sh.rowBreaks);
+  const cp = paginate(Array.from({ length: sh.cols }, (_, i) => sh.colWidth(i)), pw - 2 * margin, sh.colBreaks);
+  return cp.flatMap(([c1, c2]) => rp.map(([r1, r2]) => `${keyOf({ col: cols[c1], row: rows[r1] })}:${keyOf({ col: cols[c2], row: rows[r2] })}`));
+}
+
+// Where Page Break Preview draws: for each printed page's last row and
+// last column, whether a manual break follows it (heavier) or not.
+export function pageEdges(wb: Workbook, page: Page): { rows: Map<number, boolean>; cols: Map<number, boolean> } {
+  const rows = new Map<number, boolean>(), cols = new Map<number, boolean>();
+  for (const r of printedPages(wb, page, "a4", false)) {
+    const [a, b] = parseRange(r)!;
+    rows.set(b.row, page.breaks.rows.includes(b.row + 1));
+    cols.set(b.col, page.breaks.cols.includes(b.col + 1));
+  }
+  return { rows, cols };
+}
 
 // A theme as words: its accents and fonts.
 const themeSaid = (t: Theme): string => `accents ${["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"].map((r) => t.colors[r as Role]).join(" ")}, headings ${t.fonts.major}, body ${t.fonts.minor}`;
@@ -2980,6 +3014,61 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // Page Layout > Breaks: Insert Page Break at a cell (a page begins at
+    // its row and its column; at A1 nothing, in row 1 or column A that one
+    // alone, as Excel's), Remove Page Break there, Reset All; one step of
+    // undo, saved with the sheet.
+    id: "page.break", label: "Insert Page Break", params: ["cell"], optional: ["off"], journaled: true,
+    run: async (wb, p) => {
+      const a = cellAddr(cellOf(p.cell))!, page = wb.page(wb.active)!, off = flag(p.off ?? "0");
+      const rows = new Set(page.breaks.rows), cols = new Set(page.breaks.cols);
+      if (off) { rows.delete(a.row); cols.delete(a.col); } else { if (a.row > 0) rows.add(a.row); if (a.col > 0) cols.add(a.col); }
+      page.breaks = { rows: [...rows].sort((x, y) => x - y), cols: [...cols].sort((x, y) => x - y) };
+      return changedBy(wb, [], `page breaks: ${breaksSaid(page)}`);
+    },
+  },
+  {
+    id: "page.resetBreaks", label: "Reset All Page Breaks", params: [], journaled: true,
+    run: async (wb) => {
+      const page = wb.page(wb.active)!;
+      page.breaks = { rows: [], cols: [] };
+      return changedBy(wb, [], "page breaks: none");
+    },
+  },
+  {
+    // The pages the sheet prints as (the used range, A4 portrait, as
+    // file.exportPdf's defaults, or its paper= landscape=): each page's
+    // range, and where the breaks fall; the manual ones listed apart.
+    id: "page.breaks", label: "Page Breaks", params: [], optional: ["paper", "landscape"], journaled: false,
+    run: async (wb, p) => {
+      const pages = printedPages(wb, wb.page(wb.active)!, (p.paper ?? "a4").trim().toLowerCase(), flag(p.landscape));
+      return { ok: true, message: `${pages.length} page${pages.length === 1 ? "" : "s"}: ${pages.join(", ")}; manual breaks: ${breaksSaid(wb.page(wb.active)!)}`, changed: [], output: pages };
+    },
+  },
+  {
+    // View > Page Break Preview (on=0 back to Normal): where each printed
+    // page ends drawn on the sheet, a manual break heavier.
+    id: "view.pageBreakPreview", label: "Page Break Preview", params: [], optional: ["off"], journaled: false,
+    run: async (wb, p) => {
+      wb.breakPreview = !flag(p.off ?? "0");
+      return { ok: true, message: wb.breakPreview ? "Page Break Preview" : "Normal view", changed: wb.sheet.keys(), output: wb.breakPreview ? 1 : 0 };
+    },
+  },
+  {
+    // View > Show: the sheet's gridlines and its headings (the column
+    // letters and row numbers), saved with it; the formula bar, the
+    // window's. on=0 hides it, on=1 (or left out) shows it.
+    id: "view.show", label: "Show", params: ["what"], optional: ["on"], journaled: false,
+    run: async (wb, p) => {
+      const what = p.what.trim().toLowerCase().replace(/[\s_-]+/g, ""), on = p.on === undefined || flag(p.on), page = wb.page(wb.active)!;
+      if (what === "gridlines") page.gridlines = on;
+      else if (what === "headings") page.headings = on;
+      else if (what === "formulabar") wb.formulaBar = on;
+      else refuse(`${p.what} is not gridlines, headings or formulabar`);
+      return { ok: true, message: `${what === "formulabar" ? "the formula bar" : `${page.name}'s ${what}`} ${on ? "shown" : "hidden"}`, changed: [], output: on ? 1 : 0 };
+    },
+  },
+  {
     // Zoom: the sheet drawn at a percentage, 10 to 400, as Excel's; or in
     // or out a step (Excel's 10, 25, 50, 75, 100, 125, 150, 200, 400). A
     // view, not a step to undo, not saved.
@@ -3232,7 +3321,7 @@ const SPECS: readonly Spec[] = [
         canUndo: wb.canUndo ? 1 : 0, canRedo: wb.canRedo ? 1 : 0,
         autoId: page.autoId && { column: colName(page.autoId.column), next: `${page.autoId.prefix}${page.autoId.next}` },
         language: wb.sheet.language.name, referenceStyle: wb.referenceStyle,
-        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, animations: wb.animations ? 1 : 0, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
+        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, animations: wb.animations ? 1 : 0, gridlines: page.gridlines ? 1 : 0, headings: page.headings ? 1 : 0, formulaBar: wb.formulaBar ? 1 : 0, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
       };
       return { ok: true, message: JSON.stringify(state), changed: [], output: state };
     },

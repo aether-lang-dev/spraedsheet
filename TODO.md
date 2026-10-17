@@ -144,7 +144,7 @@ change the specs check through the driver, and REXX loses nothing.
 | 6.11c | Drawings and charts floating over the grid at their cells, scrolled with it; pictures in cells (Place in Cell, `IMAGE`): an overlay over ui.datagrid and pictures in its cells (aether-ui, every backend) | spec | |
 | 6.12 | Threaded comments: replies, resolve, a comments pane; notes converted to comments | headless `sheet_notes`; spec | `ADDCOMMENT`, `REPLYCOMMENT`, `RESOLVECOMMENT` |
 | 6.13 | Protection: locked cells, sheet and workbook protection, Allow Edit Ranges (a password hash kept, as a file setting) | headless: a locked cell refuses `cell.set` with protection on | `PROTECTSHEET`, `LOCKCELLS` |
-| 6.14 | Views: gridlines, headings, formula bar toggles; zoom; Page Layout and page breaks (with 5.8) | spec | `SETVIEW("gridlines", 0)` |
+| 6.14 | ~~Views: gridlines, headings, formula bar toggles; zoom; Page Layout and page breaks (with 5.8)~~ (done 2026-10-17: `view.show what= on=` (gridlines, headings or formulabar), gridlines and headings the sheet's and saved with it (XLSX's showGridLines and showRowColHeaders), the formula bar the window's; the View panel's Gridlines, Headings, Formula bar. `page.break cell= off=` (a page begins at the cell's row and column, as Excel's Insert Page Break), `page.resetBreaks`, `page.breaks paper= landscape=` (each printed page's range); manual breaks undone, saved, read and written as XLSX's rowBreaks and colBreaks, and honoured by `file.exportPdf`. `view.pageBreakPreview`: each printed page's last row and column edged blue on the sheet, a manual break heavier. Zoom was 3.0.5's; no Page Layout view of its own) | spec | `SETVIEW("gridlines", 0)` |
 
 ### Stage 7: automation and hardening
 

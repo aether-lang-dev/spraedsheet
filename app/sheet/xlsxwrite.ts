@@ -238,10 +238,18 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
     return `<hyperlink ref="${k}" location="${escapeXml(h.target.replace(/^#/, ""))}"${tip}/>`;
   });
   const drawingRid = page.drawings.length ? relBase + tables.length + urls.length : 0;
-  const xml = `${HEAD}<worksheet xmlns="${MAIN}" xmlns:r="${REL}"><sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rowXml}</sheetData>${
-    merges ? `<mergeCells count="${page.merges.length}">${merges}</mergeCells>` : ""}${cf}${dvs.length ? `<dataValidations count="${dvs.length}">${dvs.join("")}</dataValidations>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}${drawingRid ? `<drawing r:id="rId${drawingRid}"/>` : ""}${comments.length ? '<legacyDrawing r:id="rId2"/>' : ""}${
+  const xml = `${HEAD}<worksheet xmlns="${MAIN}" xmlns:r="${REL}"><sheetViews><sheetView${page.gridlines ? "" : ' showGridLines="0"'}${page.headings ? "" : ' showRowColHeaders="0"'} workbookViewId="0">${pane}</sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rowXml}</sheetData>${
+    merges ? `<mergeCells count="${page.merges.length}">${merges}</mergeCells>` : ""}${cf}${dvs.length ? `<dataValidations count="${dvs.length}">${dvs.join("")}</dataValidations>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}${breaksXml(page)}${drawingRid ? `<drawing r:id="rId${drawingRid}"/>` : ""}${comments.length ? '<legacyDrawing r:id="rId2"/>' : ""}${
     tables.length ? `<tableParts count="${tables.length}">${tables.map((_, i) => `<tablePart r:id="rId${relBase + i}"/>`).join("")}</tableParts>` : ""}</worksheet>`;
   return { xml, comments, tables, relBase, sparks, urls, drawingRid };
+}
+
+// Manual page breaks: a page begins above row id and left of column id
+// (both 0-based in the file, as here).
+function breaksXml(page: Page): string {
+  const { rows, cols } = page.breaks;
+  const brk = (ids: readonly number[], max: number) => ids.map((i) => `<brk id="${i}" max="${max}" man="1"/>`).join("");
+  return `${rows.length ? `<rowBreaks count="${rows.length}" manualBreakCount="${rows.length}">${brk(rows, 16383)}</rowBreaks>` : ""}${cols.length ? `<colBreaks count="${cols.length}" manualBreakCount="${cols.length}">${brk(cols, 1048575)}</colBreaks>` : ""}`;
 }
 
 // A rule as a dataValidation over its cells.
