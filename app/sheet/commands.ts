@@ -75,6 +75,9 @@ const NUMERIC_TEXT = /^\s*[-+]?(?:\d+\.?\d*|\.\d+)\s*$/;
 import { CellError } from "./values.ts";
 import { PROTECTED, STRUCTURE, allowsOf, needOf, opens, passwordHash, within } from "./protection.ts";
 import type { Saved } from "./workbook.ts";
+import { MACRO_NAME, parameters, parseLine, toRexx } from "./recorder.ts";
+export { parseLine };
+import type { Trigger } from "./recorder.ts";
 import type { Value } from "./values.ts";
 import type { Direction, Filter, LanguageName, Page, Pivot, Scenario, Workbook } from "./workbook.ts";
 import { statsLine } from "./workbook.ts";
@@ -132,23 +135,13 @@ const refuse = (message: string): never => { throw new Refused(message); };
 // ---- The command line: an id, then name=value pairs; a value with spaces,
 // quotes or '=' is quoted, "" being a quote inside.
 
-export function parseLine(line: string): { id: string; params: Record<string, string> } {
-  const m = /^\s*(\S+)/.exec(line);
-  const params: Record<string, string> = {};
-  let rest = line.slice(m ? m[0].length : 0);
-  for (;;) {
-    const p = /^\s*([A-Za-z_][\w]*)=("(?:[^"]|"")*"|\S*)/.exec(rest);
-    if (!p) break;
-    params[p[1]] = p[2].startsWith('"') ? p[2].slice(1, -1).replace(/""/g, '"') : p[2];
-    rest = rest.slice(p[0].length);
-  }
-  return { id: m ? m[1] : "", params };
-}
-
 export function lineOf(id: string, params: Params): string {
   const value = (v: string) => (v === "" || /[\s"=]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   return [id, ...Object.entries(params).map(([k, v]) => `${k}=${value(v)}`)].join(" ");
 }
+
+// A cell within a rectangle, its corners either way round.
+const inRect = (a: Addr, r: readonly [Addr, Addr]): boolean => a.col >= Math.min(r[0].col, r[1].col) && a.col <= Math.max(r[0].col, r[1].col) && a.row >= Math.min(r[0].row, r[1].row) && a.row <= Math.max(r[0].row, r[1].row);
 
 // ---- Reading parameters
 
@@ -410,6 +403,8 @@ async function open(wb: Workbook, file: SheetFile): Promise<Outcome> {
   }
   wb.activate(file.sheets[0].name);
   wb.bookProtection = file.bookProtection;
+  wb.macros = new Map(file.macros);
+  wb.triggers = file.triggers.filter((t) => wb.macros.has(t.macro) && (t.on === "open" || wb.page(t.sheet ?? "")));
   wb.name = file.name;
   wb.setupScript = file.setupScript;
   await wb.settle();
@@ -1003,6 +998,87 @@ const SPECS: readonly Spec[] = [
   { id: "book.activate", label: "Switch Windows", params: ["name"], journaled: false, run: async () => refuse("the workbooks answer this") },
   { id: "book.close", label: "Close Workbook", params: [], optional: ["name"], journaled: false, run: async () => refuse("the workbooks answer this") },
   { id: "book.list", label: "Workbooks", params: [], journaled: false, run: async () => refuse("the workbooks answer this") },
+  {
+    // Record Macro: from now, each command that changes the workbook a line
+    // of the macro `name` (recorder.ts); macro.stop ends it.
+    id: "macro.record", label: "Record Macro", params: ["name"], journaled: false,
+    run: async (wb, p) => {
+      const name = p.name.trim();
+      if (!MACRO_NAME.test(name)) refuse(`${p.name} is not a macro's name (a letter, then letters, digits or _)`);
+      if (wb.recording) refuse(`recording ${wb.recording.name} already: stop it first`);
+      wb.recording = { name, lines: [] };
+      return { ok: true, message: `recording ${name}`, changed: [] };
+    },
+  },
+  {
+    id: "macro.stop", label: "Stop Recording", params: [], journaled: false,
+    run: async (wb) => {
+      const r = wb.recording ?? refuse("nothing is being recorded");
+      wb.recording = null;
+      const text = toRexx(r.name, r.lines);
+      wb.macros.set(r.name, text);
+      return { ok: true, message: `${r.name}: ${r.lines.length} command${r.lines.length === 1 ? "" : "s"} recorded`, changed: [], output: text };
+    },
+  },
+  {
+    // A macro run (Macros > Run): its REXX, one step of undo.
+    // args= its parameters, "CELL=B2;N=5": each a REXX variable the macro
+    // starts with (a recorded macro edited to use them).
+    id: "macro.run", label: "Run Macro", params: ["name"], optional: ["args"], journaled: false,
+    run: async () => refuse("a macro runs through the commands' own script runner"),
+  },
+  {
+    // A macro run when the workbook opens (on=open), or after a change to a
+    // range of the active sheet (on=change range=A1:A9), as Excel's
+    // Workbook_Open and Worksheet_Change; off=1 takes it away. Saved with
+    // the workbook.
+    id: "macro.trigger", label: "Macro Trigger", params: ["name", "on"], optional: ["range", "off"], journaled: false,
+    run: async (wb, p) => {
+      const name = p.name.trim(), on = p.on.trim().toLowerCase();
+      if (on !== "open" && on !== "change") refuse(`${p.on} is not open or change`);
+      if (!wb.macros.has(name)) refuse(`no macro ${name}`);
+      const r = on === "change" ? rangeOf(p.range ?? refuse("on=change needs range=")) : null;
+      const same = (t: Trigger) => t.macro === name && t.on === on && (on === "open" || (t.sheet === wb.active && rangeName(t.range!) === rangeName(r!)));
+      if (flag(p.off ?? "0")) {
+        if (!wb.triggers.some(same)) refuse(`${name} has no such trigger`);
+        wb.triggers = wb.triggers.filter((t) => !same(t));
+        return { ok: true, message: `${name} no longer runs ${on === "open" ? "on open" : `on a change to ${rangeName(r!)}`}`, changed: [] };
+      }
+      if (!wb.triggers.some(same)) wb.triggers = [...wb.triggers, { macro: name, on, ...(r ? { range: r, sheet: wb.active } : {}) }];
+      return { ok: true, message: `${name} runs ${on === "open" ? "when the workbook opens" : `after a change to ${wb.active}!${rangeName(r!)}`}`, changed: [] };
+    },
+  },
+  {
+    id: "macro.get", label: "Macro", params: ["name"], journaled: false,
+    run: async (wb, p) => {
+      const t = wb.macros.get(p.name.trim()) ?? refuse(`no macro ${p.name}`);
+      return { ok: true, message: `${p.name.trim()}: ${t.split("\n").length} lines`, changed: [], output: t };
+    },
+  },
+  {
+    // A macro written, or edited: its REXX as given.
+    id: "macro.set", label: "Edit Macro", params: ["name", "text"], journaled: false,
+    run: async (wb, p) => {
+      const name = p.name.trim();
+      if (!MACRO_NAME.test(name)) refuse(`${p.name} is not a macro's name (a letter, then letters, digits or _)`);
+      wb.macros.set(name, p.text);
+      return { ok: true, message: `${name} saved`, changed: [] };
+    },
+  },
+  {
+    id: "macro.delete", label: "Delete Macro", params: ["name"], journaled: false,
+    run: async (wb, p) => {
+      if (!wb.macros.delete(p.name.trim())) refuse(`no macro ${p.name}`);
+      return { ok: true, message: `${p.name.trim()} deleted`, changed: [] };
+    },
+  },
+  {
+    id: "macro.list", label: "Macros", params: [], journaled: false,
+    run: async (wb) => {
+      const names = [...wb.macros.keys()].sort();
+      return { ok: true, message: names.length ? names.join(", ") : "no macros", changed: [], output: names };
+    },
+  },
   {
     id: "cell.get", label: "Read a cell", params: ["cell"], journaled: false,
     run: async (wb, p) => {
@@ -3977,6 +4053,9 @@ export class Commands {
       const areas = AREAS.has(id) && params.range?.includes(",") ? params.range.split(",").map((a) => a.trim()) : null;
       if (areas) for (const a of areas) rangeOf(a);
       if (!AREAS.has(id) && !OWN_AREAS.has(id) && params.range?.includes(",")) refuse(`${spec!.label} cannot be used on several areas (${params.range})`);
+      // A macro runs as a script does, one step of undo; what it does is not
+      // recorded again (its own run is, while recording).
+      if (id === "macro.run") return await this.#runMacro(params.name, params.args ?? "");
       const outcome = areas ? await this.#overAreas(spec!, params, areas) : await spec!.run(this.#wb, params, this.#store);
       if (outcome.ok && guarded && tried) {
         const why = this.#breach(tried, guarded);
@@ -3985,6 +4064,16 @@ export class Commands {
           refuse(why);
         }
       }
+      // A change to a range a macro watches (macro.trigger on=change): that
+      // macro run after it, once, not from inside one that is running.
+      if (outcome.ok && spec!.journaled && this.#triggering === 0 && this.#wb.triggers.some((t) => t.on === "change")) await this.#onChange(outcome.changed);
+      // A workbook opened: its macros that run on open.
+      if (outcome.ok && (id === "file.open" || id === "file.import") && this.#triggering === 0 && this.#wb.triggers.some((t) => t.on === "open")) {
+        this.#triggering++;
+        try { await this.runOnOpen(); } finally { this.#triggering--; }
+      }
+      // Recording a macro: the command, as its line.
+      if (outcome.ok && spec!.journaled && this.#wb.recording && this.#replaying === 0) this.#wb.recording.lines.push(lineOf(id, params));
       if (outcome.ok && before) this.#wb.changed(before, spec!.label);
       if (outcome.ok && spec!.journaled) this.#journal.push(lineOf(id, params));
       return outcome;
@@ -4031,6 +4120,43 @@ export class Commands {
     const viewText = (v: object) => JSON.stringify(v, (key, x) => (key === "filtered" || (g.looks && key === "rules") ? undefined : x instanceof Map || x instanceof Set ? [...x] : x));
     const { name: _n, sheet: _s, notes: _o, ...view } = page;
     return viewText(old.view) !== viewText(view) ? PROTECTED : "";
+  }
+  // A macro run: its REXX, its SAY lines kept as its output.
+  #replaying = 0;
+  async #runMacro(name: string, args = ""): Promise<Outcome> {
+    const text = this.#wb.macros.get(name.trim());
+    if (text === undefined) return { ok: false, message: `no macro ${name}`, changed: [] };
+    let head = "";
+    try { head = parameters(args); } catch (e) { return { ok: false, message: (e as Error).message, changed: [] }; }
+    const said: string[] = [];
+    if (this.#wb.recording) this.#wb.recording.lines.push(lineOf("macro.run", { name: name.trim(), ...(args ? { args } : {}) }));
+    this.#replaying++;
+    try {
+      const o = await this.script(head + text, (l) => said.push(l));
+      return { ok: o.ok, message: o.ok ? `${name.trim()} ran` : `${name.trim()} failed: ${o.message}`, changed: this.#wb.sheet.keys(), output: said };
+    } finally {
+      this.#replaying--;
+    }
+  }
+
+  // The macros watching a range the change touched, each run once.
+  #triggering = 0;
+  async #onChange(changed: readonly string[]): Promise<void> {
+    const page = this.#wb.active, hit = this.#wb.triggers.filter((t) => t.on === "change" && t.sheet === page && changed.some((k) => { const a = cellAddr(k); return a && inRect(a, t.range!); }));
+    if (!hit.length) return;
+    this.#triggering++;
+    try {
+      for (const t of hit) await this.#runMacro(t.macro);
+    } finally {
+      this.#triggering--;
+    }
+  }
+
+  // The macros run when the workbook is opened (macro.trigger on=open).
+  async runOnOpen(): Promise<string[]> {
+    const ran: string[] = [];
+    for (const t of this.#wb.triggers.filter((x) => x.on === "open")) { await this.#runMacro(t.macro); ran.push(t.macro); }
+    return ran;
   }
 
   async #overAreas(spec: Spec, params: Params, areas: readonly string[]): Promise<Outcome> {

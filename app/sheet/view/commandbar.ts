@@ -28,3 +28,33 @@ export function commandBar(v: SheetView): void {
   });
   bind(ui.text_wrapped("", 720), said);
 }
+
+// Record Macro (Script > Record macro): the name field's macro recorded
+// from now, stopped, run; its REXX shown in the text area to be edited and
+// saved; the workbook's macros listed beside.
+export function macroBar(v: SheetView): void {
+  const name = state("Macro1"), text = state(""), listed = state("");
+  const list = async () => { const o = await v.run("macro.list"); listed.set(`Macros: ${o.message}`); };
+  ui.hstack(() => {
+    bind(ui.textfield("macro name", () => {}), name);
+    v.btn("Record macro", () => v.run("macro.record", { name: name.value }));
+    v.btn("Stop recording", async () => {
+      const o = await v.run("macro.stop");
+      if (o.ok) text.set(String(o.output));
+      await list();
+    });
+    v.btn("Run macro", async () => {
+      const o = await v.run("macro.run", { name: name.value });
+      for (const l of (o.output as string[] | undefined) ?? []) print(`sheet: say ${l}`);
+    });
+    v.btn("Show macro", async () => { const o = await v.run("macro.get", { name: name.value }); if (o.ok) text.set(String(o.output)); });
+    v.btn("Save macro", async () => { await v.run("macro.set", { name: name.value, text: text.value }); await list(); });
+    v.btn("Delete macro", async () => { await v.run("macro.delete", { name: name.value }); await list(); });
+    // The macro run whenever the workbook opens, or after a change to the
+    // selection's cells.
+    v.btn("Run macro on open", () => v.run("macro.trigger", { name: name.value, on: "open" }));
+    v.btn("Run macro on a change here", () => v.run("macro.trigger", { name: name.value, on: "change", range: v.range() }));
+    bind(ui.text(""), listed);
+  });
+  bind(ui.textarea("macro REXX"), text);
+}

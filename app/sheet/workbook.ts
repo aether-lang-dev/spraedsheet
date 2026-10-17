@@ -40,6 +40,7 @@ import { drawingShapes } from "./drawings.ts";
 import type { Drawing } from "./drawings.ts";
 import { imageOf } from "./functions.ts";
 import type { BookProtection, EditRange, SheetProtection } from "./protection.ts";
+import type { Trigger } from "./recorder.ts";
 import type { ChartData, ChartKind, ChartOptions, Shape } from "./charts.ts";
 import { rangeName } from "./rules.ts";
 import { sheetPrefix } from "./address.ts";
@@ -363,6 +364,11 @@ export class Workbook {
   // null); and the edit ranges opened by their passwords this session.
   bookProtection: BookProtection | null = null;
   readonly openedRanges = new Set<string>();
+  // Macros, by name, their REXX (recorder.ts), saved with the workbook; and
+  // the one being recorded, its command lines so far, or null.
+  macros = new Map<string, string>();
+  recording: { readonly name: string; readonly lines: string[] } | null = null;
+  triggers: Trigger[] = [];
   selecting = false;
   // How a URL is handed to the system (a hyperlink followed): "" when it
   // was, or why not. The app's view sets it to sae's shell.open.
@@ -584,6 +590,8 @@ export class Workbook {
     this.styles = new Map(Object.entries(CELL_STYLES));
     this.theme = THEMES.Office;
     this.bookProtection = null;
+    this.macros = new Map();
+    this.triggers = [];
     this.carried = [];
     this.#pending.clear();
     this.#undo.length = 0;

@@ -43,6 +43,7 @@ import { SHAPES } from "./drawings.ts";
 import type { Drawing } from "./drawings.ts";
 import { ALLOWS } from "./protection.ts";
 import type { Allow, BookProtection, EditRange, SheetProtection } from "./protection.ts";
+import type { Trigger } from "./recorder.ts";
 import { AUTOMATIC } from "./sheet.ts";
 import type { Calc } from "./sheet.ts";
 import type { Aggregate } from "./pivot.ts";
@@ -90,6 +91,9 @@ export interface SheetFile {
   readonly theme: Theme;
   // Protect Workbook (its structure), with its password's hash: or null.
   readonly bookProtection: BookProtection | null;
+  // Its macros (recorder.ts), by name: their REXX; and what runs them.
+  readonly macros: readonly [string, string][];
+  readonly triggers: readonly Trigger[];
 }
 
 interface FileCell {
@@ -286,6 +290,10 @@ export function readSheetFile(data: any): SheetFile {
     dateSystem: Number(data?.dateSystem) === 1904 ? 1904 : 1900,
     theme: themeOf(data?.theme),
     bookProtection: data?.bookProtection && typeof data.bookProtection === "object" ? { ...(typeof data.bookProtection.hash === "string" && data.bookProtection.hash ? { hash: data.bookProtection.hash } : {}) } : null,
+    macros: data?.macros && typeof data.macros === "object" && !Array.isArray(data.macros)
+      ? Object.entries(data.macros as Record<string, unknown>).filter(([n, t]) => /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(n) && typeof t === "string").map(([n, t]): [string, string] => [n, t as string]) : [],
+    triggers: Array.isArray(data?.triggers) ? data.triggers.filter((t: any) => t && typeof t.macro === "string" && (t.on === "open" || (t.on === "change" && parseRange(String(t.range)) && typeof t.sheet === "string")))
+      .map((t: any): Trigger => ({ macro: t.macro, on: t.on, ...(t.on === "change" ? { range: parseRange(String(t.range))!, sheet: t.sheet } : {}) })) : [],
     cellStyles: data?.cellStyles && typeof data.cellStyles === "object" && !Array.isArray(data.cellStyles)
       ? Object.entries(data.cellStyles as Record<string, unknown>).filter(([, l]) => l && typeof l === "object").map(([n, l]): [string, Look] => [n, l as Look]) : [],
   };
@@ -374,6 +382,8 @@ export function writeSheetFile(wb: Workbook) {
     ...(wb.dateSystem === 1904 ? { dateSystem: 1904 } : {}),
     ...(ownStyles(wb).length ? { cellStyles: Object.fromEntries(ownStyles(wb)) } : {}),
     ...(wb.bookProtection ? { bookProtection: wb.bookProtection } : {}),
+    ...(wb.macros.size ? { macros: Object.fromEntries([...wb.macros].sort(([a], [b]) => (a < b ? -1 : 1))) } : {}),
+    ...(wb.triggers.length ? { triggers: wb.triggers.map((t) => ({ macro: t.macro, on: t.on, ...(t.range ? { range: rangeName(t.range), sheet: t.sheet } : {}) })) } : {}),
     ...(JSON.stringify(wb.theme) !== JSON.stringify(THEMES.Office) ? { theme: THEMES[wb.theme.name] === wb.theme ? wb.theme.name : wb.theme } : {}),
   };
 }

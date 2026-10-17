@@ -309,6 +309,19 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   ACTIVATEWORKBOOK: async (exec, n) => String((await must(exec, "book.activate", { name: text(n) })).output),
   CLOSEWORKBOOK: async (exec, n) => String((await must(exec, "book.close", text(n) ? { name: text(n) } : {})).output),
   LISTWORKBOOKS: async (exec) => stem((await must(exec, "book.list")).output as string[]),
+  // Macros (Record Macro, as REXX): recording, stopping (the program back),
+  // running, reading, writing, deleting, listing.
+  RECORDMACRO: async (exec, n) => (await must(exec, "macro.record", { name: text(n) })).message,
+  STOPRECORDING: async (exec) => String((await must(exec, "macro.stop", {})).output),
+  RUNMACRO: async (exec, n, a) => (await must(exec, "macro.run", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
+  // A macro run on open, or after a change to a range: ONOPEN("Setup"),
+  // ONCHANGE("A1:A9", "Recalc"); off=1 as the last argument takes it away.
+  ONOPEN: async (exec, n, off) => (await must(exec, "macro.trigger", { name: text(n), on: "open", ...(yes(off) ? { off: "1" } : {}) })).message,
+  ONCHANGE: async (exec, r, n, off) => (await must(exec, "macro.trigger", { name: text(n), on: "change", range: text(r), ...(yes(off) ? { off: "1" } : {}) })).message,
+  GETMACRO: async (exec, n) => String((await must(exec, "macro.get", { name: text(n) })).output),
+  SETMACRO: async (exec, n, t) => (await must(exec, "macro.set", { name: text(n), text: text(t) })).message,
+  DELETEMACRO: async (exec, n) => (await must(exec, "macro.delete", { name: text(n) })).message,
+  LISTMACROS: async (exec) => stem((await must(exec, "macro.list", {})).output as string[]),
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,

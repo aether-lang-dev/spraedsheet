@@ -2323,6 +2323,24 @@ main() {
             spec.assert_true(b.wait_for_text("Guarded not protected"), "unprotected")
             g.command("view.panel name=none")
         }
+        spec.it("Record macro from the Script panel: what is done recorded as REXX, then replayed") callback {
+            g.command("sheet.add name=Recorded")
+            g.command("view.panel name=script")
+            b.set_field_by("macro name", "Demo")
+            b.click("Record macro")
+            spec.assert_true(b.wait_for_console("sheet: recording Demo"), "recording")
+            g.enter("A1", "7")
+            g.enter("A2", "=A1*6")
+            spec.assert_true(g.wait_cell("A", 2, "42"), "done")
+            b.click("Stop recording")
+            spec.assert_true(b.wait_for_console("sheet: Demo: 2 commands recorded"), "stopped")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${b.field_id_by("macro REXX")}", "CALL SETCELL", 40), "its REXX shown, to edit")
+            g.command("range.clear range=A1:A2")
+            spec.assert_true(g.wait_cell("A", 2, ""), "cleared")
+            b.click("Run macro")
+            spec.assert_true(g.wait_cell("A", 2, "42"), "replayed")
+            g.command("view.panel name=none")
+        }
     }
     return spec.run_summary(fw)
 }

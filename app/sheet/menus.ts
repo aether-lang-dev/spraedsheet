@@ -101,7 +101,8 @@ export const MENUS: readonly Menu[] = [
     i("Protect workbook", "protect.workbook"), i("Unprotect workbook", "protect.workbook"), i("Allow edit range", "protect.allowRange"),
   ] },
   { label: "Script", items: [
-    i("Run script", "page.script"), i("Run the setup script", "setup.run"), i("Commands", "page.commands"),
+    i("Run script", "page.script"), i("Run the setup script", "setup.run"), i("Commands", "page.commands"), "-",
+    i("Record macro", "macro.record"), i("Stop recording", "macro.stop"), i("Run macro", "macro.run"), i("Save macro", "macro.set"), i("Delete macro", "macro.delete"), i("Run macro on open", "macro.trigger"),
   ] },
 ];
 
@@ -120,6 +121,7 @@ export const NOT_IN_MENUS: Readonly<Record<string, string>> = {
   "formulas.ignoreError": "a finding's own button", "setup.get": "a getter", "setup.set": "a script's",
   "sheet.activate": "a sheet's tab", "file.list": "the file bar lists them", "menus.list": "a getter (LISTMENUS)", "view.selection": "a getter (GETSELECTION)", "view.select": "the grid, and SELECTRANGE", "range.stats": "the status bar shows it", "formulas.cycleRef": "F4 in the formula bar", "sheet.lastCell": "Ctrl+End", "keys.list": "a getter (LISTKEYS)", "formulas.complete": "the formula bar's hints", "format.preview": "a script's (FORMATVALUE)", "table.calculatedColumn": "a script's (SETCALCULATEDCOLUMN)", "outline.clear": "a script's (CLEAROUTLINE)", "style.define": "a script's (DEFINESTYLE)", "style.delete": "a script's (DELETESTYLE)", "style.list": "a getter (LISTSTYLES)", "theme.color": "a script's (SETTHEMECOLOR)", "theme.fonts": "a script's (SETTHEMEFONTS)", "theme.get": "a getter (GETTHEME)", "slicer.select": "a slicer's own tiles", "slicer.clear": "a slicer's own Clear", "slicer.delete": "a script's (DELETESLICER)", "slicer.list": "a getter (LISTSLICERS)", "scenario.delete": "a script's (DELETESCENARIO)", "scenario.list": "a getter (LISTSCENARIOS)", "file.importXlsx": "Open file, an .xlsx picked", "file.exportXlsx": "Save XLSX file, through the picker", "file.importOds": "Open file, an .ods picked", "file.importXls": "Open file, an .xls picked", "file.report": "a getter (FILEREPORT)",
   "cell.removePicture": "a script's (REMOVECELLPICTURE)", "book.activate": "a workbook's own button in the File panel (Switch Windows)", "book.list": "a getter (LISTWORKBOOKS)", "page.breaks": "a getter (LISTPAGEBREAKS)", "drawing.edit": "a drawing's own Move here (EDITDRAWING)", "drawing.delete": "a drawing's own Delete", "drawing.order": "a drawing's own to front (ARRANGEDRAWING)", "drawing.list": "a getter (LISTDRAWINGS)",
+  "macro.get": "a getter (GETMACRO); the Script panel shows it", "macro.list": "a getter (LISTMACROS); the Script panel lists them",
 };
 
 // Each item as a line: "File > Save | file.save | Ctrl+S".

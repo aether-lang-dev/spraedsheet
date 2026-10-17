@@ -32,7 +32,7 @@ import { rulesBar } from "./sheet/view/rulesbar.ts";
 import { chartPanel } from "./sheet/view/chartpanel.ts";
 import { dataBar } from "./sheet/view/databar.ts";
 import { insertBar } from "./sheet/view/insertbar.ts";
-import { commandBar } from "./sheet/view/commandbar.ts";
+import { commandBar, macroBar } from "./sheet/view/commandbar.ts";
 import { booksBar, fileBar } from "./sheet/view/filebar.ts";
 import { functionList, problemList, setupScript, statusBar, statusLine } from "./sheet/view/lists.ts";
 import { menuBar } from "./sheet/view/menubar.ts";
@@ -71,7 +71,7 @@ sheet.panel("audit", () => auditBar(sheet));
 sheet.panel("insert", () => insertBar(sheet));
 sheet.panel("chart", () => chartPanel(sheet));
 sheet.panel("file", () => { fileBar(sheet); booksBar(sheet); });
-sheet.panel("script", () => { languageBar(sheet); commandBar(sheet); setupScript(sheet); });
+sheet.panel("script", () => { languageBar(sheet); commandBar(sheet); macroBar(sheet); setupScript(sheet); });
 sheet.panel("lists", () => { functionList(sheet); problemList(sheet); });
 });
 // The menus run the panels' actions: made once the panels are.
