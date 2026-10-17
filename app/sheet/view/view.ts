@@ -9,6 +9,7 @@ import { Commands } from "../commands.ts";
 import type { Outcome, Params } from "../commands.ts";
 import type { Problem } from "../sheet.ts";
 import { Workbook } from "../workbook.ts";
+import { inkTools } from "./toolbar.ts";
 import { COLUMN_WIDTH, ROWS_WHEN_SPLIT, ROWS_WITH_PANEL, ROW_PX, buildPane } from "./grid.ts";
 
 // aether-ui's datagrid's own row height, which a zoom scales.
@@ -206,6 +207,36 @@ export class SheetView {
     return o;
   }
 
+  // Light or dark (view.appearance): the system's as the page is told
+  // (ui.on_appearance), or the one chosen. Dark: the chrome in Excel's dark
+  // tokens (the window #292929, controls #333333, text #eeeeee), the icons
+  // inked light; the sheet stays white with black text, its headers grey.
+  // Light again, once it has been dark: Excel's light tokens (the window
+  // #f3f3f3, controls white, text #242424); never dark, the platform's own.
+  #systemDark = typeof ui.dark_mode === "function" ? !!ui.dark_mode() : false;
+  #shownDark: boolean | null = null;
+  readonly #watching = typeof ui.on_appearance === "function" ? (ui.on_appearance((dark: boolean) => { this.#systemDark = !!dark; this.refresh(); }), true) : false;
+  #showAppearance(): void {
+    const dark = this.wb.appearance === "dark" || (this.wb.appearance === "system" && this.#systemDark);
+    this.wb.dark = dark;
+    if (dark === this.#shownDark || (this.#shownDark === null && !dark)) { this.#shownDark ??= dark; return; }
+    this.#shownDark = dark;
+    const ink = dark ? "#eeeeee" : "#242424", ground = dark ? "#292929" : "#f3f3f3", control = dark ? "#333333" : "#ffffff";
+    ui.styles({
+      root: { background: ground, color: ink },
+      text: { color: ink },
+      button: { background: control, color: ink },
+      textfield: { background: control, color: ink },
+      securefield: { background: control, color: ink },
+      textarea: { background: control, color: ink },
+      "aui-grid-header.text": { color: "#242424" },
+      "aui-grid-cell.text": { color: "#000000" },
+      "aui-grid-frozen.text": { color: "#6a6f7a" },
+    });
+    inkTools(dark);
+    print(`sheet: ${dark ? "dark" : "light"}`);
+  }
+
   // The workbook shown again, in one batch (after a command, or a script).
   refresh(): void {
     // Another sheet while a cell was being edited (its tab clicked, a
@@ -264,6 +295,7 @@ export class SheetView {
         this.follow();
       }
     }
+    this.#showAppearance();
     if (this.grid) {
       this.#showView();
       ui.datagrid_refresh(this.grid);

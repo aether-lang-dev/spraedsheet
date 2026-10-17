@@ -85,7 +85,9 @@ const script = async (text: string) => {
   said.length = 0;
   return (await cmds.script(text, (line) => said.push(line))).message;
 };
-eq("cell.about and sheet.state, the getters' commands", [(await cmds.run("cell.comment cell=B2 text=hi")) && (await cmds.run("cell.about cell=B2")).output, (await cmds.run("sheet.state")).output],
+// sheet.state's fields that this test knows (others come with later steps).
+const known = (st: unknown) => Object.fromEntries(["name", "sheets", "hiddenSheets", "tabColors", "hiddenRows", "hiddenCols", "frozenRows", "frozenCols", "rowHeights", "colWidths", "filter", "canUndo", "canRedo", "autoId", "language", "referenceStyle", "panel", "split", "zoom", "dateSystem", "calculation", "iteration", "stale"].map((k) => [k, (st as Record<string, unknown>)[k]]));
+eq("cell.about and sheet.state, the getters' commands", [(await cmds.run("cell.comment cell=B2 text=hi")) && (await cmds.run("cell.about cell=B2")).output, known((await cmds.run("sheet.state")).output)],
   [{ cell: "B2", value: "", input: "", format: "", comment: "hi", wrap: 0, merged: "", validation: null, editor: null },
     { name: "Sheet1", sheets: ["Sheet1"], hiddenSheets: [], tabColors: {}, hiddenRows: [], hiddenCols: [], frozenRows: 0, frozenCols: 0, rowHeights: [], colWidths: [], filter: null, canUndo: 1, canRedo: 0, autoId: null, language: "Excel", referenceStyle: "A1", panel: "", split: 0, zoom: 100, dateSystem: 1900, calculation: "Automatic", iteration: null, stale: [] }]);
 eq("a script calls them by the app's names", [await script(`LET r = SETCELL("A1", 10); LET r = SETCELL("A2", 20); LET r = INSERTROW(2); LET r = HIDEROW(2)

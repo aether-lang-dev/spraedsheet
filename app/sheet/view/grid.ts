@@ -107,7 +107,7 @@ export function sheetGrid(v: SheetView): void {
     });
     cell_style((r: number, c: number) => {
       const key = keyAt(r, c);
-      return key ? v.wb.styleOf(key) : "color: #6a6f7a; text-align: end";
+      return key ? v.wb.styleOf(key) : v.wb.dark ? "color: #6a6f7a; text-align: end; background: #e6e8ec" : "color: #6a6f7a; text-align: end";
     });
     on_cell_select((r: number, c: number) => {
       // A row's number: the whole row, as Excel's row header.

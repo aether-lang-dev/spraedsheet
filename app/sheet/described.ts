@@ -74,6 +74,8 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   GETDATESYSTEM: fn([], "The workbook's date system", "1900 or 1904"),
   SETZOOM: fn([p("zoom", "text", "a percentage, 10 to 400, or in or out a step")], "Zooms the sheet", "the zoom now"),
   GETZOOM: fn([], "The sheet's zoom", "a percentage"),
+  SETAPPEARANCE: fn([p("mode", "text", "system (the system's light or dark), light or dark")], "Dark mode: the window's chrome dark or light; the sheet stays white", "the mode"),
+  GETAPPEARANCE: fn([], "Light or dark", "system, light or dark, then what it shows now: \"system dark\""),
   SELECTRANGE: fn([p("range", "range", "a cell, a range, whole columns (\"B:B\"), whole rows (\"3:5\"), or \"all\"")], "Selects it on the page", "the range selected"),
   GETSELECTION: fn([], "The selection", "a range, e.g. B2:C4"),
   GOTOSPECIAL: fn([p("what", "text", "formulas, constants, blanks, errors, comments, validation or conditional"), opt("range", "range", "the used range when left out"), opt("type", "text", "numbers, text, logicals or errors, for formulas and constants")], "Go To Special: the cells of a kind", "a stem of cells, in sheet order"),

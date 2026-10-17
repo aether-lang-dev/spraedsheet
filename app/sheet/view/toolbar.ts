@@ -8,6 +8,7 @@
 // keys' do (their actions, by label, at the click: the panels come after).
 import { toggleFont } from "./lookbar.ts";
 import type { SheetView } from "./view.ts";
+import { ICONS } from "./icons.ts";
 
 // The groups, by their first tool's label: a wider gap before each.
 export const GROUPS = ["Undo", "Cut", "B", "Left", ",", "Borders", "Fill", "A→Z", "Chart"];
@@ -44,12 +45,60 @@ export function toolBar(v: SheetView): void {
     for (const group of groups) {
       ui.hstack(2, () => {
         for (const [label, tip, action] of group) {
-          ui.tooltip(ui.btn(label, () => {
+          const run = () => {
             if (v.actions.has(action)) return v.perform(action);
             v.status.set(`${tip}: not here`);
-          }), tip);
+          };
+          tool(label, tip, run);
         }
       });
     }
   });
+}
+
+// A tool: its icon (icons.ts) in a 26 px square, the click running it; its tooltip the tool's name and shortcut,
+// and to a screen reader a button named so.
+// The ink, light or dark (inkTools): each inked shape, and how.
+export const INK = { light: "#33373d", dark: "#e8e8e8" };
+const inked: { readonly h: number; readonly stroke?: number; readonly fill?: boolean }[] = [];
+function tool(label: string, tip: string, run: () => unknown): number {
+  const icon = ICONS[label] ?? { text: label };
+  const ink = INK.light;
+  const scene: number = vg.scene("0 0 24 24", 26, 26, () => {
+    if (icon.strokes) inked.push({ h: vg.path(icon.strokes, () => { vg.fill("none"); vg.stroke(ink, 1.8); vg.linecap("round"); vg.linejoin("round"); }), stroke: 1.8 });
+    if (icon.fills) inked.push({ h: vg.path(icon.fills, () => vg.fill(ink)), fill: true });
+    if (icon.text) {
+      const size = icon.text.length > 1 ? 9 : 15;
+      inked.push({ h: vg.text_anchored(12, icon.text.length > 1 ? 15 : 17, size, "middle", icon.text, () => {
+        vg.fill(ink);
+        if (icon.weight === "bold") vg.stroke(ink, 0.9);
+        if (icon.weight === "italic") vg.transform("skewX(-14) translate(4 0)");
+      }), fill: true, ...(icon.weight === "bold" ? { stroke: 0.9 } : {}) });
+      if (icon.weight === "underline") inked.push({ h: vg.line(7, 20, 17, 20, () => vg.stroke(ink, 1.6)), stroke: 1.6 });
+    }
+    if (icon.bar) vg.rect(3, 20.5, 18, 3, () => vg.fill(icon.bar!));
+    // Over the glyph, unseen: what the pointer clicks and rests on.
+    vg.rrect(0, 0, 24, 24, 3, () => {
+      vg.fill("#ffffff");
+      vg.opacity(0);
+      vg.tooltip(tip);
+      vg.cursor("pointer");
+      vg.on_click(() => run());
+    });
+  });
+  // Its 26 px: a scene's canvas otherwise takes the row's spare width.
+  ui.set_width(scene, 26);
+  ui.a11y_role(scene, "button");
+  ui.a11y_label(scene, tip);
+  v_tools.set(label, scene);
+  return scene;
+}
+
+// The tools' scenes by label, for a spec or the menus to find.
+export const v_tools = new Map<string, number>();
+
+// Every icon inked for a dark ground or a light one (dark mode).
+export function inkTools(dark: boolean): void {
+  const c = dark ? INK.dark : INK.light;
+  for (const i of inked) vg.set(i.h, { ...(i.fill ? { fill: c } : {}), ...(i.stroke ? { stroke: [c, i.stroke] } : {}) });
 }

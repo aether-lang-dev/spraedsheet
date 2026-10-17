@@ -25,6 +25,10 @@ export function viewBar(v: SheetView): void {
     v.btn("Zoom in", () => v.run("view.zoom", { by: "in" }));
     v.btn("Zoom out", () => v.run("view.zoom", { by: "out" }));
     v.btn("Zoom 100%", () => v.run("view.zoom", { percent: "100" }));
+    // Dark mode: the chrome dark or light, or the system's.
+    v.btn("Dark mode", () => v.run("view.appearance", { mode: "dark" }));
+    v.btn("Light mode", () => v.run("view.appearance", { mode: "light" }));
+    v.btn("System appearance", () => v.run("view.appearance", { mode: "system" }));
     v.btn("AutoFit columns", () => v.run("columns.autofit", { range: v.range() }));
     v.btn("AutoFit rows", () => v.run("rows.autofit", { range: v.range() }));
     v.btn("Row height", () => v.run("rows.height", { range: v.range(), height: height.value.trim() || "0" }));

@@ -49,6 +49,7 @@ interface State {
   readonly panel: string;
   readonly split: number;
   readonly zoom: number;
+  readonly appearance: string;
   readonly hiddenSheets: readonly string[];
   readonly tabColors: Readonly<Record<string, string>>;
   readonly dateSystem: number;
@@ -270,6 +271,9 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // Zoom: SETZOOM(150), SETZOOM("in"), SETZOOM("out"); GETZOOM().
   SETZOOM: async (exec, z) => (await must(exec, "view.zoom", /^(in|out)$/i.test(text(z).trim()) ? { by: text(z).trim().toLowerCase() } : { percent: text(z).trim() })).output,
   GETZOOM: async (exec) => (await state(exec)).zoom,
+  // Dark mode: SETAPPEARANCE("dark"), "light" or "system"; GETAPPEARANCE().
+  SETAPPEARANCE: async (exec, m) => String((await must(exec, "view.appearance", { mode: text(m) })).output),
+  GETAPPEARANCE: async (exec) => (await state(exec)).appearance,
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,

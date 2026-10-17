@@ -2954,6 +2954,18 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // Light or dark: the system's (system, as it starts), or light or dark
+    // whatever the system shows; the chrome changes, the sheet stays white.
+    // A view, not saved.
+    id: "view.appearance", label: "Dark Mode", params: ["mode"], journaled: false,
+    run: async (wb, p) => {
+      const m = p.mode.trim().toLowerCase();
+      if (m !== "system" && m !== "light" && m !== "dark") refuse(`${p.mode} is not system, light or dark`);
+      wb.appearance = m as "system" | "light" | "dark";
+      return { ok: true, message: `appearance ${m}`, changed: [], output: m };
+    },
+  },
+  {
     // Zoom: the sheet drawn at a percentage, 10 to 400, as Excel's; or in
     // or out a step (Excel's 10, 25, 50, 75, 100, 125, 150, 200, 400). A
     // view, not a step to undo, not saved.
@@ -3206,7 +3218,7 @@ const SPECS: readonly Spec[] = [
         canUndo: wb.canUndo ? 1 : 0, canRedo: wb.canRedo ? 1 : 0,
         autoId: page.autoId && { column: colName(page.autoId.column), next: `${page.autoId.prefix}${page.autoId.next}` },
         language: wb.sheet.language.name, referenceStyle: wb.referenceStyle,
-        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
+        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
       };
       return { ok: true, message: JSON.stringify(state), changed: [], output: state };
     },

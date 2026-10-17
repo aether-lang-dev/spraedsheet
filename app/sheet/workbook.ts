@@ -350,6 +350,11 @@ export class Workbook {
   split = false;
   // The zoom, in percent (10 to 400, as Excel's): a view of the sheet.
   zoom = 100;
+  // Light or dark (view.appearance): the system's, or one chosen; and
+  // whether it is dark now (the page says), the sheet itself staying white
+  // with black text as Excel's does in dark mode.
+  appearance: "system" | "light" | "dark" = "system";
+  dark = false;
   // The panel open under the grid (menus.ts's PANELS), or null: a view.
   panel: string | null = null;
   // Show Formulas: the grid shows inputs rather than values.
@@ -951,7 +956,7 @@ export class Workbook {
     const v = this.sheet.value(key), n = this.notes.get(key);
     const table = this.#tableLook(key);
     const zoomed = this.zoom === 100 ? "" : `font-size: ${Math.round((n.look?.size ?? 13) * this.zoom / 100)}px`;
-    return [typeof v === "number" ? "text-align: end" : "", table, toStyle(n.style), lookStyle(this.lookOf(n)), formatStyle(v, n.format ?? ""), this.#conditional.get(key) ?? "", resolvedStyle(this.#marks.get(key)?.style ?? ""), this.#traced.get(key) ?? "",
+    return [this.dark ? "background: #ffffff; color: #000000" : "", typeof v === "number" ? "text-align: end" : "", table, toStyle(n.style), lookStyle(this.lookOf(n)), formatStyle(v, n.format ?? ""), this.#conditional.get(key) ?? "", resolvedStyle(this.#marks.get(key)?.style ?? ""), this.#traced.get(key) ?? "",
       this.#circled.has(key) ? "background: #ffd6d6" : "", v instanceof CellError ? "color: #c0392b" : "",
       n.comment ? "--corner: #d00000" : "", this.#typed.get(key) ?? "", zoomed].filter((p) => p).join("; ");
   }

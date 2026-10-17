@@ -1,13 +1,14 @@
 // The toolbar row (3.0.2): its new commands, Alignment, Fill Color, Font
 // Color and Number Format over a range, drawn, shown, undone and saved;
 // REXX's SETALIGNMENT, SETFILLCOLOR, SETTEXTCOLOR and SETNUMBERFORMAT; and
-// each button runs an action the menus have too.
+// each button runs an action the menus have too; and its icon (3.0.6).
 import { Commands } from "./sheet/commands.ts";
 import { Workbook } from "./sheet/workbook.ts";
 import { writeSheetFile } from "./sheet/file.ts";
 import { MENUS } from "./sheet/menus.ts";
 import type { MenuItem } from "./sheet/menus.ts";
 import { GROUPS, TOOLS } from "./sheet/view/toolbar.ts";
+import { ICONS } from "./sheet/view/icons.ts";
 import { eq } from "./lib/check.ts";
 
 const wb = new Workbook();
@@ -36,6 +37,8 @@ eq("from REXX", [(await cmds.script('CALL SETALIGNMENT "B1:B2", "right"\nCALL SE
 const items = new Set(MENUS.flatMap((m) => m.items.filter((e): e is MenuItem => e !== "-").map((e) => e.label)));
 eq("each toolbar button runs an action a menu item runs too", TOOLS.filter(([, , action]) => !items.has(action)).map(([l]) => l), []);
 eq("each has its tooltip", TOOLS.filter(([, tip]) => !tip).length, 0);
+eq("each tool has its icon, and every icon a tool (3.0.6)", [TOOLS.filter(([l]) => !ICONS[l]).map(([l]) => l), Object.keys(ICONS).filter((k) => !TOOLS.some(([l]) => l === k))], [[], []]);
+eq("an icon is strokes, a fill or a letter, and its paths are path data", Object.entries(ICONS).filter(([, i]) => !(i.strokes || i.fills || i.text) || [i.strokes, i.fills].some((d) => d !== undefined && !/^M[\d\s.MLHVCSQTAZmlhvcsqtaz-]+$/.test(d))).map(([k]) => k), []);
 eq("the groups start at tools there are, in order", GROUPS.map((g) => TOOLS.findIndex(([l]) => l === g)), [0, 2, 5, 8, 11, 14, 15, 17, 19]);
 
 // expect: ok Alignment over a range, and general again
@@ -47,4 +50,6 @@ eq("the groups start at tools there are, in order", GROUPS.map((g) => TOOLS.find
 // expect: ok from REXX
 // expect: ok each toolbar button runs an action a menu item runs too
 // expect: ok each has its tooltip
+// expect: ok each tool has its icon, and every icon a tool (3.0.6)
+// expect: ok an icon is strokes, a fill or a letter, and its paths are path data
 // expect: ok the groups start at tools there are, in order

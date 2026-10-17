@@ -16,6 +16,8 @@ import std.json
 import saedriver as b
 import griddriver as g
 import uidriver
+import std.os
+import std.fs
 
 const TRIES = 60
 const POLL_MS = 50
@@ -29,6 +31,27 @@ wait_formula(want: string) -> int {
         i = i + 1
     }
     return 0
+}
+
+// The toolbar's tool a screen reader names `tip`: its canvas's handle
+// (the driver's /canvas/{h} routes, /widgets' "canvas"), or 0.
+tool_canvas(tip: string) -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 }
+    c = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(w, "a11y_name"), tip) == 1 { c = uidriver.field_int(w, "canvas") }
+        i = i + 1
+    }
+    json.json_free(v)
+    return c
+}
+
+// A tool clicked, at its middle.
+click_tool(tip: string) {
+    uidriver.post_ok("/canvas/${tool_canvas(tip)}/click?x=12&y=12", "click the ${tip} tool")
 }
 
 // How many of the grid's cells carry the cursor's box (the driver's
@@ -657,7 +680,7 @@ main() {
             spec.assert_true(uidriver.widget_int_field_by_id(fb, "y") - y < 6 && y - uidriver.widget_int_field_by_id(fb, "y") < 6, "the formula bar on the Name Box's row")
             spec.assert_gt(uidriver.widget_int_field_by_id(fx, "x"), uidriver.widget_int_field_by_id(nb, "x"), "fx after the Name Box")
             spec.assert_gt(uidriver.widget_int_field_by_id(fb, "x"), uidriver.widget_int_field_by_id(fx, "x"), "the formula after fx")
-            spec.assert_gt(y, uidriver.widget_int_field_by_id(uidriver.widget_id_of("button", "Undo"), "y"), "under the toolbar")
+            spec.assert_gt(y, uidriver.widget_int_field_by_id(uidriver.widget_id_of("text", "Spreadsheet"), "y") + 24, "under the toolbar")
             g.goto("C3")
             spec.assert_true(uidriver.wait_body_contains("/widget/${nb}", "C3", 40), "the Name Box says the cell")
             g.goto("A1")
@@ -671,39 +694,69 @@ main() {
             spec.assert_true(dx >= 12, "the title 12 px in from the page's left (${dx})")
             spec.assert_true(dy >= 8, "and 8 down from its top (${dy})")
         }
-        spec.it("the toolbar: one row of short buttons with tooltips, each running its command") callback {
-            u = uidriver.widget_id_of("button", "Undo")
-            f = uidriver.widget_id_of("button", "Fill")
-            c = uidriver.widget_id_of("button", "Chart")
-            spec.assert_gt(f, 0, "Fill is there")
-            uy = uidriver.widget_int_field_by_id(u, "y")
-            spec.assert_eq(uidriver.widget_int_field_by_id(f, "y"), uy, "Fill on Undo's row")
-            spec.assert_eq(uidriver.widget_int_field_by_id(c, "y"), uy, "and Chart, the last")
-            spec.assert_gt(uidriver.widget_int_field_by_id(c, "x"), uidriver.widget_int_field_by_id(f, "x"), "in order along it")
-            r = uidriver.widget_id_of("button", "Redo")
-            cu = uidriver.widget_id_of("button", "Cut")
-            gap_in = uidriver.widget_int_field_by_id(r, "x") - uidriver.widget_int_field_by_id(u, "x") - uidriver.widget_int_field_by_id(u, "w")
-            gap_out = uidriver.widget_int_field_by_id(cu, "x") - uidriver.widget_int_field_by_id(r, "x") - uidriver.widget_int_field_by_id(r, "w")
-            spec.assert_gt(gap_out, gap_in + 6, "the groups set apart (Redo to Cut wider than Undo to Redo)")
-            spec.assert_true(uidriver.wait_body_contains("/widget/${f}", "\"tooltip\":\"Fill Color: yellow\"", 40), "Fill's tooltip")
-            spec.assert_true(uidriver.wait_body_contains("/widget/${uidriver.widget_id_of("button", "B")}", "\"tooltip\":\"Bold (Ctrl+B)\"", 40), "B's tooltip, with its shortcut")
+        spec.it("the toolbar: one row of icons with tooltips, each a button to a screen reader, each running its command") callback {
+            v, _jerr = json.parse(uidriver.get_body("/widgets"))
+            named = 0
+            i = 0
+            while i < json.json_array_size(v) {
+                w = json.json_array_get_raw(v, i)
+                if string.equals(uidriver.field_str(w, "role"), "button") == 1 && string.length(uidriver.field_str(w, "a11y_name")) > 0 && string.equals(uidriver.field_str(w, "type"), "canvas") == 1 { named = named + 1 }
+                i = i + 1
+            }
+            json.json_free(v)
+            spec.assert_true(named >= 20, "twenty icons, each a named button (${named})")
+            spec.assert_gt(tool_canvas("Undo (Ctrl+Z)"), 0, "Undo's icon")
+            spec.assert_gt(tool_canvas("Fill Color: yellow"), 0, "Fill's, its tooltip saying what it does")
+            spec.assert_gt(tool_canvas("Bold (Ctrl+B)"), 0, "Bold's, with its shortcut")
             g.enter("K50", "1234.5")
             g.goto("K50")
-            b.click("B")
+            click_tool("Bold (Ctrl+B)")
             spec.assert_true(b.wait_for_console("sheet: K50: bold"), "B: bold")
-            b.click("Fill")
+            click_tool("Fill Color: yellow")
             spec.assert_true(b.wait_for_console("sheet: K50: fill #ffff00"), "Fill: yellow")
-            b.click("$")
+            click_tool("Currency Style")
             spec.assert_true(g.wait_cell("K", 50, "$1,234.50"), "$: currency")
             g.goto("K51")
             spec.assert_true(uidriver.wait_body_contains("/widget/${g.cell_id("K", 50)}", "#ffff00", 40), "drawn yellow, the selection moved off it")
             g.goto("K50")
-            b.click("Center")
+            click_tool("Center")
             spec.assert_true(b.wait_for_console("sheet: K50: aligned center"), "Center")
-            uidriver.click_widget(uidriver.widget_id_of("button", "Undo"))
-            spec.assert_true(b.wait_for_console("sheet: undid Alignment"), "Undo from the toolbar (the first Undo)")
+            click_tool("Undo (Ctrl+Z)")
+            spec.assert_true(b.wait_for_console("sheet: undid Alignment"), "Undo from the toolbar")
             g.command("range.clearAll range=K50")
             g.goto("A1")
+        }
+        spec.it("the look above the grid, the title and the toolbar's icons, matches its screenshot for this platform (recorded when there is none)") callback {
+            uidriver.post_ok("/window/resize?w=1200&h=800", "a window 1200 by 800")
+            sleep(800)
+            t = uidriver.widget_id_of("text", "Spreadsheet")
+            last = 0
+            v, _jerr = json.parse(uidriver.get_body("/widgets"))
+            i = 0
+            while i < json.json_array_size(v) {
+                w = json.json_array_get_raw(v, i)
+                if string.equals(uidriver.field_str(w, "a11y_name"), "Chart of the selection") == 1 { last = uidriver.field_int(w, "id") }
+                i = i + 1
+            }
+            json.json_free(v)
+            spec.assert_gt(last, 0, "the toolbar's last icon")
+            x0 = uidriver.widget_int_field_by_id(t, "x")
+            y0 = uidriver.widget_int_field_by_id(t, "y")
+            x1 = uidriver.widget_int_field_by_id(last, "x") + uidriver.widget_int_field_by_id(last, "w")
+            y1 = uidriver.widget_int_field_by_id(last, "y") + uidriver.widget_int_field_by_id(last, "h")
+            shot = "../../target/above-grid.png"
+            spec.assert_str_eq(b.screenshot(shot), "", "a screenshot")
+            os_name, _oe = os.exec("uname -s")
+            plat = string.trim(os_name)
+            ref = "baselines/${plat}-above-grid.png"
+            if fs.exists(ref) == 0 {
+                _c, _ce = os.exec("cp ${shot} ${ref}")
+                println("    recorded ${ref}: check it in")
+            } else {
+                out, eerr = os.exec("python3 ../lib/shot_mae.py ${ref} ${shot} ${x0} ${y0} ${x1 - x0} ${y1 - y0} 6")
+                println("    above the grid against ${ref}: ${out}")
+                spec.assert_str_eq(eerr, "", "within a mean error of 6 of the checked-in screenshot (${out})")
+            }
         }
         spec.it("Calculation options: manual waits for Calculate now; iteration works a cycle round") callback {
             g.command("formulas.use language=Excel")
@@ -2098,6 +2151,24 @@ main() {
             spec.assert_true(g.wait_cell("C", 14, "27"), "the first forecast")
             spec.assert_true(g.wait_cell("C", 15, "29"), "the second")
             g.command("view.panel name=none")
+        }
+        spec.it("dark mode: the system's dark followed, the chrome dark, the icons inked light, the sheet white; chosen whatever the system shows") callback {
+            g.command("cell.set cell=A1 input=dark?")
+            uidriver.post_ok("/appearance?dark=1", "the system turned dark")
+            spec.assert_true(b.wait_for_console("sheet: dark"), "followed")
+            nb = g.field("cell")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${nb}", "\"bg\":\"#333333\"", 40), "the Name Box's ground dark")
+            spec.assert_true(uidriver.wait_body_contains("/canvas/${tool_canvas("Undo (Ctrl+Z)")}/nodes", "#e8e8e8", 40), "the icons inked light")
+            g.pick("B", 2)
+            spec.assert_true(uidriver.wait_body_contains("/widget/${g.cell_id("A", 1)}", "\"bg\":\"#ffffff\",\"fg\":\"#000000\"", 40), "the sheet's cells white, their text black")
+            uidriver.post_ok("/appearance?dark=0", "and light again")
+            spec.assert_true(b.wait_for_console("sheet: light"), "followed back")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${nb}", "\"bg\":\"#ffffff\"", 40), "the Name Box white")
+            g.command("view.appearance mode=dark")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${nb}", "\"bg\":\"#333333\"", 40), "dark when chosen, the system light")
+            g.command("view.appearance mode=system")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${nb}", "\"bg\":\"#ffffff\"", 40), "the system's again")
+            g.command("range.clear range=A1")
         }
     }
     return spec.run_summary(fw)
