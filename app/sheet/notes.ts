@@ -27,6 +27,14 @@ export interface Note {
   // (Sheet2!B3, a name; "#" before it as Excel writes one), and the tip
   // shown when the pointer rests on it.
   readonly hyperlink?: Hyperlink;
+  // A picture placed in the cell (Place in Cell): its bytes as base64, its
+  // alternative text; drawn over the cell, fitted to it.
+  readonly picture?: CellPicture;
+}
+
+export interface CellPicture {
+  readonly data: string;
+  readonly alt?: string;
 }
 
 export interface Hyperlink {

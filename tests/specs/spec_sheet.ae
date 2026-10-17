@@ -2277,6 +2277,15 @@ main() {
             g.command("range.clear range=J20")
             g.command("view.panel name=none")
         }
+        spec.it("a picture in a cell (Place in Cell), drawn over it fitted to it; and taken out") callback {
+            g.command("sheet.add name=Pictures")
+            g.goto("A1")
+            g.command("insert.cellPicture cell=B2 base64=iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGM4oaGBFTEMLQkAgl1GAWqNFmsAAAAASUVORK5CYII= alt=logo")
+            spec.assert_true(b.wait_for_console("sheet: a picture in B2: logo"), "placed")
+            spec.assert_true(uidriver.wait_body_contains("/widgets", "\"type\":\"image\"", 40), "drawn over its cell")
+            g.command("cell.removePicture range=B2")
+            spec.assert_true(b.wait_for_console("sheet: 1 picture taken out of B2"), "taken out")
+        }
     }
     return spec.run_summary(fw)
 }

@@ -400,6 +400,11 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   REMOVEHYPERLINK: async (exec, r) => (await must(exec, "cell.removeHyperlink", { range: text(r) })).message,
   FOLLOWHYPERLINK: async (exec, c) => String((await must(exec, "cell.followHyperlink", { cell: text(c) })).output),
   GETHYPERLINK: async (exec, c) => (await about(exec, c)).hyperlink ?? "",
+  // Place in Cell: INSERTCELLPICTURE("B2", base64, "a logo"); a floating
+  // picture into its cell: PLACEINCELL("Picture 1"); REMOVECELLPICTURE("B2").
+  INSERTCELLPICTURE: async (exec, c, b64, alt) => (await must(exec, "insert.cellPicture", { cell: text(c), base64: text(b64), ...(text(alt) ? { alt: text(alt) } : {}) })).message,
+  PLACEINCELL: async (exec, n) => (await must(exec, "insert.cellPicture", { name: text(n) })).message,
+  REMOVECELLPICTURE: async (exec, r) => (await must(exec, "cell.removePicture", { range: text(r) })).message,
   FORECASTSHEET: async (exec, t, v, end, opts) => (await must(exec, "data.forecastSheet", { timeline: text(t), values: text(v), end: text(end), ...pairs(opts) })).message,
   // Data Analysis: ANALYZE("regression", "A1:C20", "E1", "labels=1;alpha=0.05").
   ANALYZE: async (exec, tool, input, output, opts) => (await must(exec, "data.analyze", { tool: text(tool), input: text(input), output: text(output), ...pairs(opts) })).message,

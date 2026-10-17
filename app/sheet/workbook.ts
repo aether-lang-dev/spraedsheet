@@ -38,6 +38,7 @@ import { applied } from "./rules.ts";
 import { chartData, layout } from "./charts.ts";
 import { drawingShapes } from "./drawings.ts";
 import type { Drawing } from "./drawings.ts";
+import { imageOf } from "./functions.ts";
 import type { ChartData, ChartKind, ChartOptions, Shape } from "./charts.ts";
 import { rangeName } from "./rules.ts";
 import { sheetPrefix } from "./address.ts";
@@ -1063,6 +1064,17 @@ export class Workbook {
 
   // What shows when the pointer rests on a cell: its comment.
   // A cell's tooltip: its comment, and its rule's input prompt.
+  // A cell's picture, its bytes as base64 ("" none): one placed in it, or
+  // what its IMAGE formula shows.
+  pictureIn(key: string): string {
+    const n = this.notes.get(key);
+    if (n.picture) return n.picture.data;
+    const input = this.sheet.input(key);
+    if (!/^=\s*IMAGE\s*\(/i.test(input) || this.sheet.value(key) instanceof CellError) return "";
+    const m = /^=\s*IMAGE\s*\(\s*"([^"]*)"/i.exec(input);
+    return m ? imageOf(m[1]) ?? "" : "";
+  }
+
   tooltipOf(key: string): string {
     const n = this.notes.get(key);
     const link = n.hyperlink ? n.hyperlink.tip || `${n.hyperlink.target.replace(/^#/, "")}\nOpen Hyperlink to follow it` : "";

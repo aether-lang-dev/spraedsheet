@@ -192,6 +192,11 @@ export function sheetGrid(v: SheetView): void {
     pointing = pointable(text, caret);
     typed(text);
   });
+  // Pictures in cells (Place in Cell, IMAGE): drawn over their cells.
+  if (typeof ui.datagrid_cell_picture === "function") ui.datagrid_cell_picture(v.grid, (r: number, c: number) => {
+    const key = keyAt(r, c);
+    return key ? v.wb.pictureIn(key) : "";
+  });
   ui.datagrid_cell_tooltip(v.grid, (r: number, c: number) => {
     const key = keyAt(r, c);
     return key ? v.wb.tooltipOf(key) : "";

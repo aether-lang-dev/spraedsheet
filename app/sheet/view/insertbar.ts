@@ -40,6 +40,13 @@ export function insertBar(v: SheetView): void {
       if (!d) return;
       return v.run("insert.picture", { base64: await d.read_base64(), at: v.here(), alt: d.name });
     });
+    // Place in Cell: a picture into the selected cell, fitted to it.
+    v.btn("Picture in cell", async () => {
+      if (typeof documents === "undefined") return v.status.set("A picture from a file needs the installed app (documents)");
+      const d = await documents.pick_open("Place a picture in the cell: PNG, JPEG, GIF or BMP");
+      if (!d) return;
+      return v.run("insert.cellPicture", { cell: v.here(), base64: await d.read_base64(), alt: d.name });
+    });
     const shape = (label: string, kind: string) => v.btn(label, () => v.run("insert.shape", { shape: kind, at: v.here(), ...(words.value ? { text: words.value } : {}) }));
     shape("Rectangle", "rectangle");
     shape("Rounded rectangle", "roundedRectangle");
@@ -56,6 +63,7 @@ export function insertBar(v: SheetView): void {
       ui.btn(`Delete ${d.name}`, () => v.run("drawing.delete", { name: d.name }));
       ui.btn(`${d.name} to front`, () => v.run("drawing.order", { name: d.name, to: "front" }));
       ui.btn(`Move ${d.name} here`, () => v.run("drawing.edit", { name: d.name, at: v.here() }));
+      if (d.kind === "picture") ui.btn(`Place ${d.name} in cell`, () => v.run("insert.cellPicture", { name: d.name }));
     });
     vg.scene(`0 0 ${d.w} ${d.h}`, d.w, d.h, () => {
       if (d.kind === "picture" && d.picture) {

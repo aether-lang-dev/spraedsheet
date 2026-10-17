@@ -100,6 +100,7 @@ interface FileCell {
   readonly ignoreError?: unknown;
   readonly cellStyle?: string;
   readonly hyperlink?: unknown;
+  readonly picture?: unknown;
 }
 
 type Cells = Record<string, string | FileCell>;
@@ -133,6 +134,8 @@ function noteOf(c: string | FileCell): Note {
   const editor = editorIn(c.editor);
   if (editor) note.editor = editor;
   if (c.ignoreError === true) note.ignoreError = true;
+  const pic = c.picture as { data?: unknown; alt?: unknown } | undefined;
+  if (pic && typeof pic === "object" && typeof pic.data === "string" && pic.data) note.picture = { data: pic.data, ...(typeof pic.alt === "string" && pic.alt ? { alt: pic.alt } : {}) };
   const h = c.hyperlink as { target?: unknown; tip?: unknown } | undefined;
   if (h && typeof h === "object" && typeof h.target === "string" && h.target) note.hyperlink = { target: h.target, ...(typeof h.tip === "string" && h.tip ? { tip: h.tip } : {}) };
   return note;

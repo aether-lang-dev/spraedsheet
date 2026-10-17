@@ -2864,6 +2864,35 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // Place in Cell: a picture into a cell (base64= its bytes, alt= its
+    // alternative text), drawn over it fitted to it, its value left as it
+    // is; or (name=) a floating picture placed in the cell it sits on.
+    id: "insert.cellPicture", label: "Place in Cell", params: [], optional: ["cell", "base64", "alt", "name"], journaled: true,
+    run: async (wb, p) => {
+      if (p.name !== undefined) {
+        const page = wb.page(wb.active)!, d = drawingNamed(wb, p.name);
+        if (d.kind !== "picture" || !d.picture) refuse(`${d.name} is not a picture`);
+        const key = keyOf(d.at);
+        wb.notes.set(key, { picture: { data: d.picture!, ...(d.alt ? { alt: d.alt } : {}) } });
+        page.drawings = page.drawings.filter((x) => x !== d);
+        return changedBy(wb, [key], `${d.name} placed in ${key}`);
+      }
+      const key = cellOf(p.cell ?? refuse("Place in Cell needs cell= (and base64=) or name="));
+      const bytes = fromBase64(p.base64 ?? refuse("Place in Cell needs base64= a picture's bytes"));
+      pictureOf(bytes) ?? refuse("not a picture (PNG, JPEG, GIF or BMP)");
+      wb.notes.set(key, { picture: { data: toBase64(bytes), ...(p.alt ? { alt: p.alt } : {}) } });
+      return changedBy(wb, [key], `a picture in ${key}${p.alt ? `: ${p.alt}` : ""}`);
+    },
+  },
+  {
+    id: "cell.removePicture", label: "Delete Picture in Cell", params: ["range"], journaled: true,
+    run: async (wb, p) => {
+      const r = rangeOf(p.range), keys = [...range(r[0], r[1])].filter((k) => wb.notes.get(k).picture);
+      for (const k of keys) wb.notes.set(k, { picture: undefined });
+      return changedBy(wb, keys, `${keys.length} picture${keys.length === 1 ? "" : "s"} taken out of ${rangeName(r)}`);
+    },
+  },
+  {
     // Insert Shapes: shape= (rectangle, roundedRectangle, oval, triangle,
     // rightArrow, line), at=, w= and h= (96 x 64), fill= and line= colours
     // (a theme's accent1 and its darker line), text= inside it.

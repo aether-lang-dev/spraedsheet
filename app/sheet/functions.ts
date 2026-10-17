@@ -504,8 +504,22 @@ def("REPT", 2, 2, (args) => {
 // HYPERLINK(link, [friendly name]): the friendly name shown (the link
 // itself without one); following the cell opens the link (cell.followHyperlink).
 def("HYPERLINK", 1, 2, (args) => (absent(args, 1) ? str(args, 0) : val(args, 1)));
+// IMAGE(source, [alt_text]): a picture in its cell, from a data: URL (this
+// app fetches no pictures from the network); its value the alternative
+// text, the grid drawing the picture (imageOf).
+def("IMAGE", 1, 5, (args) => {
+  const src = str(args, 0);
+  if (!imageOf(src)) return fail("#VALUE!", "IMAGE: a data: URL of a PNG, JPEG, GIF or BMP (this app fetches no pictures from the network)");
+  return absent(args, 1) ? "" : str(args, 1);
+});
 def("EXACT", 2, 2, (args) => str(args, 0) === str(args, 1));
 def("VALUE", 1, 1, (args) => num(args, 0));
+
+// The picture a data: URL holds, its base64, or null.
+export function imageOf(src: string): string | null {
+  const m = /^\s*data:image\/(png|jpeg|jpg|gif|bmp);base64,([A-Za-z0-9+/=\s]+)$/i.exec(src);
+  return m ? m[2].replace(/\s+/g, "") : null;
+}
 
 // CODE and CHAR over the first 255 codes; UNICODE and UNICHAR over all.
 def("CODE", 1, 1, (args) => {
