@@ -1,4 +1,4 @@
-// Charts laid out with no toolkit, as GridCraft's chart crate lays them out:
+// Charts laid out with no toolkit, as plain geometry the page draws:
 // a range read as categories and series (chartData), a scale with round
 // ticks (niceScale), and any of fifteen of Excel's kinds as plain shapes (layout)
 // that the page draws in vg and a spec can read back. And sparklines, as

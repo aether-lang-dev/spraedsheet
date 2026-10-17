@@ -1,5 +1,5 @@
-// Excel's number-format language, as GridCraft's numfmt crate and Excel's
-// Format Cells > Custom have it. A format is up to four sections, split by
+// Excel's number-format language, as Excel's Format Cells > Custom has
+// it. A format is up to four sections, split by
 // ';' outside quotes: positive;negative;zero;text (one section serves every
 // number, the negative ones with a '-'; a negative section shows the
 // number without one). A section may start with a colour ([Red]) or a
