@@ -98,6 +98,7 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   SETMACRO: fn([p("name", "text"), p("text", "text", "the REXX")], "Writes or edits a macro", "what it did"),
   DELETEMACRO: fn([p("name", "text")], "Deletes a macro", "what it did"),
   LISTMACROS: fn([], "The workbook's macros", "a stem of their names"),
+  LISTFUNCTIONS: fn([], "The functions a formula may call, in the sheet's language", "a stem of their names, sorted"),
   SELECTRANGE: fn([p("range", "range", "a cell, a range, whole columns (\"B:B\"), whole rows (\"3:5\"), or \"all\"")], "Selects it on the page", "the range selected"),
   GETSELECTION: fn([], "The selection", "a range, e.g. B2:C4"),
   GOTOSPECIAL: fn([p("what", "text", "formulas, constants, blanks, errors, comments, validation or conditional"), opt("range", "range", "the used range when left out"), opt("type", "text", "numbers, text, logicals or errors, for formulas and constants")], "Go To Special: the cells of a kind", "a stem of cells, in sheet order"),
@@ -346,6 +347,7 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   RESULT: fn([QUERY], "The query's rows", "a stem of rows"),
   // ---- the workbook
   SPREADSHEET_VERSION: fn([], "The app's version", "e.g. \"sae demo 18\""),
+  RUNCOMMAND: fn([p("line", "text", "a command line, as the command bar takes: cell.set cell=A1 input=4"), opt("encoding", "text", "\"json\": the line is a JSON string")], "Runs one of the app's commands by its command line", "what it said"),
   SETFORMULALANGUAGE: fn([p("language", "text", "Excel or RexxJS")], "Sets the language formulas are written in", "the language now"),
   GETFORMULALANGUAGE: fn([], "The language formulas are written in", "Excel or RexxJS"),
   SETREFERENCESTYLE: fn([p("style", "text", "A1 or R1C1")], "Sets how the page shows Excel formulas and takes them typed (stored A1 either way)", "the style now"),

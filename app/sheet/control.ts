@@ -10,6 +10,7 @@ import { check } from "./validation.ts";
 import type { Rule } from "./validation.ts";
 import type { Addr } from "./address.ts";
 import { DESCRIBED, signature } from "./described.ts";
+import { parseLine } from "./recorder.ts";
 
 export interface Done {
   readonly ok: boolean;
@@ -118,6 +119,17 @@ const VERSION = "sae demo 18";
 
 export const CONTROL: Readonly<Record<string, Control>> = {
   SPREADSHEET_VERSION: () => VERSION,
+  // One of the app's command lines ("cell.set cell=A1 input=4"), run as the
+  // command bar runs it: what it gave (a getter's value), else what it said,
+  // as ADDRESS SHEET's RESULT. `encoding` "json": the line is a JSON
+  // string (the CLI sends it so, nothing in it read as REXX on the way in).
+  RUNCOMMAND: async (exec, source, encoding) => {
+    const line = text(encoding).toLowerCase() === "json" ? JSON.parse(text(source)) : text(source);
+    if (typeof line !== "string" || !line.trim()) throw new Error("RUNCOMMAND: a command line, e.g. cell.set cell=A1 input=4");
+    const { id, params } = parseLine(line);
+    const o = await must(exec, id, params);
+    return o.output ?? o.message;
+  },
   // Not the app's (its sheets are RexxJS formulas only): the formula
   // language, "Excel" or "RexxJS", as the Formula language setting.
   SETREFERENCESTYLE: async (exec, s) => (await must(exec, "formulas.style", { style: text(s) }), (await state(exec)).referenceStyle),
@@ -322,6 +334,9 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   SETMACRO: async (exec, n, t) => (await must(exec, "macro.set", { name: text(n), text: text(t) })).message,
   DELETEMACRO: async (exec, n) => (await must(exec, "macro.delete", { name: text(n) })).message,
   LISTMACROS: async (exec) => stem((await must(exec, "macro.list", {})).output as string[]),
+  // The formula functions there are, in the sheet's language (the CLI's
+  // sheet functions).
+  LISTFUNCTIONS: async (exec) => stem((await must(exec, "formulas.functions")).output as string[]),
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,

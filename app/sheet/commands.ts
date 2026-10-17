@@ -3548,6 +3548,14 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // The functions a formula may call, in the sheet's language, sorted.
+    id: "formulas.functions", label: "Functions", params: [], journaled: false,
+    run: async (wb) => {
+      const fs = [...wb.sheet.language.functions()].sort();
+      return { ok: true, message: `${fs.length} ${wb.sheet.language.name} functions`, changed: [], output: fs };
+    },
+  },
+  {
     // The function names that complete a formula typed so far, and the
     // call its end is in (Formula AutoComplete and the argument hint).
     id: "formulas.complete", label: "Formula AutoComplete", params: ["text"], journaled: false,
