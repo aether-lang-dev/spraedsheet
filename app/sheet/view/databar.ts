@@ -46,6 +46,9 @@ export function dataBar(v: SheetView): void {
       return v.run("data.forecastSheet", { timeline: `${keyOf({ col: l, row: top })}:${keyOf({ col: l, row: bottom })}`, values: `${keyOf({ col: r, row: top })}:${keyOf({ col: r, row: bottom })}`, end: goal.value });
     });
     v.btn("Solver", () => v.run("solver.solve", { objective: v.here(), changing: by.value, ...(criteria.value.trim() ? { constraints: criteria.value } : {}), report: "1" }));
+    // The same by GRG Nonlinear and by Evolutionary (bounds in the criteria).
+    v.btn("Solver GRG", () => v.run("solver.solve", { objective: v.here(), changing: by.value, ...(criteria.value.trim() ? { constraints: criteria.value } : {}), report: "1", method: "grg" }));
+    v.btn("Solver Evolutionary", () => v.run("solver.solve", { objective: v.here(), changing: by.value, ...(criteria.value.trim() ? { constraints: criteria.value } : {}), report: "1", method: "evolutionary" }));
     bind(ui.textfield("row input", () => {}), rowInput);
     bind(ui.textfield("column input", () => {}), columnInput);
     v.btn("Data table", () => v.run("data.table", { range: v.range(), ...given({ row: rowInput.value, column: columnInput.value }) }));

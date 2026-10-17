@@ -54,6 +54,7 @@ import { BAND, bandedKeys, slicedRows, slicerValues } from "./workbook.ts";
 import type { Edit, Scope } from "./shift.ts";
 import { CONSOLIDATE_FUNCTIONS, consolidate } from "./consolidate.ts";
 import { solveLp } from "./solver.ts";
+import { evolutionary, grg } from "./nlp.ts";
 import { TOOLS, analyze } from "./analysis.ts";
 import type { Column } from "./analysis.ts";
 import type { LpRow, Relation } from "./solver.ts";
@@ -275,6 +276,72 @@ async function everySheet(wb: Workbook): Promise<string[]> {
 async function changedBy(wb: Workbook, changed: readonly string[], message: string): Promise<Outcome> {
   await wb.settle();
   return { ok: true, message, changed };
+}
+
+// Solver's GRG Nonlinear and Evolutionary (nlp.ts): the objective and the
+// constraints worked out by the sheet at each point tried; bounds from the
+// constraints on a changing cell alone (and 0 below, unless nonneg=0); an
+// Answer Report as Simplex LP's.
+interface NonlinearAsk {
+  readonly obj: string; readonly goal: string; readonly vars: string[]; readonly was: [string, string][];
+  readonly cons: { lhs: string; rel: Relation; rhs: string | number; said: string }[];
+  readonly ints: Set<string>; readonly bins: Set<string>; readonly origValues: number[]; readonly origObj: number;
+  readonly num: (k: string) => number; readonly at: (x: readonly number[]) => Promise<void>; readonly evolutionary: boolean;
+}
+async function solveNonlinear(wb: Workbook, p: Params, a: NonlinearAsk): Promise<Outcome> {
+  const { obj, goal, vars, was, cons, ints, bins, num, at } = a;
+  const free = p.nonneg !== undefined && !flag(p.nonneg);
+  const lower = vars.map((k) => (bins.has(k) || !free ? 0 : -Infinity)), upper = vars.map((k) => (bins.has(k) ? 1 : Infinity));
+  for (const c of cons) {
+    const i = vars.indexOf(c.lhs);
+    if (i < 0 || typeof c.rhs !== "number") continue;
+    if (c.rel !== ">=") upper[i] = Math.min(upper[i], c.rhs);
+    if (c.rel !== "<=") lower[i] = Math.max(lower[i], c.rhs);
+  }
+  if (a.evolutionary && vars.some((_, i) => !isFinite(lower[i]) || !isFinite(upper[i]))) refuse(`Evolutionary needs bounds on every changing cell, as Excel's (${vars.filter((_, i) => !isFinite(lower[i]) || !isFinite(upper[i])).join(", ")} has none above)`);
+  if (!a.evolutionary && (ints.size || bins.size)) refuse("GRG Nonlinear here takes no int or bin constraint: use Evolutionary, or Simplex LP for a linear problem");
+  const target = Number(p.value);
+  try {
+    const problem = {
+      n: vars.length, maximise: goal === "max", rels: cons.map((c) => c.rel), lower, upper,
+      integer: vars.map((k) => ints.has(k) || bins.has(k)),
+      start: vars.map((k, i) => (isFinite(a.origValues[i]) ? a.origValues[i] : 0)),
+      evaluate: async (x: readonly number[]) => {
+        await at(x);
+        const o = num(obj);
+        return { obj: goal === "value" ? -((o - target) ** 2) : o, diff: cons.map((c) => num(c.lhs) - (typeof c.rhs === "number" ? c.rhs : num(c.rhs))) };
+      },
+    };
+    if (goal === "value") (problem as { maximise: boolean }).maximise = true;
+    const result = a.evolutionary ? await evolutionary(problem) : await grg(problem);
+    if (result.status === "infeasible") {
+      await wb.sheet.setMany(was);
+      await wb.settle();
+      refuse("Solver could not find a feasible solution");
+    }
+    const x = result.x.map((v, i) => (ints.has(vars[i]) || bins.has(vars[i]) ? Math.round(v) : Number(v.toPrecision(10))));
+    await at(x);
+    const finalObj = num(obj), lhs = cons.map((c) => num(c.lhs)), rhs = cons.map((c) => (typeof c.rhs === "number" ? c.rhs : num(c.rhs)));
+    if (flag(p.report)) {
+      const source = wb.active;
+      let name = "Answer Report 1";
+      for (let i = 2; wb.page(name); i++) name = `Answer Report ${i}`;
+      await wb.add(name);
+      const lines: string[][] = [["Answer Report"], ["Solver Engine", a.evolutionary ? "Evolutionary" : "GRG Nonlinear"], [], ["Objective Cell (" + (goal === "value" ? `Value Of ${p.value}` : goal === "max" ? "Max" : "Min") + ")"], ["Cell", "Original Value", "Final Value"], [`${source}!${obj}`, show(a.origObj), String(Number(finalObj.toPrecision(10)))], [],
+        ["Variable Cells"], ["Cell", "Original Value", "Final Value", "Integer"], ...vars.map((k, i) => [`${source}!${k}`, show(a.origValues[i]), String(x[i]), ints.has(k) ? "Integer" : bins.has(k) ? "Binary" : "Contin"]), [],
+        ["Constraints"], ["Cell", "Cell Value", "Formula", "Status", "Slack"],
+        ...cons.map((c, i) => { const slackV = Math.abs(rhs[i] - lhs[i]); return [`${source}!${c.lhs}`, String(Number(lhs[i].toPrecision(10))), c.said, slackV < 1e-5 || c.rel === "=" ? "Binding" : "Not Binding", String(Number(slackV.toPrecision(10)))]; })];
+      await wb.sheet.setMany(lines.flatMap((l, r) => l.map((v, c): [string, string] => [keyOf({ col: c, row: r }), /^[=']/.test(v) || /^[-+]?\d/.test(v) && !NUMERIC_TEXT.test(v) ? `'${v}` : v])));
+      wb.activate(source);
+    }
+    if (flag(p.restore)) await wb.sheet.setMany(was);
+    await wb.settle();
+    return { ok: true, message: `Solver (${a.evolutionary ? "Evolutionary" : "GRG Nonlinear"}) ${result.status === "optimal" ? "found a solution" : "converged"}: ${obj} = ${Number(finalObj.toPrecision(10))} at ${vars.map((k, i) => `${k}=${x[i]}`).join(", ")}${flag(p.restore) ? " (the cells as they were)" : ""}`, changed: wb.sheet.keys(), output: x };
+  } catch (e) {
+    await wb.sheet.setMany(was);
+    await wb.settle();
+    throw e;
+  }
 }
 
 const SAMPLES: Record<string, unknown> = { budget: SAMPLE_BUDGET, test: TEST_SHEET, formatted: FORMATTED };
@@ -2268,7 +2335,9 @@ const SPECS: readonly Spec[] = [
     // does). nonneg=0 frees the unconstrained ones. The solution kept (one
     // step of undo) unless restore=1; report=1 writes Excel's Answer
     // Report on a sheet of its own.
-    id: "solver.solve", label: "Solver", params: ["objective", "changing"], optional: ["goal", "value", "constraints", "nonneg", "restore", "report"], journaled: true,
+    // method=: simplex (Simplex LP, the default), grg (GRG Nonlinear) or
+    // evolutionary (nlp.ts).
+    id: "solver.solve", label: "Solver", params: ["objective", "changing"], optional: ["goal", "value", "constraints", "nonneg", "restore", "report", "method"], journaled: true,
     run: async (wb, p) => {
       const obj = cellOf(p.objective), goal = (p.goal ?? "max").trim().toLowerCase();
       if (!["max", "min", "value"].includes(goal)) refuse(`${p.goal} is not max, min or value`);
@@ -2293,6 +2362,9 @@ const SPECS: readonly Spec[] = [
       }
       for (const k of [...ints, ...bins]) if (!vars.includes(k)) refuse(`${k} is int or bin but not a changing cell`);
       const origValues = vars.map(num), origObj = num(obj);
+      const method = (p.method ?? "simplex").trim().toLowerCase().replace(/[\s-]+/g, "");
+      if (!["simplex", "simplexlp", "grg", "grgnonlinear", "evolutionary"].includes(method)) refuse(`${p.method} is not a solving method (simplex, grg, evolutionary)`);
+      if (method.startsWith("grg") || method === "evolutionary") return solveNonlinear(wb, p, { obj, goal, vars, was, cons, ints, bins, origValues, origObj, num, at, evolutionary: method === "evolutionary" });
       // Each formula's coefficients, read off: its value with every
       // changing cell 0, then each one 1; then a check at another point.
       const watched = [obj, ...cons.flatMap((c) => [c.lhs, ...(typeof c.rhs === "string" ? [c.rhs] : [])])];
