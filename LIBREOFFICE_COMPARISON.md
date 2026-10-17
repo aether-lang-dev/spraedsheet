@@ -1,257 +1,184 @@
-# LibreOffice Calc: ideas for Spraedsheet
+# LibreOffice Calc: ideas for the Aether/AetherUI/sae Spraedsheet
 
-Prepared for Paul and Nic, 18 October 2026.
+Updated for Paul and Nic, 18 October 2026.
 
-**Recommendation:** use Calc as a reference for dependable spreadsheet behaviour,
-while developing Spraedsheet as a programmable workbook for objects, tables, and
-automation. The best next investment is a shared foundation for reference handling,
-recalculation, and transactional edits. Build the query and object features in
-[ENHANCEMENT_PLAN.md](ENHANCEMENT_PLAN.md) on that foundation.
+**Recommendation:** keep the native Aether/AetherUI/sae implementation and learn
+from Calc's depth of behaviour, correctness work, and integration between
+features. Spraedsheet already has much of the previously proposed functionality;
+the next work is stronger guarantees, larger-workbook evidence, and record-aware
+object/table workflows.
 
-This is a study of the local LibreOffice checkout at
-`/home/paul/scm/libre_office_core`, revision `1fd35eecd`, compared with Spraedsheet
-revision `9617649`. It describes what is present in those sources, not a claim
-about a particular released LibreOffice version. Spraedsheet is also called
-RexxSheet/RexxJS Spreadsheet in the existing documents.
+This replaces the comparison of the old React/Tauri application. That version is
+abandoned. Browser DOM work, a Tauri backend, and Pyodide integration are not
+recommendations for the current app.
 
-The implementation suggestions below are original design proposals. No LibreOffice
-source, tests, or assets are reproduced. This is a source-informed comparison,
-not a claim that a formal clean-room development process has taken place.
+Review: `/home/paul/scm/libre_office_core` at `1fd35eecd`, compared with Spraedsheet
+`cfc906f`. These are local source/documentation observations, not runtime tests
+or a claim about a particular LibreOffice release. See the
+[comparison index](OPEN_SOURCE_COMPARISONS.md) for the other studies and common
+review limits. No source, fixtures, assets, or numerical routines are copied;
+this is source-informed analysis, not a formal clean-room process.
 
 ## What LibreOffice brings
 
-LibreOffice is an integrated office suite; **Calc** is the relevant spreadsheet
-application. Its capabilities extend beyond a grid and formula interpreter:
+LibreOffice is an integrated office suite; **Calc** is its spreadsheet application.
+The useful comparison is how its features interact inside a mature workbook.
 
-| Area | Calc in this checkout | Opportunity for Spraedsheet |
-|---|---|---|
-| Workbook model | Documents, sheets, cells, ranges, names, and structural reference updates | Consistent identities and reference semantics across every operation |
-| Calculation | Formula compilation, dirty-cell tracking, range listeners, formula groups, threaded/OpenCL calculation paths | Predictable incremental calculation, then measured optimisation |
-| Data work | Database ranges, sorting/query settings, imports and transformations, DataPilot pivot tables | Named tables shared by RexxJS queries, pivots, charts, and row editing |
-| Editing | Dedicated undo machinery, copying/pasting, validation, conditional formats | A common edit pipeline for UI and Control Bus |
-| Interchange | Separate format filters, including ODF and Excel-related formats | Explicit import/export contracts and fidelity reports |
-| Automation | UNO interfaces for ranges, bulk data, recalculation, pivots, and goal seeking | A small, explicit Control Bus with comparable operational completeness |
-| Presentation | Number formats, charts, printing, accessibility infrastructure | Polished workflows selected for Spraedsheet's users |
-| Quality | Extensive calculation, import/export, UI, and regression test collections | Independent behavioural fixtures for the edge cases we support |
+| Area | Calc in this checkout | Current Spraedsheet | Useful next work |
+|---|---|---|---|
+| Workbook model | Sheets, ranges, names, reference-update contexts | Sheets, scoped names, structural edits, both formula languages | Cross-feature reference and persistence regression coverage |
+| Calculation | Compiled formulas, dirty-cell tracking, range listeners, formula groups, threaded/OpenCL paths | Compiled language adapters, tracked reads, awaited calculation, cross-sheet settling/cycles, manual/iterative modes | Measure invalidation, range work, and settlement at scale |
+| Data | Database ranges, transformations, DataPilot pivots | Tables, structured references, RexxJS queries, pivots, slicers, auto IDs | Stable record identity, typed query contracts, relations, keyed object reconciliation |
+| Editing | Dedicated undo infrastructure and rich edit operations | Command-based edits, grouped workbook snapshots, script rollback | Malformed-command and random-sequence testing; measure history cost |
+| Inspection | Detective tracing and calculation diagnostics | Precedents/dependents, watches, error checks, Excel evaluation steps | RexxJS expression steps, query lineage, timing explanations |
+| Interchange | Dedicated ODF, Excel, and other filters | Native JSON, CSV/TSV, XLSX read/write, XLS import, ODS cached-value import, PDF output | Semantic round trips and accurate unsupported-feature reports |
+| Presentation | Formatting, charts, printing, accessibility infrastructure | Native grid/menus/panels, formatting, charts and drawings | Native layout, keyboard accessibility, and remaining print/platform work |
+| Automation | UNO interfaces for cells, ranges, calculation, pivots and analysis | Shared command registry, REXX, control bus, MCP | REXX recording, headless/interactive parity, operational limits |
 
-Calc's value as a reference is how these features interact. A row insertion can
-affect formulas, named ranges, validation, chart sources, and undo history. Adding
-the menu item is only part of implementing the behaviour.
+Presence is not proof of equal completeness or correctness. In particular, neither
+file support nor function counts establishes full Calc/Excel fidelity.
 
-## Where Spraedsheet actually stands
+## Where Spraedsheet now stands
 
-[COMPARISON.md](COMPARISON.md) is useful for positioning, but its missing-feature
-list is stale. Inspection of the active `src/` implementation finds:
+[README.md](README.md) identifies `app/` as the implementation. Its page and view
+modules use sae and AetherUI; the workbook and commands have no DOM dependency.
+[The tracker](docs/gridcraft_parity.md) and [TODO.md](TODO.md) describe the current
+feature coverage and remaining work. The earlier `ENHANCEMENT_PLAN.md` and
+`COMPARISON.md` are historical documents, available through git history.
 
-- Multiple sheets, merging, cell editors, pivots, sorting, filtering, named ranges,
-  validation, freeze settings, fill operations, and undo/redo in
-  [spreadsheet-model.js](src/spreadsheet-model.js).
-- CSV, JSON, TOML, and YAML import utilities in
-  [spreadsheet-import-export.js](src/spreadsheet-import-export.js).
-- Save handling, sheet tabs, and a grid in
-  [SpreadsheetApp.jsx](src/SpreadsheetApp.jsx).
-- RexxJS integration and a shared set of script/control functions in
-  [spreadsheet-rexx-adapter.js](src/spreadsheet-rexx-adapter.js) and
-  [spreadsheet-control-functions.js](src/spreadsheet-control-functions.js).
+Reading the active model changes the assessment:
 
-These are implementation observations, not a certification that every feature is
-complete, exposed in the UI, or correct across all combinations. This review did
-not run either application or benchmark them. Root-level legacy implementations
-also exist; this comparison uses `src/`, which the Vite entry point imports.
+- `language.ts`, `parser.ts`, `shift.ts`, and `sheet.ts` already separate formula
+  compilation, reference changes, reads, and evaluation. The old criticism of
+  regex-only model dependency extraction does not describe this implementation.
+- `workbook.ts` provides cross-sheet settlement, names, metadata, grouped history,
+  and persisted workbook state. `commands.ts` routes edits and exposes script
+  grouping/rollback. These foundations already exist.
+- `query.ts` and `rexx.ts` provide TABLE/RANGE, filtering, grouping, selection and
+  aggregation; `language.ts` describes range-based tables and column metadata.
+  Adding the original plan's pipeline functions again would duplicate work.
+- `address.ts` still bounds each sheet to 26×100. Larger-file requirements need
+  measured model and native-grid work together.
 
-The important gap is therefore depth and consistency as much as feature breadth.
-For example, the model uses regular expressions for dependency extraction and
-reference rewriting, starts asynchronous evaluation from a synchronous `setCell`,
-and records undo snapshots using shallow copies of several maps. Those choices
-deserve attention before larger queries and batches make their limitations more
-visible.
+The rest of this document proposes extensions, rather than marking existing
+features as new work.
 
-## Highest-value ideas to build independently
+## Ideas to develop independently
 
-### 1. Make references and recalculation a workbook service
+### 1. Test feature interactions as workbook behaviour
 
-Calc separates formula compilation, reference updates, dependency notification,
-and calculation. Spraedsheet can adopt those responsibilities with a much smaller
-JavaScript design while retaining RexxJS as its language.
+Calc has explicit reference-update context and broad calculation/import/export
+regression collections. We should maintain our own behavioural fixtures for
+structural edits through formulas, names, tables, validation, conditional formats,
+merges, chart sources, and history together.
 
-Build a reference representation that distinguishes a cell, range, named range,
-table column, and sheet identity. Integrate it with RexxJS parsing or its variable
-resolution hooks so a string containing `"A1"` is not mistaken for a dependency.
-Track actual reads where expressions compute references dynamically; use an
-explicit conservative invalidation policy when a dependency cannot be known in
-advance. A range dependency must notice an edit to any interior cell.
+For example, insert a row into a table read by another sheet, rename that sheet,
+undo/redo, save and reopen. Compare formulas, raw values, names and metadata.
+Test copying separately from moving: `$` anchors affect copying, while a
+reference follows its target through structural insertion. The current app
+already models this distinction; regression coverage should preserve it.
 
-Separate **copying a formula** from **moving its referenced cells**. For example,
-copying `=$A$2` should preserve the address; inserting a row before row 2 should
-move the reference to `$A$3`. The current insertion logic treats absolute markers
-as a reason not to shift, so this distinction is a concrete improvement.
+Run matching workloads through commands, REXX/control bus, and interactive actions.
+Use original fixtures and documented semantics, not Calc's source or test corpus.
 
-Use a workbook-wide dependency graph keyed by stable sheet identity. Queue dirty
-formulas in dependency order, deduplicate work, and report cycles. Give each
-evaluation a revision so a slow PyOdide result cannot overwrite a newer edit.
-Expose an awaitable completion point to both the UI and Control Bus; merely
-awaiting the current synchronous `setCell` does not await its internal work.
+### 2. Measure calculation before changing its architecture
 
-**First acceptance examples:** changing an interior range cell updates its sum;
-renaming a sheet preserves references; a diamond-shaped dependency calculates
-correctly; a stale asynchronous result is discarded; strings survive reference
-rewriting unchanged.
+Calc's range listeners, sparse column storage and grouped formulas show why
+large-sheet work requires more than raising a row constant. For our engine,
+measure dependency count, dirty formulas, range visits, cross-sheet rounds,
+notification count, history memory, and time by phase.
 
-### 2. Turn batching into a transaction boundary
+Include long chains, diamond graphs, running totals, dynamic references, spills,
+and controlled volatile functions in both supported languages where applicable.
+Check unchanged branches and cycles as well as final numeric answers. Then decide
+whether range dependencies, cached aggregates, shared compiled formulas, or
+different settlement scheduling address the observed costs. Native parallelism
+and GPU execution would require separate evidence and runtime design.
 
-The enhancement plan rightly proposes fewer Control Bus round-trips. Calc's bulk
-range and calculation-control APIs suggest an additional benefit: defer repeated
-calculation and display work until an operation is complete.
+### 3. Finish the object/table contract
 
-Implement one model-level edit operation used by paste, import, scripts, and UI
-actions. For a batch, stage changes, validate the proposed result, commit once,
-update dependencies, calculate, and publish a consolidated change event. Capture
-one undo entry. Make all-or-nothing behaviour the initial batch contract; offer
-best-effort processing later only through an explicit option with per-item results.
+Calc's database ranges, query/sort settings and pivot infrastructure illustrate
+the value of shared data metadata. Spraedsheet can go further toward its own
+object↔sheet goal without turning all worksheets into databases.
 
-Replace or strengthen shallow snapshots with immutable before/after data or edit
-patches. Include sheet creation/deletion, names, dimensions, table metadata, and
-other changed workbook state in the history contract.
+Extend selected tables with stable table/field/record identities, optional business
+keys, declared types, null/blank rules, and keyed import reconciliation. Keep
+ordinary named ranges lightweight. Make filters, queries, pivots, charts and record
+forms consume the same table contract.
 
-**First acceptance examples:** an invalid item leaves an atomic batch unchanged;
-undo reverses an entire import; a batch returns only after its documented
-calculation boundary. Measure transport time, calculation time, UI notifications,
-and history memory separately. A speed-up percentage needs an actual baseline.
+Current queries materialise rows and group by textual keys. Define type-sensitive
+equality and source lineage before adding editable joins or live views. Specify
+output ownership and refresh collisions for derived results. The important new
+capability is a safe object round trip, not another spelling of GROUP_BY.
 
-Transaction scope should initially cover workbook state. RexxJS functions can
-perform effects, including cell writes; classify those functions and define when
-they may execute. Rolling back cells cannot automatically reverse an external
-side effect.
+### 4. State validation and transaction policies precisely
 
-### 3. Make named tables the bridge between objects and cells
+Calc supports typed/custom validation, prompts and different error responses.
+Spraedsheet already supports contextual validation, several rule types, auto IDs,
+and grouped scripted edits. Extend and test that behaviour rather than re-add it.
 
-Calc has database-range metadata, query/sort settings, import transformations,
-and pivot infrastructure. These support the direction in priorities 1 and 5 of
-the enhancement plan, without requiring Spraedsheet to reproduce their APIs.
+Declare validation policy for manual edits, paste, imports, scripts and record
+forms. There may deliberately be different policies; make bypass/report modes
+explicit. For unique keys, validate the whole proposed batch, including conflicts
+between new rows. A blank field is not sufficient to establish record creation.
 
-Define one table descriptor: stable identity, source range, header policy, column
-names and types, optional key, and expansion rules. Let queries, filters, pivots,
-charts, and object conversion consume it. Avoid implementing a separate notion of
-columns for each feature.
+Keep recalculation batching, one-step undo, and atomic workbook rollback distinct.
+Document read-after-write semantics in scripts. Workbook rollback cannot reverse
+external effects; future triggered scripts need effect and retry contracts.
 
-Keep ordinary named ranges lightweight; a table adds semantics rather than
-silently changing every named range into a database. Specify blank/null values,
-duplicate headers, type conversion failures, ordering, and key uniqueness.
+### 5. Extend inspection where RexxJS differs
 
-The plan's `TABLE(...) |> WHERE(...) |> GROUP_BY(...)` direction is a strong fit.
-Prefer parsed RexxJS predicates or callable predicates over an unrelated second
-expression language. Decide whether a query is a live view or a materialised
-result. For results written to cells, define output ownership, refresh, and
-collision behaviour so refresh cannot overwrite unrelated work.
+Calc's Detective features are useful precedent for tracing and error diagnosis,
+which our app already offers. Build on those with calculation timings, library
+requirements, query row lineage and grouping explanations. Stepwise RexxJS
+evaluation needs RexxJS's own expression representation; changes to the language
+belong in canonical RexxJS first, then vendoring here.
 
-**Object round trips should be explicit:** map object properties to named columns,
-preserve types, use keys to reconcile edits, and distinguish missing, blank, and
-deleted values. Start with flat records; define nesting and one-to-many relations
-later. This would make Spraedsheet particularly useful as an editable view of
-application data.
+Calc's `README.Lambda.md` also makes clear that user-defined programmable formulas
+are not unique to Spraedsheet. The distinction to develop is REXX across formulas,
+recordable operations, object/table workflows and external control.
 
-### 4. Enforce validation in the shared write path
+### 6. Make compatibility and native usability assessable
 
-Calc provides typed and custom validation, input guidance, and different error
-responses. Spraedsheet already has validation rules and editors; extend those
-through one write path so scripts, imports, paste, and manual edits behave alike.
+For XLSX/ODS and native storage, publish supported semantics and known losses.
+Test original workbooks through open/edit/save/reopen, including styles, names,
+dates, errors, and unsupported objects. ODS cached-value import is not ODS formula
+execution. An exported RexxJS workbook needs an explicit formula/results policy
+for applications unable to execute RexxJS.
 
-Implement the plan's create/update distinction using explicit operation context
-and stable record identity. An empty cell does not necessarily mean a new record.
-Provide old value, proposed value, operation, and proposed row to a pure validator;
-make table uniqueness inspect the staged batch, including other new rows.
+For UI work, improve AetherUI's datagrid and sae page services where needed, test
+there, and consume them here. Complete keyboard-only and screen-reader workflows,
+layout/print integration, and larger-grid interaction. Browser/DOM components
+from another spreadsheet would not advance the selected native architecture.
 
-If auto IDs are introduced, keep them stable through sorting and insertion.
-Specify allocation after failed writes, undo, import, and merge. A local counter
-can serve a single workbook; independently edited copies need a separate identity
-and reconciliation policy. Row number is unsuitable as record identity.
+## Suggested order
 
-**First acceptance examples:** two rows with the same key in one batch are
-rejected; an invalid imported value reports its row and column; an update can
-compare with the previous committed value.
+1. Harden current behaviour with cross-feature workbooks, malformed commands,
+   seeded edit sequences, and headless/interactive comparisons.
+2. Deliver REXX session recording from the existing journal (TODO 7.1).
+3. Define stable record identities and keyed object reconciliation, then saved
+   views and a detail form; use existing tables and queries.
+4. Connect relations and derived-view lineage; improve refresh/error diagnostics.
+5. Expand size, interchange and native presentation from measured requirements.
 
-### 5. Offer an explanation of a calculated result
-
-Calc's Detective facilities provide precedent/dependent tracing and error
-inspection. Spraedsheet's programmable formulas make an equivalent especially
-valuable.
-
-Add an inspector showing formula source, dependencies, evaluation state, error
-details, timing, and loaded-library requirements. Extend it to table pipelines:
-show row counts after filtering, grouping keys, and the source of output rows.
-Expose the same information through the Control Bus for automated diagnosis.
-
-Start with dependency lists and an error chain. Query provenance and a graphical
-view can follow once the underlying metadata exists.
-
-## Useful follow-on work
-
-| Idea from Calc | Independently implementable Spraedsheet version | Priority |
-|---|---|---|
-| Rich import controls | Preview, delimiter/encoding options, per-column types, preserved leading zeros, and an explicit policy for formula-looking text | High after the edit pipeline |
-| Dedicated format filters | Versioned native workbook format; round-trip fixtures; report unsupported fields for each interchange format | High |
-| Pivot infrastructure | Extend existing pivots with multiple measures, grouping, refresh/invalidation, and named-table sources | Medium |
-| Conditional formats and number formatting | Rule editor over RexxJS expressions; documented locale/date/number semantics; separate raw values from display | Medium |
-| Goal Seek and Solver interfaces | Start with one numeric input and one target formula, bounded iterations, cancellation, and restored state on failure | Medium, after reliable calculation |
-| Accessibility infrastructure | Keyboard-complete grid workflows, focus management, screen-reader labels, and announced validation errors | High for wider adoption |
-| Sparse column storage and grouped formulas | Keep the existing sparse maps initially; profile memory and repeated formulas before changing representation | Measure first |
-| Extensive regression suites | Original small workbooks covering edits, formulas, undo, refresh, and save/load together | Start now |
-| Charts and printing | Build on current chart support with table-bound sources; add print/PDF layouts if users need shareable reports | Demand-led |
-
-For ODS/XLSX, choose a limited supported subset and make losses visible. Preserving
-formulas, cached results, styles, names, dates, and charts is a much larger task
-than importing cell values. RexxJS formulas also need a declared policy when the
-destination application cannot evaluate them. Keep native storage authoritative
-until fidelity is demonstrated.
-
-Calc's `LAMBDA` documentation in this checkout also qualifies the existing
-positioning: programmable formulas and user-defined functions are not exclusive
-to Spraedsheet. Our stronger distinction is **RexxJS throughout the workbook,
-object/table pipelines, library integration, and accessible external control**.
-
-## Suggested sequence for Paul and Nic
-
-1. **Establish the baseline.** Refresh the stale feature matrix, distinguish model
-   support from UI support, and write down reference, type, and calculation rules.
-   Create small independent behavioural workbooks for those rules.
-2. **Strengthen the edit engine.** Implement parsed references, workbook-wide
-   dependencies, awaited calculation, atomic batches, and complete undo records.
-   These directly support priority 2 and make priorities 1 and 3 safer to deliver.
-3. **Deliver one object/table workflow.** Combine named-table metadata, keys,
-   validation, and a narrow query pipeline. Demonstrate importing customer objects,
-   editing rows, filtering/grouping them, and exporting changes by key.
-4. **Connect existing analysis features.** Bind pivots and charts to those tables,
-   implement refresh and output ownership, and add the inspector.
-5. **Expand from measured demand.** Improve interchange, larger-data rendering,
-   analysis functions, and reporting according to actual workbooks.
-
-These are dependency-ordered milestones, not time estimates. The day-level
-estimates in the existing plan do not account for the correctness work above.
-Calc's broad office framework, UNO runtime, GPU infrastructure, and full legacy
-format compatibility would each introduce substantial scope; the immediate
-product can remain React/Tauri, a DOM-free model, RexxJS, and the Control Bus.
+This is a dependency-aware proposal, not a time estimate or a replacement for the
+existing tracker. Calc's office-wide framework, UNO runtime and acceleration paths
+do not need to be reproduced to deliver these outcomes.
 
 ## Local evidence map
 
-Paths below are relative to `/home/paul/scm/libre_office_core/`. They identify the
-reference material behind this comparison, not implementation templates.
+Paths relative to `/home/paul/scm/libre_office_core/`:
 
-| Topic | Relevant checkout locations |
+| Topic | Locations consulted |
 |---|---|
-| Suite structure and integration | `README.md`, `sc/README.md` |
-| Workbook, storage, and calculation | `sc/inc/document.hxx`, `sc/inc/column.hxx`, `sc/source/core/inc/bcaslot.hxx`, `sc/inc/formulagroup.hxx` |
-| Structural reference changes | `sc/inc/refupdatecontext.hxx` |
-| Tables, transformations, and pivots | `sc/inc/dbdata.hxx`, `sc/inc/dpobject.hxx`, `sc/source/ui/dataprovider/`, `sc/source/ui/inc/datatransformation.hxx` |
-| Validation and conditional formatting | `sc/inc/validat.hxx`, `sc/inc/conditio.hxx` |
-| Undo and tracing | `sc/source/ui/inc/undobase.hxx`, `sc/inc/detfunc.hxx` |
-| Bulk data and calculation APIs | `offapi/com/sun/star/sheet/XCellRangeData.idl`, `offapi/com/sun/star/sheet/XCalculatable.idl` |
-| What-if APIs | `offapi/com/sun/star/sheet/XGoalSeek.idl`, `offapi/com/sun/star/sheet/XSolver.idl` |
-| Import/export and CSV controls | `sc/source/filter/`, `sc/source/ui/dbgui/scuiasciiopt.cxx` |
-| Formats and accessibility | `svl/source/numbers/`, `sc/source/ui/Accessibility/` |
-| Programmable formulas | `sc/README.Lambda.md` |
-| Behavioural coverage | `sc/qa/unit/ucalc_formula.cxx`, `ucalc_sort.cxx`, `ucalc_copypaste.cxx`, `ucalc_pivottable.cxx`, `ucalc_spilled_range.cxx`, and `subsequent_*` files in the same directory |
+| Suite and Calc organisation | `README.md`, `sc/README.md` |
+| Workbook, storage, calculation | `sc/inc/document.hxx`, `sc/inc/column.hxx`, `sc/source/core/inc/bcaslot.hxx`, `sc/inc/formulagroup.hxx` |
+| Reference updates | `sc/inc/refupdatecontext.hxx` |
+| Data and transformations | `sc/inc/dbdata.hxx`, `sc/inc/dpobject.hxx`, `sc/source/ui/dataprovider/`, `sc/source/ui/inc/datatransformation.hxx` |
+| Rules, history, tracing | `sc/inc/validat.hxx`, `sc/inc/conditio.hxx`, `sc/source/ui/inc/undobase.hxx`, `sc/inc/detfunc.hxx` |
+| Automation contracts | `offapi/com/sun/star/sheet/XCellRangeData.idl`, `XCalculatable.idl`, `XGoalSeek.idl`, `XSolver.idl` in the same directory |
+| Interchange, display, access | `sc/source/filter/`, `sc/source/ui/dbgui/scuiasciiopt.cxx`, `svl/source/numbers/`, `sc/source/ui/Accessibility/` |
+| Programmability and coverage | `sc/README.Lambda.md`, `sc/qa/unit/ucalc_*.cxx`, `sc/qa/unit/subsequent_*` |
 
-When implementing these proposals, write requirements and original tests around
-the behaviours we choose, then implement them in Spraedsheet's architecture.
-Consult format specifications for interchange semantics. Do not translate Calc
-classes or transplant its source, fixtures, or UI assets.
+Spraedsheet evidence: `app/sheet/{language,sheet,workbook,commands,query,rexx,shift,audit,file,xlsx,xlsxwrite}.ts`,
+`app/sheet/view/`, `tests/headless/`, `tests/specs/`, and the current tracker.
