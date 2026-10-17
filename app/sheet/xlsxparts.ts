@@ -13,6 +13,7 @@ import { rangeName } from "./rules.ts";
 import type { CfRule } from "./rules.ts";
 import { colour } from "./formats.ts";
 import type { TableDef } from "./language.ts";
+import type { CommentThread } from "./notes.ts";
 
 const EMPTY: El = { name: "", attrs: {}, children: [] };
 const THEME_ROLES = ["light1", "dark1", "light2", "dark2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hyperlink"];
@@ -194,3 +195,39 @@ export function unmodelled(names: readonly string[], sheetXml: readonly string[]
 // What a written file carries over from the one opened (pass-through):
 // its document properties and its theme, unchanged.
 export const PASS_THROUGH = /^(docProps\/(core|app|custom)\.xml|xl\/theme\/theme1\.xml)$/;
+
+// Threaded comments (Excel 365's): the workbook's people, one id apiece,
+// and a sheet's threads, each a comment and its replies (parentId), the
+// first marked done when resolved. The ids are the file's own, numbered.
+const THREADS_NS = "http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments";
+export const personId = (i: number): string => `{00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}}`;
+export function personsXml(people: readonly string[]): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<personList xmlns="${THREADS_NS}">${people.map((p, i) => `<person displayName="${escapeXml(p)}" id="${personId(i)}" userId="${escapeXml(p)}" providerId="None"/>`).join("")}</personList>`;
+}
+export function threadsXml(threads: readonly [string, CommentThread][], person: (author: string) => string, firstId: number): string {
+  let n = firstId;
+  const id = () => `{00000000-0000-4000-9000-${String(n++).padStart(12, "0")}}`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<ThreadedComments xmlns="${THREADS_NS}">${threads.map(([k, t]) => {
+    const root = id();
+    return `<threadedComment ref="${k}" personId="${person(t.author)}" id="${root}"${t.resolved ? ' done="1"' : ""}><text>${escapeXml(t.text)}</text></threadedComment>${
+      t.replies.map((r) => `<threadedComment ref="${k}" personId="${person(r.author)}" id="${id()}" parentId="${root}"><text>${escapeXml(r.text)}</text></threadedComment>`).join("")}`;
+  }).join("")}</ThreadedComments>`;
+}
+// A sheet's threads read: by cell, its comments in order, a reply's
+// parent the thread's first; its people by their id.
+export function readThreads(part: El, people: ReadonlyMap<string, string>): Map<string, CommentThread> {
+  const out = new Map<string, CommentThread>(), roots = new Map<string, string>();
+  for (const c of all(part, "threadedComment")) {
+    const ref = (attr(c, "ref") ?? "").replace(/\$/g, "").toUpperCase(), who = people.get(attr(c, "personId") ?? "") ?? "Unknown", text = textOf(kid(c, "text") ?? c).trim();
+    const parent = attr(c, "parentId");
+    if (!ref) continue;
+    if (!parent || !roots.has(parent)) {
+      roots.set(attr(c, "id") ?? ref, ref);
+      out.set(ref, { author: who, text, replies: [], ...(attr(c, "done") === "1" ? { resolved: true } : {}) });
+    } else {
+      const k = roots.get(parent)!, t = out.get(k)!;
+      out.set(k, { ...t, replies: [...t.replies, { author: who, text }] });
+    }
+  }
+  return out;
+}

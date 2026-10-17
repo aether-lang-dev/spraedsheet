@@ -17,7 +17,7 @@
 import { SheetView } from "./sheet/view/view.ts";
 import { languageBar } from "./sheet/view/languagebar.ts";
 import { formulaBar } from "./sheet/view/formulabar.ts";
-import { notesBar } from "./sheet/view/notesbar.ts";
+import { commentsBar, notesBar } from "./sheet/view/notesbar.ts";
 import { lookBar } from "./sheet/view/lookbar.ts";
 import { viewBar } from "./sheet/view/viewbar.ts";
 import { namesBar } from "./sheet/view/namesbar.ts";
@@ -59,7 +59,7 @@ ui.divider();
 // The bars, as panels under the grid, one open at a time (view.panel).
 panelTabs(sheet);
 sheet.panel("edit", () => editBar(sheet));
-sheet.panel("looks", () => { lookBar(sheet); notesBar(sheet); });
+sheet.panel("looks", () => { lookBar(sheet); notesBar(sheet); commentsBar(sheet); });
 sheet.panel("view", () => viewBar(sheet));
 sheet.panel("names", () => namesBar(sheet));
 sheet.panel("rules", () => rulesBar(sheet));

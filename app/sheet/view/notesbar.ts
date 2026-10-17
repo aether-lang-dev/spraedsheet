@@ -12,3 +12,28 @@ export function notesBar(v: SheetView): void {
     v.action("Number format", () => ui.focus(format));
   });
 }
+
+// Threaded comments (Review > New Comment): the selected cell's thread
+// begun or replied to with the text field's words, resolved or reopened,
+// deleted; notes converted; and the comments pane, every thread on the
+// sheet, kept under the buttons.
+export function commentsBar(v: SheetView): void {
+  const words = state(""), pane = state("");
+  const listed = async () => {
+    const o = await v.run("comment.list");
+    pane.set(Array.isArray(o.output) && o.output.length ? (o.output as string[]).join("\n") : "No comments");
+  };
+  const say = (id: string, params: Record<string, string> = {}) => async () => { await v.run(id, { cell: v.here(), ...params }); await listed(); };
+  ui.hstack(() => {
+    const field = bind(ui.textfield("comment thread text", () => {}), words);
+    v.action("Comment thread field", () => ui.focus(field));
+    v.btn("New comment", async () => { await v.run("comment.new", { cell: v.here(), text: words.value }); await listed(); });
+    v.btn("Reply", async () => { await v.run("comment.reply", { cell: v.here(), text: words.value }); await listed(); });
+    v.btn("Resolve thread", say("comment.resolve"));
+    v.btn("Reopen thread", say("comment.resolve", { off: "1" }));
+    v.btn("Delete thread", say("comment.delete"));
+    v.btn("Convert notes to comments", async () => { await v.run("comment.convertNotes"); await listed(); });
+    v.btn("Show comments", listed);
+  });
+  bind(ui.text(""), pane);
+}

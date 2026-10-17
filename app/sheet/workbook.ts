@@ -349,6 +349,8 @@ export class Workbook {
   // The selection as a range ("B2:C4"), as the page last had it or a
   // command asked for (then `selecting`, for the page to make it so).
   selection = "A1";
+  // Who comments are signed by (File > Options > User name).
+  userName = "User";
   selecting = false;
   // How a URL is handed to the system (a hyperlink followed): "" when it
   // was, or why not. The app's view sets it to sae's shell.open.
@@ -973,7 +975,7 @@ export class Workbook {
     const zoomed = this.zoom === 100 ? "" : `font-size: ${Math.round((n.look?.size ?? 13) * this.zoom / 100)}px`;
     return [this.dark ? "background: #ffffff; color: #000000" : "", typeof v === "number" ? "text-align: end" : "", table, toStyle(n.style), lookStyle(this.lookOf(n)), formatStyle(v, n.format ?? ""), this.#conditional.get(key) ?? "", resolvedStyle(this.#marks.get(key)?.style ?? ""), this.#traced.get(key) ?? "",
       this.#circled.has(key) ? "background: #ffd6d6" : "", v instanceof CellError ? "color: #c0392b" : "",
-      n.comment ? "--corner: #d00000" : "", this.#typed.get(key) ?? "", zoomed].filter((p) => p).join("; ");
+      n.comment ? "--corner: #d00000" : "", n.thread ? `--corner: ${n.thread.resolved ? "#a6a6a6" : "#7030a0"}` : "", this.#typed.get(key) ?? "", zoomed].filter((p) => p).join("; ");
   }
 
   // What a table's style gives a cell of it: its banded rows shaded, a
@@ -1078,7 +1080,8 @@ export class Workbook {
   tooltipOf(key: string): string {
     const n = this.notes.get(key);
     const link = n.hyperlink ? n.hyperlink.tip || `${n.hyperlink.target.replace(/^#/, "")}\nOpen Hyperlink to follow it` : "";
-    return [link, n.comment ?? "", n.validation?.prompt ?? ""].filter((x) => x).join("\n");
+    const thread = n.thread ? [n.thread, ...n.thread.replies].map((r) => `${r.author}: ${r.text}`).join("\n") + (n.thread.resolved ? "\n(resolved)" : "") : "";
+    return [link, n.comment ?? "", thread, n.validation?.prompt ?? ""].filter((x) => x).join("\n");
   }
 
   // The rows (0-based) with a wrapped cell, to be as tall as their text.

@@ -14,7 +14,7 @@ import type { El } from "./xml.ts";
 import { COLS, ROWS, addrOf, colName, keyOf } from "./address.ts";
 import { moved } from "./excel.ts";
 import type { Look } from "./formats.ts";
-import { PASS_THROUGH, cfRulesOf, tableOf, unmodelled } from "./xlsxparts.ts";
+import { PASS_THROUGH, cfRulesOf, readThreads, tableOf, unmodelled } from "./xlsxparts.ts";
 import { readDrawings } from "./xlsxdrawings.ts";
 
 // The built-in number formats by number (ECMA-376 18.8.30).
@@ -184,6 +184,9 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
   const sheetXmls: string[] = [];
   let off = 0;
   const usedMedia = new Set<string>();
+  // The people threaded comments are by (a persons part), by id.
+  const people = new Map<string, string>();
+  for (const [n, b] of parts) if (/^xl\/persons\/person\d*\.xml$/i.test(n)) for (const p of all(parseXml(utf8Text(b)), "person")) people.set(attr(p, "id") ?? "", attr(p, "displayName") ?? "Unknown");
   sheetEls.forEach((se) => {
     const name = attr(se, "name") ?? `Sheet${sheets.length + 1}`, path = wbRels.get(attr(se, "id") ?? "") ?? "";
     const xml = parts.get(path);
@@ -262,6 +265,8 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
         const k = at(attr(cm, "ref") ?? "");
         if (!k) continue;
         const t = textOf(cm).trim();
+        // A thread's note for older versions: the thread itself is read below.
+        if (t.startsWith("[Threaded comment]")) continue;
         const was = cells[k];
         cells[k] = typeof was === "object" && was ? { ...(was as object), comment: t } : { content: typeof was === "string" ? was : "", comment: t };
       }
@@ -282,6 +287,15 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
       for (let r = Math.min(a.row, b.row); r <= Math.max(a.row, b.row); r++) for (let cc = Math.min(a.col, b.col); cc <= Math.max(a.col, b.col); cc++) {
         const k = keyOf({ col: cc, row: r }), was = cells[k], link = { target, ...(tip ? { tip } : {}) };
         cells[k] = typeof was === "object" && was ? { ...(was as object), hyperlink: link } : { content: typeof was === "string" ? was : "", hyperlink: link };
+      }
+    }
+    // Its threaded comments, their people the workbook's.
+    for (const target of sheetRels.values()) {
+      if (!/threadedComments\/threadedComment\d*\.xml$/i.test(target) || !parts.has(target)) continue;
+      for (const [k, thread] of readThreads(parseXml(utf8Text(parts.get(target)!)), people)) {
+        if (!at(k)) continue;
+        const was = cells[k];
+        cells[k] = typeof was === "object" && was ? { ...(was as object), thread } : { content: typeof was === "string" ? was : "", thread };
       }
     }
     // Its drawings: pictures, shapes and text boxes (a drawing part, by its

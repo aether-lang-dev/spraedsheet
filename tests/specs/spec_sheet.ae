@@ -2286,6 +2286,26 @@ main() {
             g.command("cell.removePicture range=B2")
             spec.assert_true(b.wait_for_console("sheet: 1 picture taken out of B2"), "taken out")
         }
+        spec.it("a threaded comment from the Looks panel: begun, replied to, resolved, listed in the comments pane") callback {
+            g.command("sheet.add name=Threads")
+            g.command("comment.author name=Ann")
+            g.command("view.panel name=looks")
+            g.pick("B", 2)
+            b.set_field_by("comment thread text", "Is this right?")
+            b.click("New comment")
+            spec.assert_true(b.wait_for_text("B2: Ann: Is this right?"), "the thread in the comments pane")
+            spec.assert_eq(g.cell_has("B", 2, "\"corner\":"), 1, "its corner marked")
+            spec.assert_eq(g.cell_has("B", 2, "Ann: Is this right?"), 1, "the thread its tooltip")
+            b.set_field_by("comment thread text", "Yes")
+            b.click("Reply")
+            spec.assert_true(b.wait_for_text("B2: Ann: Is this right? · Ann: Yes"), "the reply under it")
+            b.click("Resolve thread")
+            spec.assert_true(b.wait_for_text("B2: Ann: Is this right? · Ann: Yes (resolved)"), "resolved")
+            spec.assert_eq(g.cell_has("B", 2, "(resolved)"), 1, "its tooltip says so")
+            b.click("Delete thread")
+            spec.assert_true(b.wait_for_text("No comments"), "deleted")
+            g.command("view.panel name=none")
+        }
     }
     return spec.run_summary(fw)
 }

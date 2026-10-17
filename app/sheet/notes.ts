@@ -27,6 +27,10 @@ export interface Note {
   // (Sheet2!B3, a name; "#" before it as Excel writes one), and the tip
   // shown when the pointer rests on it.
   readonly hyperlink?: Hyperlink;
+  // A threaded comment (as against the note above, Excel's older kind): who
+  // began it and what they said, the replies in order, and whether it is
+  // resolved.
+  readonly thread?: CommentThread;
   // A picture placed in the cell (Place in Cell): its bytes as base64, its
   // alternative text; drawn over the cell, fitted to it.
   readonly picture?: CellPicture;
@@ -36,6 +40,20 @@ export interface CellPicture {
   readonly data: string;
   readonly alt?: string;
 }
+
+export interface Remark {
+  readonly author: string;
+  readonly text: string;
+}
+
+export interface CommentThread extends Remark {
+  readonly replies: readonly Remark[];
+  readonly resolved?: true;
+}
+
+// A thread as one line: "Ann: Check this · Bo: Done (resolved)".
+export const threadLine = (t: CommentThread): string =>
+  `${[t, ...t.replies].map((r) => `${r.author}: ${r.text}`).join(" · ")}${t.resolved ? " (resolved)" : ""}`;
 
 export interface Hyperlink {
   readonly target: string;

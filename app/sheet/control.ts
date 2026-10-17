@@ -405,6 +405,15 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   INSERTCELLPICTURE: async (exec, c, b64, alt) => (await must(exec, "insert.cellPicture", { cell: text(c), base64: text(b64), ...(text(alt) ? { alt: text(alt) } : {}) })).message,
   PLACEINCELL: async (exec, n) => (await must(exec, "insert.cellPicture", { name: text(n) })).message,
   REMOVECELLPICTURE: async (exec, r) => (await must(exec, "cell.removePicture", { range: text(r) })).message,
+  // Threaded comments (Review > New Comment, Reply, Resolve, Delete).
+  ADDCOMMENT: async (exec, c, t, a) => (await must(exec, "comment.new", { cell: text(c), text: text(t), ...(text(a) ? { author: text(a) } : {}) })).message,
+  REPLYCOMMENT: async (exec, c, t, a) => (await must(exec, "comment.reply", { cell: text(c), text: text(t), ...(text(a) ? { author: text(a) } : {}) })).message,
+  RESOLVECOMMENT: async (exec, c, off) => (await must(exec, "comment.resolve", { cell: text(c), ...(text(off) ? { off: text(off) } : {}) })).message,
+  DELETECOMMENT: async (exec, c, n) => (await must(exec, "comment.delete", { cell: text(c), ...(text(n) ? { reply: text(n) } : {}) })).message,
+  GETCOMMENTTHREAD: async (exec, c) => String((await must(exec, "comment.get", { cell: text(c) })).output),
+  LISTCOMMENTS: async (exec) => stem((await must(exec, "comment.list")).output as string[]),
+  CONVERTNOTES: async (exec, r) => (await must(exec, "comment.convertNotes", text(r) ? { range: text(r) } : {})).message,
+  SETUSERNAME: async (exec, n) => String((await must(exec, "comment.author", { name: text(n) })).output),
   FORECASTSHEET: async (exec, t, v, end, opts) => (await must(exec, "data.forecastSheet", { timeline: text(t), values: text(v), end: text(end), ...pairs(opts) })).message,
   // Data Analysis: ANALYZE("regression", "A1:C20", "E1", "labels=1;alpha=0.05").
   ANALYZE: async (exec, tool, input, output, opts) => (await must(exec, "data.analyze", { tool: text(tool), input: text(input), output: text(output), ...pairs(opts) })).message,

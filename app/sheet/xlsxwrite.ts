@@ -15,7 +15,9 @@ import type { Page, Workbook } from "./workbook.ts";
 import { BUILTIN_FORMATS } from "./xlsx.ts";
 import type { Look } from "./formats.ts";
 import type { Rule } from "./validation.ts";
-import { cfXml, styleDxf, tableXml } from "./xlsxparts.ts";
+import { cfXml, personId, personsXml, styleDxf, tableXml, threadsXml } from "./xlsxparts.ts";
+import { threadLine } from "./notes.ts";
+import type { CommentThread } from "./notes.ts";
 import { drawingXml } from "./xlsxdrawings.ts";
 import { ROLES } from "./themes.ts";
 
@@ -93,6 +95,9 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
   let tableId = 0;
   const sheetParts = pages.map((page) => sheetOf(page, wb, sst, styleOf, excel, dxfOf, () => ++tableId));
   const sheetXml = sheetParts.map((x) => x.xml);
+  // The people who wrote the threads, the workbook's one list of them.
+  const people = [...new Set(sheetParts.flatMap((x) => x.threads.flatMap(([, t]) => [t.author, ...t.replies.map((r) => r.author)])))];
+  let threadIds = 1;
   // Each sheet's drawings, a drawing part apiece, their pictures as media.
   let mediaN = 0;
   const drawingParts = pages.map((page) => (page.drawings.length ? drawingXml(page.drawings, () => ++mediaN) : null));
@@ -113,7 +118,8 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
     names.length ? `<definedNames>${names.join("")}</definedNames>` : ""}</workbook>`;
   const n = pages.length;
   const bookRels = `${HEAD}<Relationships xmlns="${PKG}">${pages.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${REL}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}<Relationship Id="rId${n + 1}" Type="${REL}/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId${n + 2}" Type="${REL}/styles" Target="styles.xml"/>${
-    wb.carried.some(([x]) => x === "xl/theme/theme1.xml") ? `<Relationship Id="rId${n + 3}" Type="${REL}/theme" Target="theme/theme1.xml"/>` : ""}</Relationships>`;
+    wb.carried.some(([x]) => x === "xl/theme/theme1.xml") ? `<Relationship Id="rId${n + 3}" Type="${REL}/theme" Target="theme/theme1.xml"/>` : ""}${
+    people.length ? `<Relationship Id="rId${n + 4}" Type="http://schemas.microsoft.com/office/2017/10/relationships/person" Target="persons/person.xml"/>` : ""}</Relationships>`;
   // The number formats: Excel's built-in numbers, else the file's own from 164.
   const ownCodes: string[] = [];
   const fmtId = (c: string): number => {
@@ -131,6 +137,8 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
   const shared = `${HEAD}<sst xmlns="${MAIN}" count="${strings.length}" uniqueCount="${strings.length}">${strings.map((s) => `<si><t${/^\s|\s$|\n/.test(s) ? ' xml:space="preserve"' : ""}>${escapeXml(s)}</t></si>`).join("")}</sst>`;
   const types = `${HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>${exts.map((e) => `<Default Extension="${e}" ContentType="image/${e}"/>`).join("")}<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${
     pages.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}${sheetParts.map((x, i) => (x.comments.length ? `<Override PartName="/xl/comments${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>` : "")).join("")}${
+    people.length ? '<Override PartName="/xl/persons/person.xml" ContentType="application/vnd.ms-excel.person+xml"/>' : ""}${
+    sheetParts.map((x, i) => (x.threads.length ? `<Override PartName="/xl/threadedComments/threadedComment${i + 1}.xml" ContentType="application/vnd.ms-excel.threadedcomments+xml"/>` : "")).join("")}${
     drawingParts.map((d, i) => (d ? `<Override PartName="/xl/drawings/drawing${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` : "")).join("")}${
     sheetParts.flatMap((x) => x.tables).map((t) => `<Override PartName="/xl/tables/table${t.id}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>`).join("")}${
     wb.carried.map(([n]) => `<Override PartName="/${n}" ContentType="${CARRIED_TYPES[n] ?? "application/xml"}"/>`).join("")}<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
@@ -142,21 +150,27 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
   const entries: [string, Uint8Array][] = [["[Content_Types].xml", utf8Bytes(types)], ["_rels/.rels", utf8Bytes(rootRels)], ["xl/workbook.xml", utf8Bytes(book)],
     ["xl/_rels/workbook.xml.rels", utf8Bytes(bookRels)], ["xl/styles.xml", utf8Bytes(styles)], ["xl/sharedStrings.xml", utf8Bytes(shared)],
     ...sheetXml.map((x, i): [string, Uint8Array] => [`xl/worksheets/sheet${i + 1}.xml`, utf8Bytes(x)])];
-  sheetParts.forEach(({ comments, tables, relBase, urls, drawingRid }, i) => {
+  sheetParts.forEach(({ comments, tables, relBase, urls, drawingRid, threads, threadRid }, i) => {
+    if (threads.length) {
+      entries.push([`xl/threadedComments/threadedComment${i + 1}.xml`, utf8Bytes(threadsXml(threads, (a) => personId(people.indexOf(a)), threadIds))]);
+      threadIds += threads.reduce((k, [, t]) => k + 1 + t.replies.length, 0);
+    }
     const dp = drawingParts[i];
     if (dp) {
       entries.push([`xl/drawings/drawing${i + 1}.xml`, utf8Bytes(dp.xml)], ...dp.media.map((m): [string, Uint8Array] => [m.name, m.bytes]));
       if (dp.media.length) entries.push([`xl/drawings/_rels/drawing${i + 1}.xml.rels`, utf8Bytes(`${HEAD}<Relationships xmlns="${PKG}">${dp.media.map((m) => `<Relationship Id="${m.rId}" Type="${REL}/image" Target="../media/${m.name.split("/").pop()}"/>`).join("")}</Relationships>`)]);
     }
-    if (!comments.length && !tables.length && !urls.length && !drawingRid) return;
+    if (!comments.length && !tables.length && !urls.length && !drawingRid && !threadRid) return;
     const relsXml = [...(comments.length ? [`<Relationship Id="rId1" Type="${REL}/comments" Target="../comments${i + 1}.xml"/>`, `<Relationship Id="rId2" Type="${REL}/vmlDrawing" Target="../drawings/vmlDrawing${i + 1}.vml"/>`] : []),
       ...tables.map((t, j) => `<Relationship Id="rId${relBase + j}" Type="${REL}/table" Target="../tables/table${t.id}.xml"/>`),
       ...urls.map((u, j) => `<Relationship Id="rId${relBase + tables.length + j}" Type="${REL}/hyperlink" Target="${escapeXml(u)}" TargetMode="External"/>`),
-      ...(drawingRid ? [`<Relationship Id="rId${drawingRid}" Type="${REL}/drawing" Target="../drawings/drawing${i + 1}.xml"/>`] : [])].join("");
+      ...(drawingRid ? [`<Relationship Id="rId${drawingRid}" Type="${REL}/drawing" Target="../drawings/drawing${i + 1}.xml"/>`] : []),
+      ...(threadRid ? [`<Relationship Id="rId${threadRid}" Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" Target="../threadedComments/threadedComment${i + 1}.xml"/>`] : [])].join("");
     entries.push([`xl/worksheets/_rels/sheet${i + 1}.xml.rels`, utf8Bytes(`${HEAD}<Relationships xmlns="${PKG}">${relsXml}</Relationships>`)]);
     if (comments.length) entries.push([`xl/comments${i + 1}.xml`, utf8Bytes(commentsXml(comments))], [`xl/drawings/vmlDrawing${i + 1}.vml`, utf8Bytes(vmlXml(comments))]);
     for (const t of tables) entries.push([`xl/tables/table${t.id}.xml`, utf8Bytes(t.xml)]);
   });
+  if (people.length) entries.push(["xl/persons/person.xml", utf8Bytes(personsXml(people))]);
   // What the file opened carried that is written back unchanged.
   for (const [name, bytes] of wb.carried) entries.push([name, bytes]);
   return { bytes: zip(entries), report };
@@ -220,7 +234,11 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
     byRule.set(id, g);
   }
   const dvs = [...byRule.values()].map(({ rule, keys: ks }) => validationXml(rule, ks)).filter((x) => x);
-  const comments = keys.filter((k) => page.notes.get(k).comment).map((k): [string, string] => [k, page.notes.get(k).comment!]);
+  // Notes, and threads as Excel writes them for older versions: a note
+  // saying what the thread does.
+  const threads = keys.filter((k) => page.notes.get(k).thread).map((k): [string, CommentThread] => [k, page.notes.get(k).thread!]);
+  const comments = keys.filter((k) => page.notes.get(k).comment || page.notes.get(k).thread)
+    .map((k): [string, string] => [k, page.notes.get(k).thread ? `[Threaded comment] ${threadLine(page.notes.get(k).thread!)}` : page.notes.get(k).comment!]);
   const cf = cfXml(page.rules, dxfOf);
   const tables = page.sheet.tables().map((t) => {
     const left = Math.min(t.range[0].col, t.range[1].col), right = Math.max(t.range[0].col, t.range[1].col), top = Math.min(t.range[0].row, t.range[1].row);
@@ -238,10 +256,11 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
     return `<hyperlink ref="${k}" location="${escapeXml(h.target.replace(/^#/, ""))}"${tip}/>`;
   });
   const drawingRid = page.drawings.length ? relBase + tables.length + urls.length : 0;
+  const threadRid = threads.length ? relBase + tables.length + urls.length + (drawingRid ? 1 : 0) : 0;
   const xml = `${HEAD}<worksheet xmlns="${MAIN}" xmlns:r="${REL}"><sheetViews><sheetView${page.gridlines ? "" : ' showGridLines="0"'}${page.headings ? "" : ' showRowColHeaders="0"'} workbookViewId="0">${pane}</sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rowXml}</sheetData>${
     merges ? `<mergeCells count="${page.merges.length}">${merges}</mergeCells>` : ""}${cf}${dvs.length ? `<dataValidations count="${dvs.length}">${dvs.join("")}</dataValidations>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}${breaksXml(page)}${drawingRid ? `<drawing r:id="rId${drawingRid}"/>` : ""}${comments.length ? '<legacyDrawing r:id="rId2"/>' : ""}${
     tables.length ? `<tableParts count="${tables.length}">${tables.map((_, i) => `<tablePart r:id="rId${relBase + i}"/>`).join("")}</tableParts>` : ""}</worksheet>`;
-  return { xml, comments, tables, relBase, sparks, urls, drawingRid };
+  return { xml, comments, tables, relBase, sparks, urls, drawingRid, threads, threadRid };
 }
 
 // Manual page breaks: a page begins above row id and left of column id

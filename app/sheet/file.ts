@@ -101,6 +101,7 @@ interface FileCell {
   readonly cellStyle?: string;
   readonly hyperlink?: unknown;
   readonly picture?: unknown;
+  readonly thread?: unknown;
 }
 
 type Cells = Record<string, string | FileCell>;
@@ -137,6 +138,9 @@ function noteOf(c: string | FileCell): Note {
   const pic = c.picture as { data?: unknown; alt?: unknown } | undefined;
   if (pic && typeof pic === "object" && typeof pic.data === "string" && pic.data) note.picture = { data: pic.data, ...(typeof pic.alt === "string" && pic.alt ? { alt: pic.alt } : {}) };
   const h = c.hyperlink as { target?: unknown; tip?: unknown } | undefined;
+  const t = c.thread as { author?: unknown; text?: unknown; replies?: unknown; resolved?: unknown } | undefined;
+  const remark = (r: any) => (r && typeof r.author === "string" && typeof r.text === "string" ? { author: r.author, text: r.text } : null);
+  if (t && remark(t)) note.thread = { ...remark(t)!, replies: Array.isArray(t.replies) ? t.replies.map(remark).filter((r): r is { author: string; text: string } => !!r) : [], ...(t.resolved === true ? { resolved: true } : {}) };
   if (h && typeof h === "object" && typeof h.target === "string" && h.target) note.hyperlink = { target: h.target, ...(typeof h.tip === "string" && h.tip ? { tip: h.tip } : {}) };
   return note;
 }

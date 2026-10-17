@@ -42,6 +42,7 @@ import type { Look } from "./formats.ts";
 import { CHART_KINDS, LEGENDS, SPARKLINE_TYPES, sparklineOptions } from "./charts.ts";
 import type { ChartOptions, Shape, Trendline } from "./charts.ts";
 import { TREND_TYPES } from "./trend.ts";
+import { threadLine } from "./notes.ts";
 import { SHAPES, SHAPE_TITLES, pictureOf } from "./drawings.ts";
 import type { Drawing } from "./drawings.ts";
 import type { ChartKind } from "./charts.ts";
@@ -166,6 +167,8 @@ const countOf = (s: string | undefined): number => {
 // ---- What changing commands share
 
 const inputs = (wb: Workbook) => (key: string) => wb.sheet.input(key);
+
+const authorOf = (wb: Workbook, p: Params): string => p.author?.trim() || wb.userName;
 
 // A URL's scheme (https:, mailto:, file: ...), as against a place in the
 // workbook.
@@ -1099,6 +1102,86 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // New Comment: a thread begun at a cell, by author= (the workbook's
+    // user name); a cell has one thread, which replies go on.
+    id: "comment.new", label: "New Comment", params: ["cell", "text"], optional: ["author"], journaled: true,
+    run: async (wb, p) => {
+      const key = cellOf(p.cell), text = p.text.trim() || refuse("a comment says something");
+      if (wb.notes.get(key).thread) refuse(`${key} has a comment thread already: reply to it`);
+      wb.notes.set(key, { thread: { author: authorOf(wb, p), text, replies: [] } });
+      return changedBy(wb, [key], `${key}: ${threadLine(wb.notes.get(key).thread!)}`);
+    },
+  },
+  {
+    id: "comment.reply", label: "Reply", params: ["cell", "text"], optional: ["author"], journaled: true,
+    run: async (wb, p) => {
+      const key = cellOf(p.cell), t = wb.notes.get(key).thread ?? refuse(`${key} has no comment thread`), text = p.text.trim() || refuse("a reply says something");
+      // A reply reopens a resolved thread, as Excel's does.
+      wb.notes.set(key, { thread: { author: t.author, text: t.text, replies: [...t.replies, { author: authorOf(wb, p), text }] } });
+      return changedBy(wb, [key], `${key}: ${threadLine(wb.notes.get(key).thread!)}`);
+    },
+  },
+  {
+    // Resolve Thread (off=1: Reopen Thread).
+    id: "comment.resolve", label: "Resolve Thread", params: ["cell"], optional: ["off"], journaled: true,
+    run: async (wb, p) => {
+      const key = cellOf(p.cell), t = wb.notes.get(key).thread ?? refuse(`${key} has no comment thread`), off = flag(p.off ?? "0");
+      const { resolved: _r, ...open } = t;
+      wb.notes.set(key, { thread: off ? open : { ...open, resolved: true } });
+      return changedBy(wb, [key], `${key}: ${off ? "reopened" : "resolved"}`);
+    },
+  },
+  {
+    // Delete Thread, or (reply=n) one reply.
+    id: "comment.delete", label: "Delete Comment", params: ["cell"], optional: ["reply"], journaled: true,
+    run: async (wb, p) => {
+      const key = cellOf(p.cell), t = wb.notes.get(key).thread ?? refuse(`${key} has no comment thread`);
+      if (p.reply === undefined) {
+        wb.notes.set(key, { thread: undefined });
+        return changedBy(wb, [key], `${key}: thread deleted`);
+      }
+      const i = Number(p.reply) - 1;
+      if (!(i >= 0 && i < t.replies.length) || !Number.isInteger(i)) refuse(`${key}'s thread has no reply ${p.reply} (1 to ${t.replies.length})`);
+      wb.notes.set(key, { thread: { ...t, replies: t.replies.filter((_, j) => j !== i) } });
+      return changedBy(wb, [key], `${key}: reply ${p.reply} deleted`);
+    },
+  },
+  {
+    // A cell's thread as one line ("" when it has none).
+    id: "comment.get", label: "Comment thread", params: ["cell"], journaled: false,
+    run: async (wb, p) => {
+      const key = cellOf(p.cell), t = wb.notes.get(key).thread;
+      return { ok: true, message: t ? `${key}: ${threadLine(t)}` : `${key} has no comment thread`, changed: [], output: t ? threadLine(t) : "" };
+    },
+  },
+  {
+    // The comments pane: every thread on the sheet, in sheet order.
+    id: "comment.list", label: "Show Comments", params: [], journaled: false,
+    run: async (wb) => {
+      const listed = wb.notes.keys().filter((k) => wb.notes.get(k).thread).sort((a, b) => order(cellAddr(a)!) - order(cellAddr(b)!)).map((k) => `${k}: ${threadLine(wb.notes.get(k).thread!)}`);
+      return { ok: true, message: listed.length ? listed.join("; ") : "no comments", changed: [], output: listed };
+    },
+  },
+  {
+    // Convert to Comments: each note (over range=, or the sheet) a thread
+    // begun by its author=, the note gone; a cell with a thread keeps both.
+    id: "comment.convertNotes", label: "Convert to Comments", params: [], optional: ["range", "author"], journaled: true,
+    run: async (wb, p) => {
+      const r = p.range ? rangeOf(p.range) : null, inside = (k: string) => !r || overlap(r, [cellAddr(k)!, cellAddr(k)!]);
+      const keys = wb.notes.keys().filter((k) => wb.notes.get(k).comment && !wb.notes.get(k).thread && inside(k));
+      for (const k of keys) wb.notes.set(k, { comment: undefined, thread: { author: authorOf(wb, p), text: wb.notes.get(k).comment!, replies: [] } });
+      return changedBy(wb, keys, `${keys.length} note${keys.length === 1 ? "" : "s"} converted to comments`);
+    },
+  },
+  {
+    // The name a comment is signed with (File > Options > User name).
+    id: "comment.author", label: "User name", params: ["name"], journaled: true, unstepped: true,
+    run: async (wb, p) => {
+      wb.userName = p.name.trim() || refuse("a user name is not empty");
+      return { ok: true, message: `comments by ${wb.userName}`, changed: [], output: wb.userName };
+    },
+  },
+  {
     id: "cell.format", label: "Number format or style", params: ["cell", "format"], journaled: true,
     run: async (wb, p) => {
       const key = cellOf(p.cell);
@@ -1266,7 +1349,7 @@ const SPECS: readonly Spec[] = [
             styleExpression: n.styleExpression ? movedBy(clip.language, `=${n.styleExpression}`, by).slice(1) : "",
           });
         }
-        if (what === "comments" || what === "all") wb.notes.set(key, { comment: n.comment ?? "" });
+        if (what === "comments" || what === "all") wb.notes.set(key, { comment: n.comment ?? "", thread: n.thread });
       }));
       const how = [what, op !== "none" ? op : "", skip ? "skipping blanks" : "", turned ? "transposed" : ""].filter((x) => x).join(", ");
       return setting(wb, entries, `pasted ${how} at ${keyOf(at)}`);
@@ -3225,7 +3308,8 @@ const SPECS: readonly Spec[] = [
       if (!kinds.includes(what)) refuse(`${p.what} is not one of ${kinds.join(", ")}`);
       const types = ["numbers", "text", "logicals", "errors"], type = p.type?.trim().toLowerCase();
       if (type !== undefined && !types.includes(type)) refuse(`${p.type} is not a type (${types.join(", ")})`);
-      const keys = wb.sheet.keys();
+      // The used range, as Excel's: what holds an input, a look or a comment.
+      const keys = [...new Set([...wb.sheet.keys(), ...wb.notes.keys()])].filter((k) => cellAddr(k));
       const r: [Addr, Addr] = p.range ? rangeOf(p.range) : [{ col: 0, row: 0 }, { col: Math.max(0, ...keys.map((k) => cellAddr(k)!.col)), row: Math.max(0, ...keys.map((k) => cellAddr(k)!.row)) }];
       const page = wb.page(wb.active)!;
       const ofType = (v: Value) => !type || (type === "numbers" ? typeof v === "number" : type === "text" ? typeof v === "string" : type === "logicals" ? typeof v === "boolean" : v instanceof CellError);
@@ -3236,7 +3320,7 @@ const SPECS: readonly Spec[] = [
           case "constants": return input !== "" && !input.startsWith("=") && ofType(v);
           case "blanks": return input === "" && (v === null || v === "");
           case "errors": return v instanceof CellError;
-          case "comments": return !!n.comment;
+          case "comments": return !!n.comment || !!n.thread;
           case "validation": return !!n.validation;
           default: return page.rules.some((rule) => a.col >= Math.min(rule.range[0].col, rule.range[1].col) && a.col <= Math.max(rule.range[0].col, rule.range[1].col)
             && a.row >= Math.min(rule.range[0].row, rule.range[1].row) && a.row <= Math.max(rule.range[0].row, rule.range[1].row));
