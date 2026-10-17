@@ -2257,6 +2257,26 @@ main() {
             g.command("page.resetBreaks")
             g.command("view.panel name=none")
         }
+        spec.it("several workbooks from the File panel: a new one with its own cells, switched to and from, closed") callback {
+            g.command("sheet.activate name=Sheet1")
+            g.command("cell.set cell=J20 input=first-book")
+            g.command("view.panel name=file")
+            b.click("New workbook")
+            spec.assert_true(b.wait_for_console("sheet: Book2 opened (2 workbooks)"), "a second workbook")
+            spec.assert_true(g.wait_cell("J", 20, ""), "its own cells: J20 empty")
+            g.command("cell.set cell=J20 input=second-book")
+            spec.assert_true(g.wait_cell("J", 20, "second-book"), "typed into it")
+            b.click("Untitled")
+            spec.assert_true(b.wait_for_console("sheet: Untitled active"), "switched back")
+            spec.assert_true(g.wait_cell("J", 20, "first-book"), "the first's cells shown")
+            b.click("Book2")
+            spec.assert_true(g.wait_cell("J", 20, "second-book"), "and the second's")
+            b.click("Close workbook")
+            spec.assert_true(b.wait_for_console("sheet: Book2 closed; Untitled active"), "closed")
+            spec.assert_true(g.wait_cell("J", 20, "first-book"), "the first shown again")
+            g.command("range.clear range=J20")
+            g.command("view.panel name=none")
+        }
     }
     return spec.run_summary(fw)
 }

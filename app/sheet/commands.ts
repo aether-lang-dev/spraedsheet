@@ -918,6 +918,17 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // Several workbooks (books.ts answers these): a new one, a saved file
+    // or a sample opened beside this one, another made active, one closed,
+    // the list.
+    id: "book.new", label: "New Workbook", params: [], optional: ["name"], journaled: false,
+    run: async () => refuse("the workbooks answer this"),
+  },
+  { id: "book.open", label: "Open Workbook", params: [], optional: ["name", "sample"], journaled: false, run: async () => refuse("the workbooks answer this") },
+  { id: "book.activate", label: "Switch Windows", params: ["name"], journaled: false, run: async () => refuse("the workbooks answer this") },
+  { id: "book.close", label: "Close Workbook", params: [], optional: ["name"], journaled: false, run: async () => refuse("the workbooks answer this") },
+  { id: "book.list", label: "Workbooks", params: [], journaled: false, run: async () => refuse("the workbooks answer this") },
+  {
     id: "cell.get", label: "Read a cell", params: ["cell"], journaled: false,
     run: async (wb, p) => {
       const key = cellOf(p.cell), shown = show(wb.sheet.value(key));
@@ -3647,6 +3658,9 @@ export class Commands {
   readonly #wb: Workbook;
   readonly #store: Store;
   readonly #journal: string[] = [];
+  // The workbooks open beside this one (books.ts), for book.*: none when
+  // this one stands alone.
+  books: { run(id: string, p: Record<string, string>): Promise<Outcome>; readonly active: { readonly cmds: Commands } } | null = null;
 
   constructor(wb: Workbook, store: Store = memoryStore()) {
     this.#wb = wb;
@@ -3665,6 +3679,8 @@ export class Commands {
     try {
       if (!spec) refuse(`no command ${id}`);
       for (const name of spec!.params) if (params[name] === undefined) refuse(`${id} needs ${name}`);
+      // Several workbooks: theirs to answer (books.ts).
+      if (id.startsWith("book.")) return this.books ? await this.books.run(id, params) : refuse("one workbook here: no others to open beside it");
       // The workbook as it was, kept as a step to undo once the command has
       // changed it.
       const before = spec!.journaled && !spec!.unstepped ? this.#wb.saved() : null;
@@ -3778,11 +3794,14 @@ export class Commands {
     const live = () => {
       if (request?.cancelled) throw new Error("the request was stopped");
     };
+    // With several workbooks, the one active as each line runs (a script
+    // that opens or switches to another goes on in that one).
+    const here = (): Commands => this.books?.active.cmds ?? this;
     return {
-      run: (line: string) => (live(), this.run(line)),
-      execute: (id: string, params: Record<string, string>) => (live(), this.execute(id, params)),
-      set: (cell: string, input: string) => (live(), this.execute("cell.set", { cell, input })),
-      get: (cell: string) => (live(), scripted(this.#wb.sheet.value(cell))),
+      run: (line: string) => (live(), here().run(line)),
+      execute: (id: string, params: Record<string, string>) => (live(), here().execute(id, params)),
+      set: (cell: string, input: string) => (live(), here().execute("cell.set", { cell, input })),
+      get: (cell: string) => (live(), scripted(here().#wb.sheet.value(cell))),
     };
   }
 }

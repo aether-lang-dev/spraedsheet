@@ -302,6 +302,13 @@ export const CONTROL: Readonly<Record<string, Control>> = {
     if (k === "formulabar") return st.formulaBar;
     throw new Error(`GETVIEW: ${text(w)} is not gridlines, headings or formulabar`);
   },
+  // Several workbooks: a new one, one opened (a saved file's name, or a
+  // sample: budget, test, formatted), switched to, closed, listed.
+  NEWWORKBOOK: async (exec, n) => String((await must(exec, "book.new", text(n) ? { name: text(n) } : {})).output),
+  OPENWORKBOOK: async (exec, n) => String((await must(exec, "book.open", /^(budget|test|formatted)$/i.test(text(n)) ? { sample: text(n) } : { name: text(n) })).output),
+  ACTIVATEWORKBOOK: async (exec, n) => String((await must(exec, "book.activate", { name: text(n) })).output),
+  CLOSEWORKBOOK: async (exec, n) => String((await must(exec, "book.close", text(n) ? { name: text(n) } : {})).output),
+  LISTWORKBOOKS: async (exec) => stem((await must(exec, "book.list")).output as string[]),
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,

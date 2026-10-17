@@ -133,3 +133,20 @@ function documentsRow(v: SheetView): void {
     }));
   });
 }
+
+// Several workbooks (books.ts): each open one a button that makes it the
+// one shown; a new one, one opened by the field's name (a saved file, or a
+// sample: budget, test, formatted), the active one closed.
+export function booksBar(v: SheetView): void {
+  const which = state("");
+  ui.hstack(() => {
+    ui.text("Workbooks:");
+    each(v.bookNames, (n: string) => n, (n: string) => ui.button(n, () => {
+      ui.onclick(() => v.run("book.activate", { name: n.replace(/ \(active\)$/, "") }));
+    }));
+    bind(ui.textfield("workbook to open", () => {}), which);
+    v.btn("New workbook", () => v.run("book.new"));
+    v.btn("Open workbook", () => v.run("book.open", /^(budget|test|formatted)$/i.test(which.value.trim()) ? { sample: which.value.trim() } : { name: which.value }));
+    v.btn("Close workbook", () => v.run("book.close"));
+  });
+}

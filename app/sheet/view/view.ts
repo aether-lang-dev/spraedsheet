@@ -15,19 +15,34 @@ import { COLUMN_WIDTH, ROWS_WHEN_SPLIT, ROWS_WITH_PANEL, ROW_PX, buildPane } fro
 // aether-ui's datagrid's own row height, which a zoom scales.
 const ROW_HEIGHT = 24;
 import type { ChartView, DrawingView, SlicerView, Watch } from "../workbook.ts";
+import { Workbooks } from "../books.ts";
 import { statsLine } from "../workbook.ts";
 import type { CellEditor } from "../editors.ts";
 
 export class SheetView {
-  readonly wb = new Workbook();
-  // Files are saved in the page's storage.
-  readonly cmds = new Commands(this.wb, storage);
+  // The workbooks open (books.ts), their files saved in the page's storage;
+  // the page shows the active one, and its commands are the ones run.
+  readonly books = new Workbooks(storage);
+  get wb(): Workbook { return this.books.active.wb; }
+  get cmds(): Commands { return this.books.active.cmds; }
   // A link's URL opened by the system: the installed app's shell.open
   // (app.json grants https:, http: and mailto:); a web page has none.
-  readonly #opener = this.wb.opener = (url: string): string => {
+  readonly #opener = (url: string): string => {
     if (typeof shell === "undefined") return "opening a URL needs the installed app (open-urls)";
     try { shell.open(url); return ""; } catch (e) { return String((e as Error)?.message ?? e); }
   };
+  readonly #wired = (() => {
+    this.wb.opener = this.#opener;
+    this.books.onMade = (wb) => { wb.opener = this.#opener; };
+    // Another workbook shown: its sheets, its cells, its selection.
+    this.books.onSwitch = () => {
+      if (this.grid && ui.datagrid_editor(this.grid) !== 0) ui.datagrid_edit_cancel(this.grid);
+      this.wb.selecting = true;
+      this.refresh();
+      if (this.grid) ui.datagrid_refresh(this.grid);
+    };
+    return true;
+  })();
   readonly address = state("A1");
   readonly input = state("");
   readonly status = state("");
@@ -47,6 +62,8 @@ export class SheetView {
   // The tabs shown: the sheets not hidden, each with its colour.
   readonly tabs = state<{ name: string; color: string | null }[]>([{ name: "Sheet1", color: null }]);
   readonly active = state("Sheet1");
+  // The open workbooks' names, the active one's marked.
+  readonly bookNames = state<string[]>(["Untitled"]);
   readonly watches = state<Watch[]>([]);
   readonly charts = state<(ChartView & { n: number })[]>([]);
   readonly slicers = state<SlicerView[]>([]);
@@ -258,6 +275,7 @@ export class SheetView {
       this.sheets.set(this.wb.sheetNames());
       this.tabs.set(this.wb.pages().filter((p) => !p.hiddenSheet).map((p) => ({ name: p.name, color: p.tabColor })));
       this.active.set(this.wb.active);
+      this.bookNames.set(this.books.all.map((b) => (b === this.books.active ? `${b.wb.name} (active)` : b.wb.name)));
       this.watches.set(this.wb.watches());
       this.charts.set(this.wb.charts().map((c, i) => ({ ...c, n: i + 1 })));
       this.slicers.set(this.wb.slicerViews());
