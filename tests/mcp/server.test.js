@@ -64,33 +64,33 @@ const names = (r) => r.result.tools.map((t) => t.name);
 
 test('json, the default: the four tools that take JSON, a whole program, and no REXX command to escape', async () => {
   const { replies } = await talk([INIT, LIST]);
-  assert.deepEqual(names(replies[1]), ['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_list_commands']);
+  assert.deepEqual(names(replies[1]), ['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands']);
   for (const t of replies[1].result.tools) {
     assert.equal(t.inputSchema.type, 'object', t.name);
     assert.match(t.description, /one step of its undo/, t.name);
     assert.match(t.description, /not told when the person edits/, t.name);
   }
-  assert.match(replies[1].result.tools[4].description, /Every function spreadsheet_call or a program may call/);
+  assert.match(replies[1].result.tools[5].description, /Every function spreadsheet_call or a program may call/);
 });
 
 test('--tools=rexx: spreadsheet_run, with REXX\'s escaping said, and the two that read', async () => {
   const { replies } = await talk([INIT, LIST], {}, REXX);
-  assert.deepEqual(names(replies[1]), ['spreadsheet_run', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_list_commands']);
+  assert.deepEqual(names(replies[1]), ['spreadsheet_run', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands']);
   assert.match(replies[1].result.tools[0].description, /a quote inside one is written twice/);
-  assert.match(replies[1].result.tools[3].description, /Every function spreadsheet_run or a program may call/);
+  assert.match(replies[1].result.tools[4].description, /Every function spreadsheet_run or a program may call/);
 });
 
 test('--tools=all, or SPREADSHEET_MCP_TOOLS=all: all six', async () => {
   const flag = await talk([INIT, LIST], {}, ['--tools=all']);
   const env = await talk([INIT, LIST], { SPREADSHEET_MCP_TOOLS: 'ALL' });
   for (const { replies } of [flag, env]) {
-    assert.deepEqual(names(replies[1]), ['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_list_commands', 'spreadsheet_run']);
+    assert.deepEqual(names(replies[1]), ['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands', 'spreadsheet_run']);
   }
 });
 
 test('the flag wins over the environment', async () => {
   const { replies } = await talk([INIT, LIST], { SPREADSHEET_MCP_TOOLS: 'all' }, REXX);
-  assert.equal(names(replies[1]).length, 4);
+  assert.equal(names(replies[1]).length, 5);
 });
 
 // ---- spreadsheet_run_program
@@ -353,3 +353,25 @@ test('requests are answered in the order they came, one bus call at a time', asy
   assert.deepEqual(replies.slice(1).map((r) => r.id), [10, 11, 12, 13, 14, 15]);
   assert.deepEqual(calls.map((c) => c[1]), msgs.slice(1).map((m) => m.params.arguments.command));
 });
+
+test('spreadsheet_inspect: the workbook at a glance, from INSPECTWORKBOOK(), as JSON and as structured content', async () => {
+  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_inspect', {})]);
+  assert.deepEqual(calls.map((c) => c[1]), ['INSPECTWORKBOOK()']);
+  const r = replies[1].result;
+  assert.equal(r.isError, false);
+  assert.equal(r.structuredContent.sheets[1].name, 'Costs');
+  assert.equal(r.structuredContent.sheets[0].used, 'A1:C4');
+  assert.match(r.content[0].text, /"tables"/);
+});
+
+test('--headless: the server starts the app itself (no window, its control bus on, a data folder of its own), asks it there, and stops it', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-headless-'));
+  const appLog = path.join(dir, 'app.log');
+  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_inspect', {})], { SAE_BIN: path.join(__dirname, 'fake-sae.js'), FAKE_SAE_LOG: appLog, FAKE_BUS_LOG_ENV: '1' }, ['--headless']);
+  assert.equal(replies[1].result.isError, false);
+  const started = JSON.parse(fs.readFileSync(appLog, 'utf8').split('\n')[0]);
+  assert.deepEqual([started.args.slice(-1), started.headless, started.appdata !== ''], [['--control-bus'], '1', true]);
+  assert.ok(calls.every((c) => c[2] === started.appdata), 'every request to that app');
+  assert.ok(fs.readFileSync(appLog, 'utf8').includes('"stopped"'), 'stopped when the client went');
+});
+

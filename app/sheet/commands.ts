@@ -3686,6 +3686,28 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // The workbook at a glance, for a program to read: its name, each
+    // sheet (its used range, cells, whether hidden, its own names, its
+    // tables, charts, pivots and drawings), the workbook's names.
+    id: "workbook.inspect", label: "Inspect Workbook", params: [], journaled: false,
+    run: async (wb) => {
+      const out = {
+        name: wb.name, active: wb.active, language: wb.sheet.language.name,
+        sheets: wb.pages().map((pg) => {
+          const keys = [...new Set([...pg.sheet.keys(), ...pg.notes.keys()])].filter((k) => cellAddr(k));
+          const used = keys.length ? rangeName([{ col: 0, row: 0 }, { col: Math.max(...keys.map((k) => cellAddr(k)!.col)), row: Math.max(...keys.map((k) => cellAddr(k)!.row)) }]) : "";
+          return {
+            name: pg.name, used, cells: pg.sheet.keys().length, formulas: pg.sheet.keys().filter((k) => pg.sheet.input(k).startsWith("=")).length, hidden: pg.hiddenSheet ? 1 : 0,
+            names: pg.sheet.names().map(([n, r]) => `${n}=${r}`), tables: pg.sheet.tables().map((t) => `${t.name}=${rangeName(t.range)}`),
+            charts: pg.charts.map((c) => `${c.kind} of ${rangeName(c.range)}`), pivots: [...pg.pivots.keys()], drawings: pg.drawings.map((d) => d.name),
+          };
+        }),
+        names: wb.names().map(([n, r]) => `${n}=${r}`),
+      };
+      return { ok: true, message: `${out.name}: ${out.sheets.length} sheet${out.sheets.length === 1 ? "" : "s"}, ${out.sheets.reduce((n, x) => n + x.cells, 0)} cells`, changed: [], output: out };
+    },
+  },
+  {
     // All a script may ask of the active sheet, rows counted from 1 and
     // columns by letter (control.ts's ISROWHIDDEN, GETSHEETNAMES, CANUNDO ...).
     id: "sheet.state", label: "About the sheet", params: [], journaled: false,

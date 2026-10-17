@@ -7,7 +7,7 @@
 const fs = require('fs');
 
 const [app, command] = process.argv.slice(2);
-if (process.env.FAKE_BUS_LOG) fs.appendFileSync(process.env.FAKE_BUS_LOG, JSON.stringify([app, command]) + '\n');
+if (process.env.FAKE_BUS_LOG) fs.appendFileSync(process.env.FAKE_BUS_LOG, JSON.stringify(process.env.FAKE_BUS_LOG_ENV ? [app, command, process.env.SAE_APPDATA_DIR || ''] : [app, command]) + '\n');
 
 const answer = (result) => process.stdout.write(JSON.stringify({ success: true, result, errorCode: 0, error: '' }) + '\n');
 const refuse = (error) => process.stdout.write(JSON.stringify({ success: false, result: null, errorCode: 1, error }) + '\n');
@@ -75,6 +75,12 @@ if (process.env.FAKE_BUS_NO_APP) {
   answer({ 0: 4, 1: cell('A1', '2'), 2: cell('B1', 'x'), 3: cell('A2', 5, 'A1+3'), 4: cell('B2', '') });
 } else if (command === 'GETCELLS("C3:C3")') {
   answer({ 0: 1, 1: cell('C3', 'one') });
+} else if (command === 'INSPECTWORKBOOK()') {
+  answer(JSON.stringify({ name: 'Untitled', active: 'Sheet1', language: 'Excel', names: ['TOTAL=Sheet1!B1:B3'],
+    sheets: [{ name: 'Sheet1', used: 'A1:C4', cells: 9, formulas: 2, hidden: 0, names: [], tables: ['Sales=A1:C4'], charts: [], pivots: [], drawings: [] },
+      { name: 'Costs', used: '', cells: 0, formulas: 0, hidden: 0, names: [], tables: [], charts: [], pivots: [], drawings: [] }] }));
+} else if (command === 'SPREADSHEET_VERSION()') {
+  answer('1.0');
 } else if (command === 'LISTCOMMANDS(1)') {
   answer(stem(FUNCTIONS));
 } else if (command === 'GETSHEETNAMES()') {

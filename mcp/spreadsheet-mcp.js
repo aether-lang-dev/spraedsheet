@@ -18,11 +18,19 @@
  *     spreadsheet_call           one function, or several as one step,
  *                                its arguments checked before it is sent
  *     spreadsheet_read_range     a range's values and formulas, as rows
+ *     spreadsheet_inspect        the workbook at a glance: its sheets (each
+ *                                its used range, cells, names, tables,
+ *                                charts, pivots, drawings), its names
  *     spreadsheet_list_commands  the functions, each with its parameters
  *   rexx                for those who would write the app's REXX themselves
  *     spreadsheet_run            a command, a string of REXX the app runs
- *     spreadsheet_read_range, spreadsheet_list_commands
- *   all                 all five
+ *     spreadsheet_read_range, spreadsheet_inspect, spreadsheet_list_commands
+ *   all                 all of them
+ *
+ * --headless (or SPREADSHEET_MCP_HEADLESS=1): the server starts the app
+ * itself, with no window (sae with AETHER_UI_HEADLESS=1 and its control
+ * bus on, its data in a folder of its own), and stops it when the client
+ * goes; SAE_BIN names another sae (default ../sae/target/build/bin/sae).
  *
  * The bus is sae's: the app started with `--control-bus`, a port chosen at
  * random and a key fresh for every launch, in a courier file only this user
@@ -181,6 +189,16 @@ const READ_RANGE = {
   },
 };
 
+const INSPECT = {
+  name: 'spreadsheet_inspect',
+  title: 'Inspect the workbook',
+  description:
+    'The workbook at a glance, before reading or writing it: its name, the active sheet, the formula language, each ' +
+    'sheet (its used range such as "A1:D20", how many cells and formulas, whether hidden, its own names, tables, ' +
+    'charts, pivot tables and drawings) and the workbook\'s names. ' + LIMITS,
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+};
+
 const listCommands = (via) => ({
   name: 'spreadsheet_list_commands',
   title: 'List the spreadsheet functions',
@@ -196,9 +214,9 @@ const listCommands = (via) => ({
 });
 
 function toolsFor(surface) {
-  if (surface === 'rexx') return [RUN, RUN_PROGRAM, READ_RANGE, listCommands('spreadsheet_run or a program')];
-  if (surface === 'all') return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, listCommands('spreadsheet_call, a program, or spreadsheet_run'), RUN];
-  return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, listCommands('spreadsheet_call or a program')];
+  if (surface === 'rexx') return [RUN, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_run or a program')];
+  if (surface === 'all') return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call, a program, or spreadsheet_run'), RUN];
+  return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call or a program')];
 }
 
 // --tools=X, or SPREADSHEET_MCP_TOOLS; json when neither.
@@ -216,12 +234,33 @@ function rexxString(s) {
   return '"' + String(s).replace(/"/g, '""') + '"';
 }
 
+// --headless: the app this server started, and its data folder.
+let headlessApp = null, headlessData = '';
+async function startHeadless() {
+  const fs = require('fs'), os = require('os'), { spawn } = require('child_process');
+  headlessData = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-app-'));
+  const sae = process.env.SAE_BIN || path.join(__dirname, '..', 'sae', 'target', 'build', 'bin', 'sae');
+  headlessApp = spawn(sae, ['--app', path.join(__dirname, '..', 'app'), '--control-bus'], { env: { ...process.env, AETHER_UI_HEADLESS: '1', SAE_APPDATA_DIR: headlessData }, stdio: 'ignore' });
+  headlessApp.on('error', () => {});
+  const courier = path.join(headlessData, '.control-bus');
+  for (let i = 0; i < 150; i++) {
+    if (fs.existsSync(courier) && (await bus('SPREADSHEET_VERSION()')).ok) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+}
+function stopHeadless() {
+  if (headlessApp) headlessApp.kill();
+  if (headlessData) require('fs').rmSync(headlessData, { recursive: true, force: true });
+  headlessApp = null;
+}
+
 // One request over the bus: { ok, result } or { ok: false, error }.
 function bus(command) {
   const saeBus = process.env.SAE_BUS || path.join(__dirname, '..', 'sae', 'target', 'sae-bus');
   const app = process.env.SPREADSHEET_APP || 'Spreadsheet';
   return new Promise((resolve) => {
-    execFile(saeBus, [app, command], { encoding: 'utf8', timeout: BUS_DEADLINE_MS, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile(saeBus, [app, command], { encoding: 'utf8', timeout: BUS_DEADLINE_MS, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, ...(headlessData ? { SAE_APPDATA_DIR: headlessData } : {}) } }, (error, stdout, stderr) => {
       if (error) {
         const why = (stderr || '').trim() || (error.killed ? 'no answer within ' + BUS_DEADLINE_MS / 1000 + ' s' : error.message);
         resolve({ ok: false, error: 'no spreadsheet to ask: ' + why });
@@ -442,6 +481,13 @@ function failed(message) {
 async function callTool(name, args, surface = 'all') {
   args = args || {};
   if (!toolsFor(surface).some((t) => t.name === name)) return null;
+  if (name === 'spreadsheet_inspect') {
+    const a = await bus('INSPECTWORKBOOK()');
+    if (!a.ok) return failed(a.error);
+    let w;
+    try { w = JSON.parse(String(a.result)); } catch (e) { return failed('the app answered with something other than JSON'); }
+    return ok(w, w);
+  }
   if (name === 'spreadsheet_run') {
     if (typeof args.command !== 'string' || args.command.trim() === '') return failed('spreadsheet_run needs a command, e.g. SETCELL("A1", "100")');
     const a = await bus(args.command);
@@ -591,7 +637,10 @@ if (require.main === module) {
     process.exit(2);
   }
   // Requests are answered in order: the bus takes one command at a time.
-  let queue = Promise.resolve();
+  // --headless: the app started first, and stopped at the end.
+  const headless = process.argv.includes('--headless') || process.env.SPREADSHEET_MCP_HEADLESS === '1';
+  let queue = headless ? startHeadless().then((up) => { if (!up) process.stderr.write('spreadsheet-mcp: the app did not start headless\n'); }) : Promise.resolve();
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { stopHeadless(); process.exit(0); });
   const lines = readline.createInterface({ input: process.stdin });
   lines.on('line', (line) => {
     if (line.trim() === '') return;
@@ -607,7 +656,7 @@ if (require.main === module) {
       if (msg.id !== undefined && msg.id !== null) error(msg.id, -32603, String(e && e.message || e));
     });
   });
-  lines.on('close', () => queue.then(() => process.exit(0)));
+  lines.on('close', () => queue.then(() => { stopHeadless(); process.exit(0); }));
 }
 
 module.exports = { toolsFor, surfaceOf, rexxString, batchCommand, programCommand, unstem, plain, parseRange, asRows, checked, callTool, handle };

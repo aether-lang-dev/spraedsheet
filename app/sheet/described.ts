@@ -99,6 +99,7 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   DELETEMACRO: fn([p("name", "text")], "Deletes a macro", "what it did"),
   LISTMACROS: fn([], "The workbook's macros", "a stem of their names"),
   LISTFUNCTIONS: fn([], "The functions a formula may call, in the sheet's language", "a stem of their names, sorted"),
+  INSPECTWORKBOOK: fn([], "The workbook at a glance: its sheets (each its used range, cells, formulas, names, tables, charts, pivots, drawings) and its names", "JSON"),
   SELECTRANGE: fn([p("range", "range", "a cell, a range, whole columns (\"B:B\"), whole rows (\"3:5\"), or \"all\"")], "Selects it on the page", "the range selected"),
   GETSELECTION: fn([], "The selection", "a range, e.g. B2:C4"),
   GOTOSPECIAL: fn([p("what", "text", "formulas, constants, blanks, errors, comments, validation or conditional"), opt("range", "range", "the used range when left out"), opt("type", "text", "numbers, text, logicals or errors, for formulas and constants")], "Go To Special: the cells of a kind", "a stem of cells, in sheet order"),

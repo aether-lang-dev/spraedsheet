@@ -337,6 +337,9 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // The formula functions there are, in the sheet's language (the CLI's
   // sheet functions).
   LISTFUNCTIONS: async (exec) => stem((await must(exec, "formulas.functions")).output as string[]),
+  // The workbook at a glance (the MCP server's spreadsheet_inspect and the
+  // CLI's sheet inspect): JSON.
+  INSPECTWORKBOOK: async (exec) => JSON.stringify((await must(exec, "workbook.inspect")).output),
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,
