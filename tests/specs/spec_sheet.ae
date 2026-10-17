@@ -76,6 +76,36 @@ wait_editors(want: int) -> int {
     return 0
 }
 
+// The width of the narrowest text field under the panel tabs (the open
+// panel's), or -1 when it has none.
+narrowest_panel_field() -> int {
+    top = uidriver.widget_int_field_by_id(uidriver.widget_id_of("text", "Panels:"), "y")
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 - 1 }
+    least = 100000
+    n = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(w, "type"), "textfield") == 1 && string.length(uidriver.field_str(w, "placeholder")) > 0 && uidriver.field_int(w, "y") > top {
+            n = n + 1
+            if uidriver.field_int(w, "w") < least { least = uidriver.field_int(w, "w") }
+        }
+        i = i + 1
+    }
+    json.json_free(v)
+    if n == 0 { return 0 - 1 }
+    return least
+}
+
+// A panel opened: its narrowest text field at least 60 px wide.
+panel_fields_have_room(name: string) {
+    g.command("view.panel name=${name}")
+    sleep(300)
+    least = narrowest_panel_field()
+    spec.assert_true(least < 0 || least >= 60, "the ${name} panel's narrowest field is ${least} px wide")
+}
+
 // 1 once the cursor's box is on one cell alone.
 wait_one_box() -> int {
     i = 0
@@ -1894,6 +1924,24 @@ main() {
             sleep(200)
             spec.assert_true(wait_editors(0), "undo: no editor (${open_editors()})")
             spec.assert_true(wait_one_box(), "undo: one cursor box (${cursor_boxes()})")
+        }
+        spec.it("every panel's text fields have room: none a few pixels wide beside another") callback {
+            panel_fields_have_room("edit")
+            panel_fields_have_room("looks")
+            panel_fields_have_room("view")
+            panel_fields_have_room("names")
+            panel_fields_have_room("rules")
+            panel_fields_have_room("validation")
+            panel_fields_have_room("editors")
+            panel_fields_have_room("data")
+            panel_fields_have_room("find")
+            panel_fields_have_room("audit")
+            panel_fields_have_room("insert")
+            panel_fields_have_room("chart")
+            panel_fields_have_room("file")
+            panel_fields_have_room("script")
+            panel_fields_have_room("lists")
+            g.command("view.panel name=none")
         }
         spec.it("the formula bar's row: Name Box, fx, the formula taking the rest of the row and growing with the window, R1C1") callback {
             nb = g.field("cell")
