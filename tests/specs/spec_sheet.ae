@@ -129,6 +129,27 @@ panel_fields_have_room(name: string) {
     spec.assert_true(least < 0 || least >= 60, "the ${name} panel's narrowest field is ${least} px wide")
 }
 
+// The header (its widget id) over the cell the cursor's box is on, or 0.
+boxed_header() -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 }
+    h = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        if string.contains(uidriver.field_str(w, "classes"), "aui-grid-cell") == 1 && uidriver.field_int(w, "borderWidth") == 2 { h = uidriver.field_int(w, "a11y_header") }
+        i = i + 1
+    }
+    json.json_free(v)
+    return h
+}
+
+// 1 when the cursor's box is on the cell now.
+cursor_on(col: string, row: int) -> int {
+    if uidriver.widget_int_field_by_id(g.cell_id(col, row), "borderWidth") == 2 { return 1 }
+    return 0
+}
+
 // 1 once the cursor's box is on one cell alone.
 wait_one_box() -> int {
     i = 0
@@ -2151,6 +2172,32 @@ main() {
             spec.assert_true(g.wait_cell("C", 14, "27"), "the first forecast")
             spec.assert_true(g.wait_cell("C", 15, "29"), "the second")
             g.command("view.panel name=none")
+        }
+        spec.it("View > Animations: the selection's outline glides through the cells between; off, it jumps") callback {
+            g.goto("A1")
+            g.pick("A", 1)
+            spec.assert_true(wait_one_box(), "one box, on A1")
+            // Slowed to be seen on its way (Excel's is 120 ms).
+            g.command("view.animations ms=900")
+            spec.assert_true(b.wait_for_console("sheet: animations on (900 ms)"), "a slow glide")
+            hb = uidriver.widget_id_by_text("B")
+            he = uidriver.widget_id_by_text("E")
+            g.pick("F", 1)
+            between = 0
+            k = 0
+            while k < 40 && between == 0 {
+                h = boxed_header()
+                if h >= hb && h <= he { between = 1 }
+                k = k + 1
+            }
+            spec.assert_eq(between, 1, "on its way to F1 the outline passed a cell between")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${g.cell_id("F", 1)}", "\"borderWidth\":2", 40), "and rests on F1")
+            b.click("Animations")
+            spec.assert_true(b.wait_for_console("sheet: animations off"), "off")
+            g.pick("A", 1)
+            spec.assert_eq(cursor_on("A", 1), 1, "it jumps: on A1 at once")
+            g.command("view.animations ms=120")
+            spec.assert_true(b.wait_for_console("sheet: animations on (120 ms)"), "on again, Excel's 120 ms")
         }
         spec.it("dark mode: the system's dark followed, the chrome dark, the icons inked light, the sheet white; chosen whatever the system shows") callback {
             g.command("cell.set cell=A1 input=dark?")

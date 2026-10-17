@@ -75,6 +75,8 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   SETZOOM: fn([p("zoom", "text", "a percentage, 10 to 400, or in or out a step")], "Zooms the sheet", "the zoom now"),
   GETZOOM: fn([], "The sheet's zoom", "a percentage"),
   SETAPPEARANCE: fn([p("mode", "text", "system (the system's light or dark), light or dark")], "Dark mode: the window's chrome dark or light; the sheet stays white", "the mode"),
+  SETANIMATIONS: fn([p("on", "flag", "1: the selection's outline glides to a new cell; 0: it jumps")], "View > Animations", "1 or 0"),
+  GETANIMATIONS: fn([], "Whether the selection glides", "1 or 0"),
   GETAPPEARANCE: fn([], "Light or dark", "system, light or dark, then what it shows now: \"system dark\""),
   SELECTRANGE: fn([p("range", "range", "a cell, a range, whole columns (\"B:B\"), whole rows (\"3:5\"), or \"all\"")], "Selects it on the page", "the range selected"),
   GETSELECTION: fn([], "The selection", "a range, e.g. B2:C4"),

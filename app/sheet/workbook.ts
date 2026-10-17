@@ -354,6 +354,10 @@ export class Workbook {
   // whether it is dark now (the page says), the sheet itself staying white
   // with black text as Excel's does in dark mode.
   appearance: "system" | "light" | "dark" = "system";
+  // View > Animations: the selection's outline glides to a new cell (about
+  // 120 ms, decelerating), as Excel's; off, it jumps.
+  animations = true;
+  glideMs = 120;
   dark = false;
   // The panel open under the grid (menus.ts's PANELS), or null: a view.
   panel: string | null = null;

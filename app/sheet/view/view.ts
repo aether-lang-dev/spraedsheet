@@ -215,6 +215,7 @@ export class SheetView {
   // #f3f3f3, controls white, text #242424); never dark, the platform's own.
   #systemDark = typeof ui.dark_mode === "function" ? !!ui.dark_mode() : false;
   #shownDark: boolean | null = null;
+  #shownGlide = 0;
   readonly #watching = typeof ui.on_appearance === "function" ? (ui.on_appearance((dark: boolean) => { this.#systemDark = !!dark; this.refresh(); }), true) : false;
   #showAppearance(): void {
     const dark = this.wb.appearance === "dark" || (this.wb.appearance === "system" && this.#systemDark);
@@ -296,6 +297,14 @@ export class SheetView {
       }
     }
     this.#showAppearance();
+    // View > Animations: the grid's own glide, about Excel's 120 ms.
+    const glide = this.wb.animations ? this.wb.glideMs : 0;
+    if (this.grid && typeof ui.datagrid_selection_glide === "function" && glide !== this.#shownGlide) {
+      ui.datagrid_selection_glide(this.grid, glide);
+      if (this.pane) ui.datagrid_selection_glide(this.pane, glide);
+      this.#shownGlide = glide;
+      print(`sheet: animations ${glide ? `on (${glide} ms)` : "off"}`);
+    }
     if (this.grid) {
       this.#showView();
       ui.datagrid_refresh(this.grid);

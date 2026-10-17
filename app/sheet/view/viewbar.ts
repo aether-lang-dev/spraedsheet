@@ -25,6 +25,8 @@ export function viewBar(v: SheetView): void {
     v.btn("Zoom in", () => v.run("view.zoom", { by: "in" }));
     v.btn("Zoom out", () => v.run("view.zoom", { by: "out" }));
     v.btn("Zoom 100%", () => v.run("view.zoom", { percent: "100" }));
+    // View > Animations: the selection's glide on or off.
+    v.btn("Animations", () => v.run("view.animations", v.wb.animations ? { off: "1" } : {}));
     // Dark mode: the chrome dark or light, or the system's.
     v.btn("Dark mode", () => v.run("view.appearance", { mode: "dark" }));
     v.btn("Light mode", () => v.run("view.appearance", { mode: "light" }));

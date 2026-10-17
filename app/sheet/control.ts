@@ -50,6 +50,7 @@ interface State {
   readonly split: number;
   readonly zoom: number;
   readonly appearance: string;
+  readonly animations: number;
   readonly hiddenSheets: readonly string[];
   readonly tabColors: Readonly<Record<string, string>>;
   readonly dateSystem: number;
@@ -274,6 +275,9 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // Dark mode: SETAPPEARANCE("dark"), "light" or "system"; GETAPPEARANCE().
   SETAPPEARANCE: async (exec, m) => String((await must(exec, "view.appearance", { mode: text(m) })).output),
   GETAPPEARANCE: async (exec) => (await state(exec)).appearance,
+  // View > Animations: SETANIMATIONS(0) the selection jumps, 1 it glides.
+  SETANIMATIONS: async (exec, on) => (await must(exec, "view.animations", yes(on) ? {} : { off: "1" })).output,
+  GETANIMATIONS: async (exec) => (await state(exec)).animations,
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,

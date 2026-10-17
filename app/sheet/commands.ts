@@ -2954,6 +2954,20 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // View > Animations: on (as it starts) the selection's outline glides
+    // to a new cell, off it jumps. A view, not saved.
+    id: "view.animations", label: "Animations", params: [], optional: ["off", "ms"], journaled: false,
+    run: async (wb, p) => {
+      if (p.ms !== undefined) {
+        const ms = Number(p.ms);
+        if (!Number.isInteger(ms) || ms < 1 || ms > 2000) refuse(`${p.ms} is not a glide of 1 to 2000 ms`);
+        wb.glideMs = ms;
+      }
+      wb.animations = !flag(p.off ?? "0");
+      return { ok: true, message: `animations ${wb.animations ? "on" : "off"}`, changed: [], output: wb.animations ? 1 : 0 };
+    },
+  },
+  {
     // Light or dark: the system's (system, as it starts), or light or dark
     // whatever the system shows; the chrome changes, the sheet stays white.
     // A view, not saved.
@@ -3218,7 +3232,7 @@ const SPECS: readonly Spec[] = [
         canUndo: wb.canUndo ? 1 : 0, canRedo: wb.canRedo ? 1 : 0,
         autoId: page.autoId && { column: colName(page.autoId.column), next: `${page.autoId.prefix}${page.autoId.next}` },
         language: wb.sheet.language.name, referenceStyle: wb.referenceStyle,
-        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
+        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, animations: wb.animations ? 1 : 0, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
       };
       return { ok: true, message: JSON.stringify(state), changed: [], output: state };
     },
