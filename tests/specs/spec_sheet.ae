@@ -278,6 +278,73 @@ scrolled() -> string {
     return out
 }
 
+// A sheet tab's right-click menu, opened: its handle (recorded, not shown).
+tab_menu(name: string) -> int {
+    body = uidriver.post_body("/widget/${uidriver.widget_id_of("button", name)}/secondary_click")
+    v, _e = json.parse(body)
+    if v == null { return 0 }
+    n = uidriver.field_int(v, "popup")
+    json.json_free(v)
+    return n
+}
+
+// GET /menus' entry for menu h, as its JSON text.
+menu_json(h: int) -> string {
+    body = uidriver.get_body("/menus")
+    at = string.index_of(body, "{\"handle\":${h},")
+    if at < 0 { return "" }
+    rest = string.substring(body, at, string.length(body))
+    end = string.index_of(rest, "]}")
+    if end < 0 { return rest }
+    return string.substring(rest, 0, end + 2)
+}
+
+// Whether the widget of kind showing t is shown: itself visible, and laid
+// out at a size (a widget in a hidden row reads visible itself).
+vis_(t: string, kind: string) -> int {
+    id = uidriver.widget_id_of(kind, t)
+    if id == 0 { return 0 }
+    // It and every row it is in: a row hidden as a whole leaves its
+    // children reading visible themselves (AppKit keeps their frames).
+    k = id
+    depth = 0
+    while k > 0 && depth < 60 {
+        if uidriver.widget_bool_by_id(k, "visible") == 0 { return 0 }
+        k = uidriver.widget_int_field_by_id(k, "parent")
+        depth = depth + 1
+    }
+    if uidriver.widget_int_field_by_id(id, "w") <= 0 || uidriver.widget_int_field_by_id(id, "h") <= 0 { return 0 }
+    return 1
+}
+
+// The widget a screen reader names `name`.
+named_(name: string) -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 }
+    id = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(w, "a11y_name"), name) == 1 { id = uidriver.field_int(w, "id") }
+        i = i + 1
+    }
+    json.json_free(v)
+    return id
+}
+
+// Wait for a tab to be there (want 1) or gone (0).
+wait_tab(name: string, want: int) -> int {
+    t = 0
+    while t < 60 {
+        has = 0
+        if uidriver.widget_id_of("button", name) > 0 { has = 1 }
+        if has == want { return 1 }
+        sleep(50)
+        t = t + 1
+    }
+    return 0
+}
+
 // The grid's horizontal scrollbar: the scrollbar wider than it is tall.
 h_scrollbar() -> int {
     v, _jerr = json.parse(uidriver.get_body("/widgets"))
@@ -373,6 +440,86 @@ main() {
             spec.assert_eq(g.cell_id("K", 1), 0, "and no column K")
             spec.assert_eq(string.length(g.cell_text("A", 1)), 0, "A1 is empty")
         }
+        spec.it("the bottom is the sheet tabs and the status bar; the Extra controls show the rows; a tab's +, rename in place and menu") callback {
+            spec.assert_eq(vis_("Sheet1", "button"), 1, "the Sheet1 tab")
+            spec.assert_gt(named_("Add a sheet"), 0, "the + tab")
+            spec.assert_eq(vis_("Add sheet", "button"), 0, "the sheet buttons hidden as it starts")
+            spec.assert_eq(vis_("Panels:", "text"), 0, "and the panels' tabs")
+            spec.assert_eq(uidriver.widget_bool_by_id(uidriver.widget_id_last_of("toggle", "Extra controls"), "active"), 0, "the Extra controls off")
+            // Tall enough for the bottom to be on screen in the snapshots;
+            // the window's size (its root stack's) put back after.
+            w0 = uidriver.widget_int_field_by_id(1, "w")
+            h0 = uidriver.widget_int_field_by_id(1, "h")
+            uidriver.resize_window(1400, 1300)
+            sleep(400)
+            d0 = snapshot("tabs-1-collapsed")
+            uidriver.click_widget(named_("Add a sheet"))
+            spec.assert_true(wait_tab("Sheet2", 1) == 1, "+ added Sheet2")
+            spec.assert_gt(uidriver.widget_id_of("button", "Sheet2"), 0, "its tab")
+            // A double click renames it in place: a field on the tab, Return keeps it.
+            uidriver.post_ok("/widget/${uidriver.widget_id_of("button", "Sheet2")}/double_click", "double-click Sheet2's tab")
+            f = 0
+            t = 0
+            while t < 40 && f == 0 {
+                f = uidriver.widget_id_of("textfield", "Sheet2")
+                sleep(50)
+                t = t + 1
+            }
+            spec.assert_gt(f, 0, "a field in its place, with its name")
+            d1 = snapshot("tabs-2-renaming")
+            uidriver.post_ok("/widget/${f}/set_text?v=Costs", "type Costs")
+            uidriver.post_ok("/widget/${f}/submit", "Return")
+            t = 0
+            while t < 40 && uidriver.widget_id_of("button", "Costs") == 0 {
+                sleep(50)
+                t = t + 1
+            }
+            spec.assert_gt(uidriver.widget_id_of("button", "Costs"), 0, "the tab is Costs")
+            spec.assert_eq(uidriver.widget_id_of("button", "Sheet2"), 0, "and Sheet2 is no more")
+            // Its right-click menu: the Sheet menu's actions, then sae's.
+            m = tab_menu("Costs")
+            mj = menu_json(m)
+            spec.assert_contains(mj, "\"items\":[\"Rename\",\"Move left\",\"Move right\",\"Copy\",\"Hide\",\"Unhide\",\"Tab color red\",\"Tab color orange\",\"Tab color green\",\"Tab color blue\",\"Tab color purple\",\"No tab color\",\"Delete\",\"Back\"", "Rename to Delete, then sae's")
+            spec.assert_contains(mj, "\"disabled\":[\"Unhide\"", "Unhide off: nothing hidden")
+            d2 = snapshot("tabs-3-menu")
+            uidriver.post_ok("/menu/${m}/activate?label=Move%20left", "Move left")
+            t = 0
+            while t < 40 && uidriver.widget_int_field_by_id(uidriver.widget_id_of("button", "Costs"), "x") >= uidriver.widget_int_field_by_id(uidriver.widget_id_of("button", "Sheet1"), "x") {
+                sleep(50)
+                t = t + 1
+            }
+            spec.assert_true(uidriver.widget_int_field_by_id(uidriver.widget_id_of("button", "Costs"), "x") < uidriver.widget_int_field_by_id(uidriver.widget_id_of("button", "Sheet1"), "x"), "Costs before Sheet1")
+            uidriver.post_ok("/menu/${tab_menu("Costs")}/activate?label=Copy", "Copy")
+            spec.assert_true(wait_tab("Costs copy", 1) == 1, "Costs copy")
+            uidriver.post_ok("/menu/${tab_menu("Costs copy")}/activate?label=Tab%20color%20green", "Tab color green")
+            uidriver.post_ok("/menu/${tab_menu("Costs copy")}/activate?label=Hide", "Hide")
+            spec.assert_true(wait_tab("Costs copy", 0) == 1, "hidden: its tab gone")
+            m2 = tab_menu("Costs")
+            spec.assert_false(string.contains(menu_json(m2), "\"disabled\":[\"Unhide\"") == 1, "Unhide on now")
+            uidriver.post_ok("/menu/${m2}/activate?label=Unhide", "Unhide")
+            spec.assert_true(wait_tab("Costs copy", 1) == 1, "shown again")
+            uidriver.post_ok("/menu/${tab_menu("Costs copy")}/activate?label=Delete", "Delete")
+            spec.assert_true(wait_tab("Costs copy", 0) == 1, "deleted")
+            uidriver.post_ok("/menu/${tab_menu("Costs")}/activate?label=Rename", "Rename from the menu")
+            spec.assert_true(uidriver.wait_body_contains("/widgets", "\"placeholder\":\"sheet name\"", 20) == 1, "the field in its place")
+            fr = uidriver.widget_id_of("textfield", "Costs")
+            uidriver.post_ok("/widget/${fr}/set_text?v=Sheet2", "type Sheet2")
+            uidriver.post_ok("/widget/${fr}/submit", "Return")
+            spec.assert_true(wait_tab("Sheet2", 1) == 1, "back to Sheet2")
+            uidriver.post_ok("/menu/${tab_menu("Sheet2")}/activate?label=Delete", "Delete it")
+            spec.assert_true(wait_tab("Sheet2", 0) == 1, "one sheet again")
+            b.click("Sheet1")
+            // The Extra controls: the rows under the tabs, as before.
+            g.extras(1)
+            spec.assert_eq(vis_("Add sheet", "button"), 1, "the sheet buttons shown")
+            spec.assert_eq(vis_("Panels:", "text"), 1, "and the panels' tabs")
+            d3 = snapshot("tabs-4-expanded")
+            spec.assert_str_eq(d1, d0, "the window keeps its size (${d1})")
+            spec.assert_str_eq(d2, d0, "the window keeps its size (${d2})")
+            spec.assert_str_eq(d3, d0, "the window keeps its size (${d3})")
+            if w0 > 0 && h0 > 0 { uidriver.resize_window(w0, h0) }
+            sleep(400)
+        }
         spec.it("a click on a fresh sheet's A1, then typing, as a person does: the grid stays where it is, an editor opens on A1 with the focus, Return stores it; and on D10") callback {
             click_and_type("A", 1, "1")
             click_and_type("D", 10, "4")
@@ -419,14 +566,14 @@ main() {
             spec.assert_true(b.wait_for_text("250%"), "250%: the right half runs 100% to 400%")
             spec.assert_true(uidriver.wait_body_contains("/widgets", "Zoom 250%", 20) == 1, "the sheet zoomed")
             d1 = snapshot("zoom-2-250")
-            b.click("−")
+            uidriver.click_widget(named_("Zoom out a step"))
             spec.assert_true(b.wait_for_text("200%"), "the − button zooms out a step")
             spec.assert_true(uidriver.wait_body_contains("/widget/${zs}", "\"value\":66.67", 20) == 1, "and the slider follows")
             g.command("view.zoom percent=55")
             spec.assert_true(b.wait_for_text("55%"), "a zoom from the command bar")
             spec.assert_true(uidriver.wait_body_contains("/widget/${zs}", "\"value\":25.00", 20) == 1, "moves the slider to a quarter")
             d2 = snapshot("zoom-3-55")
-            b.click("+")
+            uidriver.click_widget(named_("Zoom in a step"))
             spec.assert_true(b.wait_for_text("75%"), "the + button zooms in a step")
             uidriver.post_ok("/widget/${zs}/set_value?v=50", "back to the middle")
             spec.assert_true(uidriver.wait_body_contains("/widgets", "Zoom 100%", 20) == 1, "100% again")
@@ -761,6 +908,7 @@ main() {
         }
         spec.it("a workbook's name is read on another sheet; Move left moves its tab; the Name Box goes back") callback {
             b.set_field_by("sheet", "Other")
+            g.extras(1)
             b.click("Add sheet")
             spec.assert_true(b.wait_for_text("On Other:"), "on Other")
             g.enter("A1", "=SUM_RANGE(\"amounts\")")
@@ -776,9 +924,11 @@ main() {
         }
         spec.it("a sheet tab dragged among the others moves its sheet; dragged back, and a tab still clicks") callback {
             b.set_field_by("sheet", "North")
+            g.extras(1)
             b.click("Add sheet")
             spec.assert_true(b.wait_for_console("sheet: added North"), "North added")
             b.set_field_by("sheet", "South")
+            g.extras(1)
             b.click("Add sheet")
             spec.assert_true(b.wait_for_console("sheet: added South"), "South added")
             spec.assert_true(wait_tabs("Sheet1", "North", "South"), "the tabs in order")
@@ -869,6 +1019,7 @@ main() {
             tp = uidriver.widget_id_of("button", "Trace precedents")
             audit = uidriver.widget_int_field_by_id(uidriver.widget_int_field_by_id(tp, "parent"), "parent")
             spec.assert_eq(uidriver.widget_bool_by_id(rules, "visible"), 0, "Rules closed at the start")
+            g.extras(1)
             b.click("Rules")
             spec.assert_true(b.wait_for_console("sheet: the rules panel"), "opened")
             spec.assert_true(b.wait_for_console("sheet: the grid 22 rows high"), "the grid gives the panel room")
@@ -1279,6 +1430,7 @@ main() {
         }
         spec.it("sheets as tabs: a formula reads another sheet, follows it, and is #REF! when it goes") callback {
             b.set_field_by("sheet", "Costs")
+            g.extras(1)
             b.click("Add sheet")
             spec.assert_true(b.wait_for_console("sheet: added Costs"), "added")
             spec.assert_true(b.wait_for_text("On Costs:"), "and on it")
@@ -1692,6 +1844,7 @@ main() {
             spec.assert_true(g.wait_cell("I", 1, "10"), "Costs_B2 read")
             g.command("sheet.activate name=Costs")
             b.set_field_by("sheet", "Spend")
+            g.extras(1)
             b.click("Rename sheet")
             spec.assert_true(b.wait_for_console("sheet: Costs is now Spend"), "renamed")
             spec.assert_true(b.wait_for_text("On Spend:"), "the active sheet named so")

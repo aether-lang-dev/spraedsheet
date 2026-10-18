@@ -47,7 +47,7 @@ export const MENUS: readonly Menu[] = [
     i("Find", "edit.find"), i("Replace all", "edit.replace"), i("Go To Special", "edit.goToSpecial"),
   ] },
   { label: "View", items: [
-    ...PANELS.map((p) => i(panelItem(p.label), "view.panel")), "-",
+    i("Extra controls", "view.extraControls"), ...PANELS.map((p) => i(panelItem(p.label), "view.panel")), "-",
     i("Show formulas", "formulas.showFormulas"), i("R1C1", "formulas.style"), "-",
     i("Hide rows", "rows.hide"), i("Unhide rows", "rows.unhide"), i("Hide columns", "columns.hide"), i("Unhide columns", "columns.unhide"), "-",
     i("Freeze top row", "view.freezeRows"), i("Freeze first column", "view.freezeCols"), i("Freeze panes", "view.freezePanes"), i("Split", "view.split"), i("Unfreeze", "view.freezeRows"), i("Row height", "rows.height"), i("Zoom in", "view.zoom"), i("Zoom out", "view.zoom"), i("Zoom 100%", "view.zoom"), i("English", "view.locale"), i("Español", "view.locale"), i("Gridlines", "view.show"), i("Headings", "view.show"), i("Formula bar", "view.show"), i("Page break preview", "view.pageBreakPreview"), i("Insert page break", "page.break"), i("Remove page break", "page.break"), i("Reset page breaks", "page.resetBreaks"), i("Animations", "view.animations"), i("Dark mode", "view.appearance"), i("Light mode", "view.appearance"), i("System appearance", "view.appearance"), i("AutoFit columns", "columns.autofit"), i("AutoFit rows", "rows.autofit"),

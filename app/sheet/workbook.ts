@@ -395,6 +395,10 @@ export class Workbook {
   // View > Formula Bar shown (a view of the window, not saved); View >
   // Page Break Preview.
   formulaBar = true;
+  // The rows under the grid (the sheet buttons, the panels' tabs and the
+  // panels) shown, or only the sheet tabs and the status bar: a view
+  // setting saved with the workbook (view.extraControls).
+  extraControls = false;
   breakPreview = false;
   // The interface's language and how a formula is typed (locale.ts):
   // English, or Spanish. What is stored stays canonical.
@@ -617,6 +621,7 @@ export class Workbook {
     this.styles = new Map(Object.entries(CELL_STYLES));
     this.theme = THEMES.Office;
     this.bookProtection = null;
+    this.extraControls = false;
     this.macros = new Map();
     this.triggers = [];
     this.carried = [];

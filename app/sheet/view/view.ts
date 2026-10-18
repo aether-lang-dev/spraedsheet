@@ -84,6 +84,9 @@ export class SheetView {
   // The status bar's zoom slider and its percentage (lists.ts statusBar).
   zoomSlider = 0;
   zoomLabel = 0;
+  // The Extra controls' toggle (sheettabs.ts) and the rows it shows.
+  extraToggle = 0;
+  #extras = 0;
   // The formula bar's row (formulabar.ts), shown or hidden by View.
   formulaRow = 0;
   // Page Break Preview's page edges (commands.ts's pageEdges), or null.
@@ -162,6 +165,12 @@ export class SheetView {
   }
 
   // A panel under the grid: its bars, hidden until it is opened.
+  // The rows behind the Extra controls (view.extraControls).
+  extras(build: () => void): void {
+    this.#extras = ui.vstack(build);
+    ui.set_visible(this.#extras, this.wb.extraControls);
+  }
+
   panel(name: string, build: () => void): void {
     this.#building = name;
     const h = ui.vstack(build);
@@ -251,6 +260,8 @@ export class SheetView {
     const bar = [words(many ? statsLine(this.wb.stats([...others, sel!])) : "Ready"), `${cells} cell${cells === 1 ? "" : "s"}`, `Zoom ${this.wb.zoom}%`, this.wb.calculation.manual && this.wb.stale().length ? "Calculate" : "", this.bus ? "Control bus" : ""];
     if (this.zoomSlider && sliderToZoom(ui.get_slider(this.zoomSlider)) !== this.wb.zoom) ui.set_slider(this.zoomSlider, zoomToSlider(this.wb.zoom));
     if (this.zoomLabel) ui.set_text(this.zoomLabel, `${this.wb.zoom}%`);
+    if (this.#extras) ui.set_visible(this.#extras, this.wb.extraControls);
+    if (this.extraToggle && (ui.get_toggle(this.extraToggle) ? true : false) !== this.wb.extraControls) ui.set_toggle(this.extraToggle, this.wb.extraControls ? 1 : 0);
     batch(() => {
       this.figures.set(bar.filter((x) => x).join("  ·  "));
       this.input.set(this.wb.shownInput(key));

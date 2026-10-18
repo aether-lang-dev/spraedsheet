@@ -74,6 +74,8 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   GETDATESYSTEM: fn([], "The workbook's date system", "1900 or 1904"),
   SETZOOM: fn([p("zoom", "text", "a percentage, 10 to 400, or in or out a step")], "Zooms the sheet", "the zoom now"),
   GETZOOM: fn([], "The sheet's zoom", "a percentage"),
+  SHOWEXTRACONTROLS: fn([p("on", "flag", "1 to show the rows under the grid (sheet buttons, panels), 0 to hide them")], "Shows or hides the Extra controls, saved with the workbook", "1 or 0"),
+  GETEXTRACONTROLS: fn([], "Whether the Extra controls are shown", "1 or 0"),
   SETAPPEARANCE: fn([p("mode", "text", "system (the system's light or dark), light or dark")], "Dark mode: the window's chrome dark or light; the sheet stays white", "the mode"),
   SETANIMATIONS: fn([p("on", "flag", "1: the selection's outline glides to a new cell; 0: it jumps")], "View > Animations", "1 or 0"),
   GETANIMATIONS: fn([], "Whether the selection glides", "1 or 0"),

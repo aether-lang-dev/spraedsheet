@@ -55,6 +55,7 @@ interface State {
   readonly gridlines: number;
   readonly headings: number;
   readonly formulaBar: number;
+  readonly extraControls: number;
   readonly locale: string;
   readonly hiddenSheets: readonly string[];
   readonly tabColors: Readonly<Record<string, string>>;
@@ -288,6 +289,10 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // Zoom: SETZOOM(150), SETZOOM("in"), SETZOOM("out"); GETZOOM().
   SETZOOM: async (exec, z) => (await must(exec, "view.zoom", /^(in|out)$/i.test(text(z).trim()) ? { by: text(z).trim().toLowerCase() } : { percent: text(z).trim() })).output,
   GETZOOM: async (exec) => (await state(exec)).zoom,
+  // The Extra controls (the rows under the grid): SHOWEXTRACONTROLS(1) or
+  // (0), saved with the workbook; GETEXTRACONTROLS() 1 or 0.
+  SHOWEXTRACONTROLS: async (exec, on) => (await must(exec, "view.extraControls", { on: yes(on) ? "1" : "0" })).output,
+  GETEXTRACONTROLS: async (exec) => (await state(exec)).extraControls,
   // Dark mode: SETAPPEARANCE("dark"), "light" or "system"; GETAPPEARANCE().
   SETAPPEARANCE: async (exec, m) => String((await must(exec, "view.appearance", { mode: text(m) })).output),
   GETAPPEARANCE: async (exec) => (await state(exec)).appearance,

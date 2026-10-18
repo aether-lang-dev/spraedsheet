@@ -25,7 +25,7 @@ import { namesBar } from "./sheet/view/namesbar.ts";
 import { validationBar } from "./sheet/view/validationbar.ts";
 import { editorBar } from "./sheet/view/editorbar.ts";
 import { sheetGrid, splitPane } from "./sheet/view/grid.ts";
-import { sheetTabs } from "./sheet/view/sheettabs.ts";
+import { sheetButtons, sheetTabs } from "./sheet/view/sheettabs.ts";
 import { editBar, protectBar } from "./sheet/view/editbar.ts";
 import { findBar } from "./sheet/view/findbar.ts";
 import { auditBar } from "./sheet/view/auditbar.ts";
@@ -45,10 +45,13 @@ import { panelTabs } from "./sheet/view/paneltabs.ts";
 // some, and the page then stopped partway, its grid half wired (a click on
 // it scrolled the page away and typing did nothing). Each one missing is
 // said, on the page and the console, and stood in for where it can be.
-const NEEDS = ["wrap", "datagrid_widget", "datagrid_show_header", "datagrid_set_row_heights", "datagrid_cell_picture", "datagrid_selection_glide"];
+const NEEDS = ["wrap", "datagrid_widget", "datagrid_show_header", "datagrid_set_row_heights", "datagrid_cell_picture", "datagrid_selection_glide", "context_menu", "on_double_click"];
 const lacking = NEEDS.filter((n) => typeof (ui as any)[n] !== "function");
 if (typeof (ui as any).wrap !== "function") (ui as any).wrap = ui.hstack;
 if (typeof (ui as any).datagrid_widget !== "function") (ui as any).datagrid_widget = () => 0;
+// No right-click menus or double clicks on a tab: the sheet buttons still do it all.
+if (typeof (ui as any).context_menu !== "function") (ui as any).context_menu = () => {};
+if (typeof (ui as any).on_double_click !== "function") (ui as any).on_double_click = () => {};
 if (lacking.length) print(`sheet: this sae lacks ui.${lacking.join(", ui.")}: rebuild it (../sae, its ./build.sh)`);
 
 const sheet = new SheetView();
@@ -69,8 +72,11 @@ splitPane(sheet);
 sheetTabs(sheet);
 statusBar(sheet);
 ui.divider();
+// Behind the Extra controls (collapsed as it starts, saved with the
+// workbook): the sheet buttons and the panels' tabs. A panel opened (its
+// tab, the View menu, an action of its) shows either way.
+sheet.extras(() => { sheetButtons(sheet); panelTabs(sheet); });
 // The bars, as panels under the grid, one open at a time (view.panel).
-panelTabs(sheet);
 sheet.panel("edit", () => { editBar(sheet); protectBar(sheet); });
 sheet.panel("looks", () => { lookBar(sheet); notesBar(sheet); commentsBar(sheet); });
 sheet.panel("view", () => viewBar(sheet));

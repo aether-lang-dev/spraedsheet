@@ -8,7 +8,7 @@
 
 exports(
     cell_id, cell_text, wait_cell, cell_has, pick, goto, formula_field, enter, editor,
-    header_id, grip_of, key, field, command, script
+    header_id, grip_of, key, field, command, script, extras
 )
 
 import std.string
@@ -206,3 +206,17 @@ script(text: string) {
     b.click("Run script")
 }
 
+
+// The Extra controls (the rows under the sheet tabs: the sheet buttons, the
+// panels' tabs) shown (on 1) or hidden (0), by their toggle, as a person
+// does, when they are not so already. A spec that uses those rows opens them.
+extras(on: int) {
+    id = uidriver.widget_id_last_of("toggle", "Extra controls")
+    if id == 0 { return }
+    if uidriver.widget_bool_by_id(id, "active") != on { uidriver.post_ok("/widget/${id}/toggle", "the Extra controls toggle") }
+    t = 0
+    while t < 40 && uidriver.widget_bool_by_id(uidriver.widget_id_of("button", "Add sheet"), "visible") != on {
+        sleep(50)
+        t = t + 1
+    }
+}

@@ -419,6 +419,7 @@ async function open(wb: Workbook, file: SheetFile): Promise<Outcome> {
   }
   wb.activate(file.sheets[0].name);
   wb.bookProtection = file.bookProtection;
+  wb.extraControls = file.extraControls;
   wb.macros = new Map(file.macros);
   wb.triggers = file.triggers.filter((t) => wb.macros.has(t.macro) && (t.on === "open" || wb.page(t.sheet ?? "")));
   wb.name = file.name;
@@ -3454,6 +3455,17 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // The Extra controls: the rows under the grid (the sheet buttons, the
+    // panels' tabs and their panels) shown, or only the sheet tabs and the
+    // status bar, as the app starts. on=1 or 0; none toggles. A view setting,
+    // not a step to undo, saved with the workbook.
+    id: "view.extraControls", label: "Extra controls", params: [], optional: ["on"], journaled: false,
+    run: async (wb, p) => {
+      wb.extraControls = p.on === undefined ? !wb.extraControls : flag(p.on);
+      return { ok: true, message: `extra controls ${wb.extraControls ? "shown" : "hidden"}`, changed: [], output: wb.extraControls ? 1 : 0 };
+    },
+  },
+  {
     // The locale (locale.ts): the interface's words and how formulas are
     // typed and shown in a cell and the formula bar (Spanish: SUMA, ';', a
     // decimal comma); stored, scripted and saved canonical. A view.
@@ -3770,7 +3782,7 @@ const SPECS: readonly Spec[] = [
         canUndo: wb.canUndo ? 1 : 0, canRedo: wb.canRedo ? 1 : 0,
         autoId: page.autoId && { column: colName(page.autoId.column), next: `${page.autoId.prefix}${page.autoId.next}` },
         language: wb.sheet.language.name, referenceStyle: wb.referenceStyle,
-        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, locale: wb.locale, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, animations: wb.animations ? 1 : 0, gridlines: page.gridlines ? 1 : 0, headings: page.headings ? 1 : 0, formulaBar: wb.formulaBar ? 1 : 0, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
+        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, locale: wb.locale, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, animations: wb.animations ? 1 : 0, gridlines: page.gridlines ? 1 : 0, headings: page.headings ? 1 : 0, formulaBar: wb.formulaBar ? 1 : 0, extraControls: wb.extraControls ? 1 : 0, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
       };
       return { ok: true, message: JSON.stringify(state), changed: [], output: state };
     },
