@@ -33,9 +33,16 @@ export class SheetView {
     if (typeof shell === "undefined") return "opening a URL needs the installed app (open-urls)";
     try { shell.open(url); return ""; } catch (e) { return String((e as Error)?.message ?? e); }
   };
+  // A PDF handed to the system's print dialog: the installed app's
+  // printing.pdf (app.json's capabilities.print); a web page has none.
+  readonly #printer = (b64: string, title: string): string => {
+    if (typeof printing === "undefined") return "printing needs the installed app (print)";
+    try { printing.pdf(b64, title); return ""; } catch (e) { return String((e as Error)?.message ?? e); }
+  };
   readonly #wired = (() => {
     this.wb.opener = this.#opener;
-    this.books.onMade = (wb) => { wb.opener = this.#opener; };
+    this.wb.printer = this.#printer;
+    this.books.onMade = (wb) => { wb.opener = this.#opener; wb.printer = this.#printer; };
     // Another workbook shown: its sheets, its cells, its selection.
     this.books.onSwitch = () => {
       if (this.grid && ui.datagrid_editor(this.grid) !== 0) ui.datagrid_edit_cancel(this.grid);

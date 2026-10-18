@@ -270,6 +270,7 @@ export function sheetGrid(v: SheetView): void {
     switch (key.toLowerCase()) {
       case "f": case "h": v.perform("Find field"); return;
       case "s": v.perform("Save"); return;
+      case "p": v.perform("Print"); return;
       case "k": v.perform("Link field"); return;
       case "c": copyOut(v, "edit.copy", range); return;
       case "x": copyOut(v, "edit.cut", range); return;

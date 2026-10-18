@@ -2,6 +2,7 @@
 "seeks clipboard, reduced functionality without";
 "seeks control-bus, reduced functionality without";
 "seeks open-urls, reduced functionality without";
+"seeks print, reduced functionality without";
 // Spreadsheet (sae/docs/roadmap.md demo 18), declared as panels over a seam.
 //
 // app/sheet/ is the spreadsheet with no ui: two formula languages (Excel's,

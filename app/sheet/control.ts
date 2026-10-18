@@ -418,6 +418,8 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   EXPORTPDF: async (exec, r, opts) => (await must(exec, "file.exportPdf", { ...(text(r).trim() ? { range: text(r) } : {}), ...pairs(opts) })).output,
   // SAVEXLSX(): the workbook as an XLSX file, its bytes in base64.
   SAVEXLSX: async (exec) => (await must(exec, "file.exportXlsx")).output,
+  // File > Print: PRINTSHEET(), or a range and EXPORTPDF's options.
+  PRINTSHEET: async (exec, r, opts) => (await must(exec, "file.print", { ...(text(r).trim() ? { range: text(r) } : {}), ...pairs(opts) })).message,
   FILEREPORT: async (exec) => stem((await must(exec, "file.report")).output as string[]),
   // JSON and HTML: IMPORTJSON("A1", text), IMPORTHTML("A1", html, 2) its
   // second table, EXPORTHTML("A1:C9", 1) the first row a header.

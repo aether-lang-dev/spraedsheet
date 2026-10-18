@@ -375,6 +375,10 @@ export class Workbook {
   // How a URL is handed to the system (a hyperlink followed): "" when it
   // was, or why not. The app's view sets it to sae's shell.open.
   opener: (url: string) => string = () => "no way to open a URL here";
+  // How a PDF is handed to the system's print dialog (its bytes as base64,
+  // the job's title): "" when it was, or why not. The app's view sets it to
+  // sae's printing.pdf.
+  printer: (b64: string, title: string) => string = () => "printing needs the installed app (print)";
   // Split: a second pane over the sheet (a view).
   split = false;
   // The zoom, in percent (10 to 400, as Excel's): a view of the sheet.

@@ -37,6 +37,8 @@ export function fileBar(v: SheetView): void {
       shown.set(String(o.output ?? ""));
     });
     v.btn("Export PDF", () => v.run("file.exportPdf", { gridlines: "1" }));
+    // File > Print: the system's print dialog (the installed app's print).
+    v.btn("Print", () => v.run("file.print", { gridlines: "1" }));
     bind(ui.textarea("CSV"), csv);
     v.btn("Import CSV", () => v.run("file.importCsv", { at: v.here(), text: csv.value }));
     v.btn("Import JSON", () => v.run("file.importJson", { at: v.here(), text: csv.value }));

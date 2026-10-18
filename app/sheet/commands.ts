@@ -4020,6 +4020,19 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // File > Print: the sheet as file.exportPdf lays it out (range=, paper=,
+    // landscape=, gridlines=, headings=, margin=, sheets=all), handed to the
+    // system's print dialog, the job named for the workbook.
+    id: "file.print", label: "Print", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin"], journaled: false,
+    run: async (wb, p) => {
+      const pdf = await BY_ID.get("file.exportPdf")!.run(wb, p, memoryStore());
+      if (!pdf.ok) return pdf;
+      const why = wb.printer(String(pdf.output), wb.name);
+      if (why) refuse(why);
+      return { ok: true, message: `${pdf.message.split(":")[1]?.split(",")[0]?.trim() ?? "the sheet"} to the printer`, changed: [] };
+    },
+  },
+  {
     // The sheet (or every sheet shown, sheets=all) as a PDF (pdf.ts): its
     // used range or range=, on paper= a4 or letter, landscape=1, with
     // gridlines=1 and headings=1 when asked; the bytes as base64.

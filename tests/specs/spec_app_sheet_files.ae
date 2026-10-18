@@ -215,6 +215,13 @@ main() {
             spec.assert_true(b.wait_for_console("sheet: refused: shell.open: this app may not open ftp://example.org/"), "a URL not granted is refused")
             g.command("view.panel name=none")
         }
+        spec.it("File > Print: the system's print dialog asked for (app.json grants print), the job named for the workbook") callback {
+            g.command("view.panel name=file")
+            b.click("Print")
+            spec.assert_true(b.wait_for_console("to the printer"), "printed")
+            spec.assert_true(uidriver.wait_body_contains("/printed", "sae-print-", 20), "the dialog asked for, a PDF of its own")
+            g.command("view.panel name=none")
+        }
     }
     return spec.run_summary(fw)
 }
