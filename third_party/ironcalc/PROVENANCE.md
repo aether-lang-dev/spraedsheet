@@ -66,6 +66,23 @@ here from Excel's behaviour (nothing was ported from IronCalc's formatter):
 - `mmmmmm` and longer month runs give the month's full name (only `mmmmm` is
   the first letter).
 
+Series detection (no code ported; inputs and expected outputs only):
+
+| Upstream path | Local destination | What was adapted |
+|---|---|---|
+| `base/src/user_model/sequence_detector.rs` (its `#[cfg(test)]` module, English cases) | `tests/headless/sheet_ironcalc_series.ts` | the numeric, float, suffixed and day/month name cases as data rows against `continued()`; the locale (de/fr/es), thousands-grouped (`1,000`) and `Jan.` cases left out |
+
+Two gaps found in `app/sheet/series.ts`, fixed there (our own two-line changes,
+not IronCalc's detector): a series of numbers keeps 15 significant digits, not
+12 (`10000.4000000007, 10000.4000000008` went on as `10000.4`); and a text
+number is padded only when written with a leading zero (`Q10, Q9` went on as
+`Q08`; `Q-07, Q-09` still pads). Padded suffixes are kept as they were.
+
+Deliberately different: IronCalc reads every selected cell and gives no series
+when a later one breaks the step (and for `A1, B2`); `edit.fillSeries` reads the
+first one or two cells only and copies when those two are not a series, so the
+rows are cut to two cells and the no-series rows expect a copy.
+
 ## Deliberate differences
 
 Number formats (the rows in `sheet_ironcalc_numfmt.ts` that carry a second

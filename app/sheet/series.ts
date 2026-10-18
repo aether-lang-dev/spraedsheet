@@ -1,7 +1,8 @@
 // Fill Series: what follows the first cells of a column (or row), as a
 // spreadsheet continues them. Numbers go on by 1, or by the step between the
 // first two; dates (YYYY-MM-DD) by a day, or by their step; text ending in a
-// number ("Item 1", "Q-07") by its number; days, months and quarters round
+// number ("Item 1", "Q-07") by its number, padded only when it was written
+// with a leading zero; days, months and quarters round
 // and round, in the case they were given. Anything else is copied (a formula
 // too: the command moves it by its offset, as Fill Down does).
 
@@ -43,7 +44,7 @@ export function continued(first: readonly string[], n: number): string[] {
   if (a.startsWith("=")) return Array.from({ length: n }, (_, i) => first[i % first.length]);
   if (NUMBER.test(a) && (!two || NUMBER.test(b))) {
     const x = Number(a), step = two ? Number(b) - x : 1, last = two ? Number(b) : x;
-    for (let i = 1; i <= n; i++) out.push(String(Number((last + step * i).toPrecision(12))));
+    for (let i = 1; i <= n; i++) out.push(String(Number((last + step * i).toPrecision(15))));
     return out;
   }
   const da = dateOf(a), db = two ? dateOf(b) : null;
@@ -63,7 +64,9 @@ export function continued(first: readonly string[], n: number): string[] {
   }
   const ta = TRAILING.exec(a), tb = two ? TRAILING.exec(b) : null;
   if (ta && (!two || (tb && tb[1] === ta[1]))) {
-    const width = ta[2].length, x = Number(ta[2]), step = two ? Number(tb![2]) - x : 1, last = two ? Number(tb![2]) : x;
+    // Padded only when a number is written with a leading zero (Q-07), so Q10, Q9 goes on to Q8.
+    const zeroed = (d: string) => d.length > 1 && d.startsWith("0"), width = zeroed(ta[2]) || (tb && zeroed(tb[2])) ? Math.max(ta[2].length, tb ? tb[2].length : 0) : 0;
+    const x = Number(ta[2]), step = two ? Number(tb![2]) - x : 1, last = two ? Number(tb![2]) : x;
     for (let i = 1; i <= n; i++) out.push(ta[1] + String(last + step * i).padStart(width, "0"));
     return out;
   }
