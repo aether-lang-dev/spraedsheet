@@ -135,6 +135,10 @@ export function sheetGrid(v: SheetView): void {
       if (key && held) {
         const { r: hr, c: hc } = held;
         held = { ...held, text: held.text + key };
+        // A reference just put in: no longer pointing until an operator is
+        // typed after it (on_edit_change says so, a turn later; until then a
+        // Return's move down was taken for another click: "=B3D6").
+        pointing = false;
         reopening = true;
         try {
           ui.datagrid_edit(v.grid, hr, v.viewCol(hc));
