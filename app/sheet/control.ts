@@ -55,6 +55,7 @@ interface State {
   readonly gridlines: number;
   readonly headings: number;
   readonly formulaBar: number;
+  readonly locale: string;
   readonly hiddenSheets: readonly string[];
   readonly tabColors: Readonly<Record<string, string>>;
   readonly dateSystem: number;
@@ -343,6 +344,12 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // A range's cells as one compares them, workbook to workbook (headless
   // against interactive): each its input, what it shows, its look, as JSON.
   INSPECTCELLS: async (exec, r) => JSON.stringify((await must(exec, "range.inspect", { range: text(r) })).output),
+  // The locale: SETLOCALE("es") (Spanish formulas in the editor, the
+  // interface's words), GETLOCALE(); LOCALIZEFORMULA("=SUMA(1,5;2)") its
+  // stored form, LOCALIZEFORMULA("=SUM(1.5,2)", "es", "local") the other way.
+  SETLOCALE: async (exec, l) => String((await must(exec, "view.locale", { lang: text(l) })).output),
+  GETLOCALE: async (exec) => (await state(exec)).locale,
+  LOCALIZEFORMULA: async (exec, f, l, to) => String((await must(exec, "formulas.localize", { formula: text(f), ...(text(l) ? { lang: text(l) } : {}), ...(text(to) ? { to: text(to) } : {}) })).output),
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,

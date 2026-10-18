@@ -41,6 +41,8 @@ import type { Drawing } from "./drawings.ts";
 import { imageOf } from "./functions.ts";
 import type { BookProtection, EditRange, SheetProtection } from "./protection.ts";
 import type { Trigger } from "./recorder.ts";
+import { canonical, localized } from "./locale.ts";
+import type { Locale } from "./locale.ts";
 import type { ChartData, ChartKind, ChartOptions, Shape } from "./charts.ts";
 import { rangeName } from "./rules.ts";
 import { sheetPrefix } from "./address.ts";
@@ -390,6 +392,9 @@ export class Workbook {
   // Page Break Preview.
   formulaBar = true;
   breakPreview = false;
+  // The interface's language and how a formula is typed (locale.ts):
+  // English, or Spanish. What is stored stays canonical.
+  locale: Locale = "en";
   // The panel open under the grid (menus.ts's PANELS), or null: a view.
   panel: string | null = null;
   // Show Formulas: the grid shows inputs rather than values.
@@ -426,12 +431,15 @@ export class Workbook {
   // A cell's input as the reference style shows it.
   shownInput(key: string): string {
     const input = this.sheet.input(key);
-    return this.referenceStyle === "R1C1" && this.sheet.language.name === "Excel" ? toR1C1(input, key) : input;
+    const shown = this.referenceStyle === "R1C1" && this.sheet.language.name === "Excel" ? toR1C1(input, key) : input;
+    return this.sheet.language.name === "Excel" ? localized(shown, this.locale) : shown;
   }
 
-  // What was typed into a cell, in the reference style, as it is stored.
+  // What was typed into a cell, in the reference style and the locale
+  // (Spanish names, a decimal comma, ';'), as it is stored: canonical.
   enteredInput(key: string, text: string): string {
-    return this.referenceStyle === "R1C1" && this.sheet.language.name === "Excel" ? fromR1C1(text, key) : text;
+    const typed = this.sheet.language.name === "Excel" ? canonical(text, this.locale) : text;
+    return this.referenceStyle === "R1C1" && this.sheet.language.name === "Excel" ? fromR1C1(typed, key) : typed;
   }
   pages(): readonly Page[] { return this.#pages; }
 

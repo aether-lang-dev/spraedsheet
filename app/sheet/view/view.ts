@@ -10,6 +10,7 @@ import type { Outcome, Params } from "../commands.ts";
 import type { Problem } from "../sheet.ts";
 import { Workbook } from "../workbook.ts";
 import { inkTools } from "./toolbar.ts";
+import { t } from "../locale.ts";
 import { COLUMN_WIDTH, ROWS_WHEN_SPLIT, ROWS_WITH_PANEL, ROW_PX, buildPane } from "./grid.ts";
 
 // aether-ui's datagrid's own row height, which a zoom scales.
@@ -64,6 +65,8 @@ export class SheetView {
   readonly active = state("Sheet1");
   // The open workbooks' names, the active one's marked.
   readonly bookNames = state<string[]>(["Untitled"]);
+  // The interface's language (locale.ts).
+  readonly locale = state<string>("en");
   readonly watches = state<Watch[]>([]);
   readonly charts = state<(ChartView & { n: number })[]>([]);
   readonly slicers = state<SlicerView[]>([]);
@@ -192,7 +195,8 @@ export class SheetView {
     const others = this.areas();
     const many = sel && (others.length > 0 || sel[0].col !== sel[1].col || sel[0].row !== sel[1].row);
     const cells = this.wb.sheet.keys().length;
-    const bar = [many ? statsLine(this.wb.stats([...others, sel!])) : "Ready", `${cells} cell${cells === 1 ? "" : "s"}`, `Zoom ${this.wb.zoom}%`, this.wb.calculation.manual && this.wb.stale().length ? "Calculate" : "", this.bus ? "Control bus" : ""];
+    const words = (s: string) => (this.wb.locale === "en" ? s : s.replace(/\b(Ready|Average|Numerical Count|Count|Min|Max|Sum)\b/g, (w) => t(this.wb.locale, w)));
+    const bar = [words(many ? statsLine(this.wb.stats([...others, sel!])) : "Ready"), `${cells} cell${cells === 1 ? "" : "s"}`, `Zoom ${this.wb.zoom}%`, this.wb.calculation.manual && this.wb.stale().length ? "Calculate" : "", this.bus ? "Control bus" : ""];
     batch(() => {
       this.figures.set(bar.filter((x) => x).join("  ·  "));
       this.input.set(this.wb.shownInput(key));
@@ -276,6 +280,7 @@ export class SheetView {
       this.tabs.set(this.wb.pages().filter((p) => !p.hiddenSheet).map((p) => ({ name: p.name, color: p.tabColor })));
       this.active.set(this.wb.active);
       this.bookNames.set(this.books.all.map((b) => (b === this.books.active ? `${b.wb.name} (active)` : b.wb.name)));
+      if (this.locale.value !== this.wb.locale) this.locale.set(this.wb.locale);
       this.watches.set(this.wb.watches());
       this.charts.set(this.wb.charts().map((c, i) => ({ ...c, n: i + 1 })));
       this.slicers.set(this.wb.slicerViews());

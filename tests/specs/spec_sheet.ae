@@ -2341,6 +2341,22 @@ main() {
             spec.assert_true(g.wait_cell("A", 2, "42"), "replayed")
             g.command("view.panel name=none")
         }
+        spec.it("Español: the panel tabs and the status line in Spanish; a formula typed with Spanish names, ';' and a decimal comma, stored canonical") callback {
+            g.command("formulas.use language=Excel")
+            g.command("view.locale lang=es")
+            spec.assert_true(b.wait_for_console("sheet: locale es"), "Spanish")
+            spec.assert_true(b.wait_for_text("Aspecto"), "the Looks tab in Spanish")
+            spec.assert_true(b.wait_for_text("Listo"), "the status line's Ready")
+            g.enter("K40", "=SUMA(1,5;2,25)")
+            spec.assert_true(g.wait_cell("K", 40, "3.75"), "worked out")
+            g.script("SAY GETEXPRESSION('K40')")
+            spec.assert_true(b.wait_for_console("sheet: say SUM(1.5,2.25)"), "stored canonical")
+            g.goto("K40")
+            spec.assert_true(wait_formula("=SUMA(1,5;2,25)"), "shown in Spanish in the formula bar")
+            g.command("view.locale lang=en")
+            spec.assert_true(b.wait_for_text("Looks"), "English again")
+            g.command("range.clear range=K40")
+        }
     }
     return spec.run_summary(fw)
 }

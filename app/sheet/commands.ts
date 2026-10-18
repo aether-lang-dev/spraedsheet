@@ -78,6 +78,8 @@ import type { Saved } from "./workbook.ts";
 import { MACRO_NAME, parameters, parseLine, toRexx } from "./recorder.ts";
 export { parseLine };
 import type { Trigger } from "./recorder.ts";
+import { LOCALES, canonical, localized } from "./locale.ts";
+import type { Locale } from "./locale.ts";
 import type { Value } from "./values.ts";
 import type { Direction, Filter, LanguageName, Page, Pivot, Scenario, Workbook } from "./workbook.ts";
 import { statsLine } from "./workbook.ts";
@@ -3438,6 +3440,28 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // The locale (locale.ts): the interface's words and how formulas are
+    // typed and shown in a cell and the formula bar (Spanish: SUMA, ';', a
+    // decimal comma); stored, scripted and saved canonical. A view.
+    id: "view.locale", label: "Language", params: ["lang"], journaled: false,
+    run: async (wb, p) => {
+      const l = p.lang.trim().toLowerCase();
+      if (!(LOCALES as readonly string[]).includes(l)) refuse(`${p.lang} is not a locale here (${LOCALES.join(", ")})`);
+      wb.locale = l as Locale;
+      return { ok: true, message: `locale ${l}`, changed: wb.sheet.keys(), output: l };
+    },
+  },
+  {
+    // A formula as the locale types it, and as it is stored (canonical).
+    id: "formulas.localize", label: "Localize Formula", params: ["formula"], optional: ["lang", "to"], journaled: false,
+    run: async (wb, p) => {
+      const l = (p.lang ?? wb.locale).trim().toLowerCase() as Locale;
+      if (!(LOCALES as readonly string[]).includes(l)) refuse(`${p.lang} is not a locale here (${LOCALES.join(", ")})`);
+      const out = (p.to ?? "canonical").trim().toLowerCase() === "local" ? localized(p.formula, l) : canonical(p.formula, l);
+      return { ok: true, message: out, changed: [], output: out };
+    },
+  },
+  {
     // Zoom: the sheet drawn at a percentage, 10 to 400, as Excel's; or in
     // or out a step (Excel's 10, 25, 50, 75, 100, 125, 150, 200, 400). A
     // view, not a step to undo, not saved.
@@ -3732,7 +3756,7 @@ const SPECS: readonly Spec[] = [
         canUndo: wb.canUndo ? 1 : 0, canRedo: wb.canRedo ? 1 : 0,
         autoId: page.autoId && { column: colName(page.autoId.column), next: `${page.autoId.prefix}${page.autoId.next}` },
         language: wb.sheet.language.name, referenceStyle: wb.referenceStyle,
-        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, animations: wb.animations ? 1 : 0, gridlines: page.gridlines ? 1 : 0, headings: page.headings ? 1 : 0, formulaBar: wb.formulaBar ? 1 : 0, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
+        panel: wb.panel ?? "", split: wb.split ? 1 : 0, zoom: wb.zoom, locale: wb.locale, appearance: `${wb.appearance} ${wb.dark ? "dark" : "light"}`, animations: wb.animations ? 1 : 0, gridlines: page.gridlines ? 1 : 0, headings: page.headings ? 1 : 0, formulaBar: wb.formulaBar ? 1 : 0, dateSystem: wb.dateSystem, calculation: wb.calculation.manual ? "Manual" : "Automatic", iteration: wb.calculation.iterate, stale: wb.stale(),
       };
       return { ok: true, message: JSON.stringify(state), changed: [], output: state };
     },

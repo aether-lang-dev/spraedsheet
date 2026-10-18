@@ -40,6 +40,9 @@ export function viewBar(v: SheetView): void {
     v.btn("Insert page break", () => v.run("page.break", { cell: v.here() }));
     v.btn("Remove page break", () => v.run("page.break", { cell: v.here(), off: "1" }));
     v.btn("Reset page breaks", () => v.run("page.resetBreaks"));
+    // The interface's language and how formulas are typed.
+    v.btn("English", () => v.run("view.locale", { lang: "en" }));
+    v.btn("Español", () => v.run("view.locale", { lang: "es" }));
     v.btn("AutoFit columns", () => v.run("columns.autofit", { range: v.range() }));
     v.btn("AutoFit rows", () => v.run("rows.autofit", { range: v.range() }));
     v.btn("Row height", () => v.run("rows.height", { range: v.range(), height: height.value.trim() || "0" }));
