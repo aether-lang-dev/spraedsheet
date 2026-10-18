@@ -45,7 +45,47 @@ ordinary workbook; `optional_xf_id.xlsx` carries a stock Office `theme1.xml` and
 theme data rather than IronCalc's creative content. No cell content in either
 is anything but placeholder numbers and a title string.
 
+Number formats (no code copied; IronCalc's inputs and expected outputs only):
+
+| Upstream path | Local destination | What was adapted |
+|---|---|---|
+| `base/src/test/test_number_format.rs` | `tests/headless/sheet_ironcalc_numfmt.ts` | `test_simple_format`, `test_maximum_zeros`, `test_leading_comma_text` as data rows (`test_wrong_locale` is IronCalc's locale API, not ours) |
+| `base/src/formatter/test/test_en_examples.rs` | same | every case, including the upstream `#[ignore]`d fraction, rounding and leading-hash ones |
+| `base/src/formatter/test/test_general.rs` | same | the numeric, percent, rounding, sections, currency, scientific and date cases (colour, condition-syntax error and locale cases left out: they test IronCalc's error type and colour palette indices) |
+| `base/src/formatter/test/test_scientific.rs`, `test_time.rs`, `test_dates.rs` | same | every case (the dates one is `m.d.yy` of 46015) |
+
+Our format code changed because of them, in `app/sheet/numfmt.ts`, written
+here from Excel's behaviour (nothing was ported from IronCalc's formatter):
+
+- a number now shows its first 15 significant digits and zeros after them
+  (`fixed()`), so `#,##0.0000000000000000000` of 1/3 is `0.3333333333333330000`,
+  and a format with many decimal places no longer printed `NaN`;
+- commas before the decimal point and after the last integer digit scale
+  (`#,##0,,.0#`), as they already did at the end of a format;
+- `[hh]`, `[mm]` and `[ss]` pad their elapsed count;
+- `mmmmmm` and longer month runs give the month's full name (only `mmmmm` is
+  the first letter).
+
 ## Deliberate differences
+
+Number formats (the rows in `sheet_ironcalc_numfmt.ts` that carry a second
+expected value and a reason):
+
+- **A negative that rounds to zero** (`-0.00001` as `000.0`, `-1/3` as `0`):
+  IronCalc shows no sign; Excel shows `-000.0` and `-0`. We keep showing no
+  sign. Excel snaps near-zero results of subtraction to zero; our arithmetic
+  does not, so a sign here would show `-0.00` for `=0.3-0.1-0.2`, where Excel
+  shows `0.00`. Revisit with a snap in the calculation.
+- **Doubled quotes in a format** (`0 """Millions"""`): IronCalc reads `""` as
+  an escaped quote, as a formula's string does. In a number format Excel takes
+  a backslash for a literal quote, and `""` is an empty string, so we show
+  `42 Millions`.
+- **`# ?/??` of 1.333**: IronCalc (ignored test, "not implemented") expects
+  `1 1/3`. A `?` holds its place with a space, so Excel pads the unused
+  denominator place: `1 1/3 `, as ours does.
+
+XLSX:
+
 
 - **Vertical alignment (`optional_xf_id`).** IronCalc asserts A2 reads
   `vertical="top"` as well as wrapped. Spraedsheet has no vertical-alignment

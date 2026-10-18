@@ -9,7 +9,7 @@
 //     space), '.', ',' between digits (thousands) or after them (scale by
 //     a thousand), % (times a hundred), E+00 (scientific), ?/? (a fraction);
 //   - a date or time, on Excel's serial numbers (days since 1899-12-30):
-//     y, m, d, h, s runs, AM/PM, [h] for elapsed hours; m is minutes beside
+//     y, m, d, h, s runs, AM/PM, [h] (or [hh]) for elapsed hours; m is minutes beside
 //     h or s;
 //   - General, or @ (the text itself).
 import { parseDate, parts } from "./dates.ts";
@@ -80,7 +80,7 @@ function section(text: string): Section {
       const m = /^(<=|>=|<>|<|>|=)\s*(-?[\d.]+)$/.exec(inner);
       if (COLOURS[inner.toLowerCase()]) color = COLOURS[inner.toLowerCase()];
       else if (m) cond = (n) => COMPARE[m[1]](n, Number(m[2]));
-      else if (/^(h+|m+|s+)$/i.test(inner)) toks.push({ t: "date", s: `[${inner.toLowerCase()[0]}]` });
+      else if (/^(h+|m+|s+)$/i.test(inner)) toks.push({ t: "date", s: `[${inner.toLowerCase()}]` });
       else if (inner.startsWith("$")) lit(inner.slice(1).split("-")[0]);
     } else if (/^general/i.test(rest)) { toks.push({ t: "general" }); i += 7; }
     else if (/^(am\/pm|a\/p)/i.test(rest)) {
@@ -137,6 +137,30 @@ export const CATEGORIES: Readonly<Record<string, string>> = {
 // so 1.005 is 1.01).
 const round = (n: number, places: number): number => Number(`${Math.round(Number(`${n}e${places}`))}e-${places}`);
 
+// x (finite, >= 0) as fixed-point text with `places` decimals, as Excel
+// displays it: only the first 15 significant digits count (the rest read as
+// zeros), then half away from zero on those digits. Done on the digits as
+// text, so no place count overflows a double (1234.33 to 19 places).
+function fixed(x: number, places: number): string {
+  if (x === 0) return places ? `0.${"0".repeat(places)}` : "0";
+  const [mant, ex] = x.toExponential(14).split("e");
+  const digits = mant.replace(".", ""), at = Number(ex) + 1;
+  let whole: string, frac: string;
+  if (at <= 0) { whole = "0"; frac = "0".repeat(-at) + digits; }
+  else if (at >= digits.length) { whole = digits + "0".repeat(at - digits.length); frac = ""; }
+  else { whole = digits.slice(0, at); frac = digits.slice(at); }
+  let kept = whole + frac.slice(0, places).padEnd(places, "0");
+  if (frac.length > places && frac[places] >= "5") {
+    const d = kept.split("");
+    let i = d.length - 1;
+    while (i >= 0 && d[i] === "9") d[i--] = "0";
+    if (i >= 0) d[i] = String(Number(d[i]) + 1); else d.unshift("1");
+    kept = d.join("");
+  }
+  const cut = kept.length - places;
+  return places ? `${kept.slice(0, cut) || "0"}.${kept.slice(cut)}` : kept;
+}
+
 const grouped = (digits: string): string => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 // Digits into placeholders right to left: the leftmost takes what is left.
@@ -173,11 +197,13 @@ function numeric(n: number, toks: readonly Tok[], signed: boolean): string {
   const fracIdx = toks.map((t, i) => (t.t === "digit" && point >= 0 && i > point && (eAt < 0 || i < eAt) ? i : -1)).filter((i) => i >= 0);
   const expIdx = toks.map((t, i) => (t.t === "digit" && eAt >= 0 && i > eAt ? i : -1)).filter((i) => i >= 0);
   const lastInt = intIdx.length ? intIdx[intIdx.length - 1] : -1;
-  // A comma with no digit after it scales; one among the integer digits groups.
+  // A comma after the last integer digit (before the point) or after the
+  // last digit at all scales by a thousand; one among the integer digits
+  // groups.
   let group = false;
   toks.forEach((t, i) => {
     if (t.t !== ",") return;
-    if (!toks.slice(i + 1).some((u) => u.t === "digit")) x /= 1000;
+    if (!toks.slice(i + 1).some((u) => u.t === "digit") || (i < intEnd && i > lastInt && lastInt >= 0)) x /= 1000;
     else if (intIdx[0] < i && i < lastInt) group = true;
   });
   let exp = 0;
@@ -188,14 +214,14 @@ function numeric(n: number, toks: readonly Tok[], signed: boolean): string {
     exp = engineering ? Math.floor(at / k) * k : at - (k - 1);
     x /= 10 ** exp;
     // A mantissa that rounds up to the next power moves the exponent on.
-    if (round(x, fracIdx.length) >= 10 ** k) {
+    if (Number(fixed(x, fracIdx.length)) >= 10 ** k) {
       const by = engineering ? k : 1;
       x /= 10 ** by;
       exp += by;
     }
   }
-  const r = round(x, fracIdx.length);
-  const [whole, frac = ""] = r.toFixed(fracIdx.length).split(".");
+  const shownText = fixed(x, fracIdx.length), r = Number(shownText);
+  const [whole, frac = ""] = shownText.split(".");
   const out = new Map<number, string>();
   const ints = fillRight(whole === "0" ? "" : whole, intIdx.map((i) => holderAt(toks[i])));
   if (group) {
@@ -289,14 +315,14 @@ function dated(serial: number, toks: readonly Tok[]): string | null {
     if (/^a/i.test(run)) {
       const pm = h >= 12, [am, p] = run.split("/");
       text += pm ? p : am;
-    } else if (run === "[h]") text += Math.floor(seconds / 3600);
-    else if (run === "[m]") text += Math.floor(seconds / 60);
-    else if (run === "[s]") text += seconds;
-    else if (run[0] === "y") text += n <= 2 ? two(d.y % 100) : String(d.y);
+    } else if (run[0] === "[") {
+      const elapsed = run[1] === "h" ? Math.floor(seconds / 3600) : run[1] === "m" ? Math.floor(seconds / 60) : seconds;
+      text += String(elapsed).padStart(run.length - 2, "0");
+    } else if (run[0] === "y") text += n <= 2 ? two(d.y % 100) : String(d.y);
     else if (run[0] === "m" && minute(i)) text += n === 1 ? mi : two(mi);
     else if (run[0] === "m") {
       const m = d.m - 1;
-      text += n === 1 ? m + 1 : n === 2 ? two(m + 1) : n === 3 ? MONTHS[m].slice(0, 3) : n === 4 ? MONTHS[m] : MONTHS[m][0];
+      text += n === 1 ? m + 1 : n === 2 ? two(m + 1) : n === 3 ? MONTHS[m].slice(0, 3) : n === 5 ? MONTHS[m][0] : MONTHS[m];
     } else if (run[0] === "d") {
       const day = d.d, w = d.weekday;
       text += n === 1 ? day : n === 2 ? two(day) : n === 3 ? DAYS[w].slice(0, 3) : DAYS[w];
