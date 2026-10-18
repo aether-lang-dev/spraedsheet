@@ -340,6 +340,9 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // The workbook at a glance (the MCP server's spreadsheet_inspect and the
   // CLI's sheet inspect): JSON.
   INSPECTWORKBOOK: async (exec) => JSON.stringify((await must(exec, "workbook.inspect")).output),
+  // A range's cells as one compares them, workbook to workbook (headless
+  // against interactive): each its input, what it shows, its look, as JSON.
+  INSPECTCELLS: async (exec, r) => JSON.stringify((await must(exec, "range.inspect", { range: text(r) })).output),
   // The selection: SELECTRANGE("B:B"), ("3:5"), ("all"), GETSELECTION().
   SELECTRANGE: async (exec, r) => (await must(exec, "view.select", { range: text(r) })).output,
   GETSELECTION: async (exec) => (await must(exec, "view.selection")).output,

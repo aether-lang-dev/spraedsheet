@@ -31,6 +31,35 @@ main() {
             _s3, bad = command_(key, "NOSUCHFUNCTION(1)")
             spec.assert_contains(bad, "\"success\":false", "refused")
         }
+        spec.it("the same workload through the bus and through the ui comes to the same sheet, cell for cell") callback {
+            _u, key = courier_()
+            // Through the bus, on a sheet of its own.
+            _a1, _p1 = command_(key, "ADDSHEET(\"ViaBus\")")
+            _a2, _p2 = command_(key, "SETACTIVESHEET(\"ViaBus\")")
+            _a3, _p3 = command_(key, "SETCELL(\"A1\", \"3\")")
+            _a4, _p4 = command_(key, "SETCELL(\"A2\", \"4\")")
+            _a5, _p5 = command_(key, "SETCELL(\"A3\", \"=A1*A2\")")
+            _a6, _p6 = command_(key, "SETCELL(\"B1\", \"pears\")")
+            _a7, _p7 = command_(key, "RUN_PROGRAM('ADDRESS SHEET \"format.font range=A3 bold=1\"')")
+            _a8, bus = command_(key, "INSPECTCELLS(\"A1:B3\")")
+            // Through the ui, on another: the Name Box and the formula
+            // bar, and the Looks panel's Bold.
+            g.command("sheet.add name=ViaUI")
+            g.enter("A1", "3")
+            g.enter("A2", "4")
+            g.enter("A3", "=A1*A2")
+            g.enter("B1", "pears")
+            spec.assert_true(g.wait_cell("A", 3, "12"), "worked out in the ui")
+            g.command("view.panel name=looks")
+            g.goto("A3")
+            b.click("Bold")
+            spec.assert_true(b.wait_for_console("sheet: A3: bold"), "made bold")
+            g.command("view.panel name=none")
+            _a9, ui = command_(key, "INSPECTCELLS(\"A1:B3\")")
+            spec.assert_contains(bus, "\"success\":true", "the bus's read")
+            spec.assert_contains(bus, "bold", "the look read too")
+            spec.assert_str_eq(ui, bus, "the same cells: inputs, values, looks")
+        }
     }
     return spec.run_summary(fw)
 }

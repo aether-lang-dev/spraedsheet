@@ -3708,6 +3708,17 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // A range's cells as they are compared (INSPECTCELLS): each with an
+    // input, a look or a format, its input, what it shows, its look.
+    id: "range.inspect", label: "Inspect Range", params: ["range"], journaled: false,
+    run: async (wb, p) => {
+      const r = rangeOf(p.range);
+      const cells = [...range(r[0], r[1])].filter((k) => wb.sheet.input(k) !== "" || Object.keys(wb.notes.get(k)).length)
+        .map((k) => ({ cell: k, input: wb.sheet.input(k), shown: wb.textOf(k), ...(wb.lookOf(wb.notes.get(k)) ? { look: wb.lookOf(wb.notes.get(k)) } : {}), ...(wb.notes.get(k).format ? { format: wb.notes.get(k).format } : {}) }));
+      return { ok: true, message: `${cells.length} cells`, changed: [], output: cells };
+    },
+  },
+  {
     // All a script may ask of the active sheet, rows counted from 1 and
     // columns by letter (control.ts's ISROWHIDDEN, GETSHEETNAMES, CANUNDO ...).
     id: "sheet.state", label: "About the sheet", params: [], journaled: false,
