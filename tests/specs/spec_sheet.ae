@@ -554,9 +554,9 @@ main() {
             g.command("cell.set cell=J1 input=\"=2*21\"")
             spec.assert_true(b.wait_for_console("sheet: J1 = 42"), "run")
             spec.assert_true(g.wait_cell("J", 1, "42"), "J1 shows it")
-            g.command("rows.delete at=101")
-            spec.assert_true(b.wait_for_console("sheet: refused: 101 is not a row on the sheet"), "refused")
-            spec.assert_true(b.wait_for_text("101 is not a row on the sheet"), "on the status line")
+            g.command("rows.delete at=1048577")
+            spec.assert_true(b.wait_for_console("sheet: refused: 1048577 is not a row on the sheet"), "refused")
+            spec.assert_true(b.wait_for_text("1048577 is not a row on the sheet"), "on the status line")
             g.command("cell.get cell=G4")
             spec.assert_true(b.wait_for_text("G4 = 0.92 → \"0.92\""), "an output shows below the bar")
         }
