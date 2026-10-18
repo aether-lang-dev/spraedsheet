@@ -4,6 +4,7 @@
 |---|---|---|
 | `app/`, `mcp/`, `tests/`, `tools/`, `docs/`, `run-tests.sh` (the sae app and its MCP server) | MIT | [LICENSE-MIT](LICENSE-MIT) |
 | `vendor/rexxjs/` (RexxJS, vendored) | MIT | [vendor/rexxjs/LICENSE](vendor/rexxjs/LICENSE) |
+| `third_party/ironcalc/` (selected [IronCalc](https://github.com/ironcalc/IronCalc) test workbooks, and tests and code adapted from it; each with its provenance) | MIT (IronCalc is MIT OR Apache-2.0; taken under MIT, copyright EqualTo GmbH and Nicolás Hatcher) | [third_party/ironcalc/LICENSE-MIT](third_party/ironcalc/LICENSE-MIT), [PROVENANCE.md](third_party/ironcalc/PROVENANCE.md) |
 | `rexx/` (control-protocol scripts) and the protocol itself | MIT | [LICENSE-PROTOCOL-MIT](LICENSE-PROTOCOL-MIT) |
 
 The sae app was written in sae (MIT) and moved here on 2026-10-14. What it
