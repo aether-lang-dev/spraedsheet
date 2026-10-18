@@ -8,7 +8,7 @@ import type { SheetView } from "./view.ts";
 
 export function commandBar(v: SheetView): void {
   const line = state(""), script = state(""), said = state("");
-  ui.hstack(() => {
+  ui.wrap(() => {
     ui.on_submit(bind(ui.textfield("command", () => {}), line), async () => {
       const o = await v.runLine(line.value);
       said.set(o.output === undefined ? o.message : `${o.message} → ${JSON.stringify(o.output)}`);
@@ -35,7 +35,7 @@ export function commandBar(v: SheetView): void {
 export function macroBar(v: SheetView): void {
   const name = state("Macro1"), text = state(""), listed = state("");
   const list = async () => { const o = await v.run("macro.list"); listed.set(`Macros: ${o.message}`); };
-  ui.hstack(() => {
+  ui.wrap(() => {
     bind(ui.textfield("macro name", () => {}), name);
     v.btn("Record macro", () => v.run("macro.record", { name: name.value }));
     v.btn("Stop recording", async () => {

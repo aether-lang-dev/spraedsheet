@@ -15,7 +15,7 @@ export function lookBar(v: SheetView): void {
   // Format Painter: the first click takes the selection's format, the
   // second paints it over the selection then.
   let painting: string | null = null;
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Format painter", async () => {
       if (painting === null) {
         painting = v.range();
@@ -43,7 +43,7 @@ export function lookBar(v: SheetView): void {
     v.btn("Unmerge", () => v.run("cells.unmerge", { range: v.range() }));
   });
   // Cell Styles: the gallery's commonest, on the selection.
-  ui.hstack(() => {
+  ui.wrap(() => {
     for (const name of ["Normal", "Good", "Bad", "Neutral", "Title", "Heading 1", "Total", "Input", "Note"]) v.btn(`Style ${name}`, () => v.run("style.apply", { range: v.range(), name }));
     // Themes: what names a theme's colours re-coloured.
     for (const name of ["Office", "Greyscale", "Harbour", "Ember"]) v.btn(`Theme ${name}`, () => v.run("theme.set", { name }));

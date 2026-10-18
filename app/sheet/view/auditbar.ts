@@ -17,7 +17,7 @@ export function auditBar(v: SheetView): void {
     const o = await v.run("formulas.errorCheck");
     findings.set(o.ok ? o.output as Finding[] : []);
   };
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Trace precedents", () => v.run("formulas.tracePrecedents", { cell: v.here() }));
     v.btn("Trace dependents", () => v.run("formulas.traceDependents", { cell: v.here() }));
     v.btn("Remove arrows", () => v.run("formulas.removeArrows"));
@@ -28,7 +28,7 @@ export function auditBar(v: SheetView): void {
     });
     v.btn("Add watch", () => v.run("formulas.watch", { cell: v.here() }));
   });
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Manual calculation", () => v.run("formulas.calculation", { mode: v.wb.calculation.manual ? "automatic" : "manual" }));
     v.btn("Calculate now", () => v.run("formulas.recalculate"));
     v.btn("Calculate sheet", () => v.run("formulas.calculateSheet"));
@@ -36,7 +36,7 @@ export function auditBar(v: SheetView): void {
     v.btn("Error checking", check);
     v.btn("1904 date system", () => v.run("workbook.dateSystem", { system: v.wb.dateSystem === 1904 ? "1900" : "1904" }));
   });
-  each(findings, (f: Finding) => `${f.cell} ${f.check}`, (f: Finding) => ui.hstack(() => {
+  each(findings, (f: Finding) => `${f.cell} ${f.check}`, (f: Finding) => ui.wrap(() => {
     ui.text(`${f.cell} ${f.check}: ${f.message}`);
     ui.btn(`Go to ${f.cell}`, () => v.select(parseRange(f.cell)!));
     ui.btn(`Ignore ${f.cell}`, async () => {
@@ -45,7 +45,7 @@ export function auditBar(v: SheetView): void {
     });
   }));
   bind(ui.text_wrapped("", 720), steps);
-  each(v.watches, (w: Watch) => `${w.sheet}!${w.cell}`, (w: Watch) => ui.hstack(() => {
+  each(v.watches, (w: Watch) => `${w.sheet}!${w.cell}`, (w: Watch) => ui.wrap(() => {
     ui.text(`Watch ${w.sheet}!${w.cell}: ${w.input} = ${w.shown}`);
     ui.btn(`Unwatch ${w.sheet}!${w.cell}`, () => v.run("formulas.unwatch", { cell: `${w.sheet}!${w.cell}` }));
   }));

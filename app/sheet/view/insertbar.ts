@@ -24,7 +24,7 @@ function draw(s: Shape): void {
 
 export function insertBar(v: SheetView): void {
   const target = state(""), shown = state(""), tip = state(""), words = state("");
-  ui.hstack(() => {
+  ui.wrap(() => {
     const field = bind(ui.textfield("link to", () => {}), target);
     v.action("Link field", () => ui.focus(field));
     bind(ui.textfield("link text", () => {}), shown);
@@ -33,7 +33,7 @@ export function insertBar(v: SheetView): void {
     v.btn("Remove link", () => v.run("cell.removeHyperlink", { range: v.range() }));
     v.btn("Open link", () => v.run("cell.followHyperlink", { cell: v.here() }));
   });
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Picture", async () => {
       if (typeof documents === "undefined") return v.status.set("A picture from a file needs the installed app (documents)");
       const d = await documents.pick_open("Insert a picture: PNG, JPEG, GIF or BMP");
@@ -58,7 +58,7 @@ export function insertBar(v: SheetView): void {
     v.btn("Text box", () => v.run("insert.textbox", { text: words.value || "Text", at: v.here() }));
   });
   each(v.drawings, (d: DrawingView) => `${d.name}|${d.where}|${d.w}x${d.h}|${d.fill ?? ""}|${d.line ?? ""}|${d.text ?? ""}|${d.picture?.length ?? 0}`, (d: DrawingView) => {
-    ui.hstack(() => {
+    ui.wrap(() => {
       ui.text(`${d.name}: ${d.kind === "shape" ? d.shape : d.kind} at ${d.where}, ${d.w}x${d.h}${d.alt ? ` (${d.alt})` : ""}`);
       ui.btn(`Delete ${d.name}`, () => v.run("drawing.delete", { name: d.name }));
       ui.btn(`${d.name} to front`, () => v.run("drawing.order", { name: d.name, to: "front" }));

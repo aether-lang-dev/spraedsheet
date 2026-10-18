@@ -14,7 +14,7 @@ export function findBar(v: SheetView): void {
     if (next) v.address.set(next);
     v.status.set(keys.length ? `${keys.length} found: ${keys.join(", ")}` : `"${text.value}" not found`);
   };
-  ui.hstack(() => {
+  ui.wrap(() => {
     const field = bind(ui.textfield("find", () => {}), text);
     // Ctrl+F and Ctrl+H: the panel opened, the field focused.
     v.action("Find field", () => ui.focus(field));

@@ -17,7 +17,7 @@ export function fileBar(v: SheetView): void {
     const o = await v.cmds.execute("file.list");
     saved.set(o.message);
   };
-  ui.hstack(() => {
+  ui.wrap(() => {
     bind(ui.textfield("file name", () => {}), name);
     v.btn("Save", async () => { await v.run("file.save", name.value.trim() ? { name: name.value } : {}); await listed(); });
     v.btn("Open", () => v.run("file.open", { name: name.value }));
@@ -25,7 +25,7 @@ export function fileBar(v: SheetView): void {
     v.btn("New", () => v.run("file.new"));
     bind(ui.text(""), saved);
   });
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Export CSV", async () => {
       const s = v.selection(), many = s && (s[0].col !== s[1].col || s[0].row !== s[1].row);
       const o = await v.run("file.exportCsv", many ? { range: v.range() } : {});
@@ -49,7 +49,7 @@ export function fileBar(v: SheetView): void {
   });
   bind(ui.text_wrapped("", 720), shown);
   if (typeof documents !== "undefined") documentsRow(v);
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Paste example", () => v.run("example.paste"));
     v.btn("Budget (RexxJS)", () => v.run("file.open", { sample: "budget" }));
     v.btn("Test sheet (RexxJS)", () => v.run("file.open", { sample: "test" }));
@@ -73,7 +73,7 @@ function documentsRow(v: SheetView): void {
   // An encrypted XLSX's password, typed here before Open file (its text
   // shown nowhere).
   let password = "";
-  ui.hstack(() => {
+  ui.wrap(() => {
     ui.securefield("file password", (t: string) => { password = t; });
     v.btn("Open file", tried(async () => {
       const d = await documents.pick_open("Open a workbook, an XLSX, or a CSV file");

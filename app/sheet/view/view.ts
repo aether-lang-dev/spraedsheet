@@ -247,7 +247,7 @@ export class SheetView {
   run(id: string, params: Params = {}): Promise<Outcome> {
     return this.#outcome(() => this.cmds.execute(id, params)).then((o) => {
       // A cell set from the page: a screen reader told what it came to.
-      if (o.ok && id === "cell.set" && this.grid && params.cell) ui.a11y_announce(this.grid, `${params.cell}: ${this.wb.textOf(params.cell) || "empty"}`);
+      if (o.ok && id === "cell.set" && this.grid && params.cell) ui.a11y_announce(ui.datagrid_widget(this.grid), `${params.cell}: ${this.wb.textOf(params.cell) || "empty"}`);
       return o;
     });
   }

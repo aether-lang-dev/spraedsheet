@@ -16,7 +16,7 @@ export function rulesBar(v: SheetView): void {
     listed.set((await v.cmds.execute("format.rules")).message);
   };
   const highlight = (op: string) => () => added(v.run("format.highlight", { range: v.range(), op, value: value.value }));
-  ui.hstack(() => {
+  ui.wrap(() => {
     bind(ui.textfield("rule value", () => {}), value);
     v.btn("Greater than", highlight("greater"));
     v.btn("Less than", highlight("less"));
@@ -30,7 +30,7 @@ export function rulesBar(v: SheetView): void {
     v.btn("Data bars", () => added(v.run("format.dataBar", { range: v.range() })));
     v.btn("Clear rules", () => added(v.run("format.clearRules", { range: v.range() })));
   });
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Begins with", highlight("beginsWith"));
     v.btn("Ends with", highlight("endsWith"));
     v.btn("Formula rule", () => added(v.run("format.formulaRule", { range: v.range(), formula: value.value })));

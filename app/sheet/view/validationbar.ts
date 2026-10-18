@@ -17,7 +17,7 @@ export function validationBar(v: SheetView): void {
   let warn = false;
   const rule = (kind: string, extra: Record<string, string>) =>
     v.run("validation.set", { range: v.range(), kind, mode: warn ? "warn" : "stop", ...(prompt.value.trim() ? { prompt: prompt.value } : {}), ...extra });
-  ui.hstack(() => {
+  ui.wrap(() => {
     bind(ui.textfield("allowed", () => {}), allowed);
     v.btn("Allow list", () => rule("list", { values: allowed.value }));
     v.btn("Allow whole numbers", () => rule("whole", limitsOf(allowed.value)));

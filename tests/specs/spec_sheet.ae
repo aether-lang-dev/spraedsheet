@@ -144,6 +144,29 @@ boxed_header() -> int {
     return h
 }
 
+// The active workbook's name, from its File panel button ("Name (active)").
+active_book() -> string {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return "" }
+    name = ""
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        t = uidriver.field_str(w, "text")
+        if string.equals(uidriver.field_str(w, "type"), "button") == 1 && string.ends_with(t, " (active)") == 1 { name = string.substring(t, 0, string.length(t) - 9) }
+        i = i + 1
+    }
+    json.json_free(v)
+    return name
+}
+
+// Whether a widget in /widgets is shown (its "visible" true).
+shown_(w: ptr) -> int {
+    f = json.json_object_get_raw(w, "visible")
+    if f == null { return 0 }
+    return json.json_get_bool(f)
+}
+
 // 1 when the cursor's box is on the cell now.
 cursor_on(col: string, row: int) -> int {
     if uidriver.widget_int_field_by_id(g.cell_id(col, row), "borderWidth") == 2 { return 1 }
@@ -1926,6 +1949,8 @@ main() {
             g.key("Escape")
             g.pick("H", 9)
             spec.assert_true(wait_one_box(), "after Escape, one box (${cursor_boxes()})")
+            i = 0
+            while i < 40 && g.cell_has("C", 4, "1f6fd1") == 1 { sleep(50); i = i + 1 }
             spec.assert_eq(g.cell_has("C", 4, "1f6fd1"), 0, "C4's reference outline gone")
             g.command("view.freezePanes cell=B2")
             g.command("view.freezePanes cell=A1")
@@ -2234,12 +2259,13 @@ main() {
             spec.assert_true(y0 - uidriver.widget_int_field_by_id(g.cell_id("B", 1), "y") >= 20, "the rows move up into the headers' place")
             b.click("Headings")
             b.click("Gridlines")
-            fb = g.formula_field()
+            // The formula bar's row is what is hidden (the field in it).
+            fbrow = uidriver.widget_int_field_by_id(g.formula_field(), "parent")
             b.click("Formula bar")
             spec.assert_true(b.wait_for_console("sheet: the formula bar hidden"), "the formula bar hidden")
-            spec.assert_true(uidriver.wait_body_contains("/widget/${fb}", "\"visible\":false", 40), "not shown")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${fbrow}", "\"visible\":false", 40), "not shown")
             b.click("Formula bar")
-            spec.assert_true(uidriver.wait_body_contains("/widget/${fb}", "\"visible\":true", 40), "shown again")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${fbrow}", "\"visible\":true", 40), "shown again")
             g.command("view.panel name=none")
         }
         spec.it("Page Break Preview: each printed page's edge drawn blue, a manual break heavier") callback {
@@ -2261,18 +2287,21 @@ main() {
             g.command("sheet.activate name=Sheet1")
             g.command("cell.set cell=J20 input=first-book")
             g.command("view.panel name=file")
+            // The first workbook's name: Untitled, or the file it was last
+            // saved as (Save names it so), its button "... (active)".
+            first = active_book()
             b.click("New workbook")
             spec.assert_true(b.wait_for_console("sheet: Book2 opened (2 workbooks)"), "a second workbook")
             spec.assert_true(g.wait_cell("J", 20, ""), "its own cells: J20 empty")
             g.command("cell.set cell=J20 input=second-book")
             spec.assert_true(g.wait_cell("J", 20, "second-book"), "typed into it")
-            b.click("Untitled")
-            spec.assert_true(b.wait_for_console("sheet: Untitled active"), "switched back")
+            b.click(first)
+            spec.assert_true(b.wait_for_console("sheet: ${first} active"), "switched back")
             spec.assert_true(g.wait_cell("J", 20, "first-book"), "the first's cells shown")
             b.click("Book2")
             spec.assert_true(g.wait_cell("J", 20, "second-book"), "and the second's")
             b.click("Close workbook")
-            spec.assert_true(b.wait_for_console("sheet: Book2 closed; Untitled active"), "closed")
+            spec.assert_true(b.wait_for_console("sheet: Book2 closed; ${first} active"), "closed")
             spec.assert_true(g.wait_cell("J", 20, "first-book"), "the first shown again")
             g.command("range.clear range=J20")
             g.command("view.panel name=none")
@@ -2315,7 +2344,7 @@ main() {
             b.click("Protect sheet")
             spec.assert_true(b.wait_for_text("Guarded protected"), "protected")
             g.enter("A1", "5")
-            spec.assert_true(b.wait_for_text("on a protected sheet"), "the refusal said")
+            spec.assert_true(b.wait_for_console("refused: The cell or chart you're trying to change is on a protected sheet"), "the refusal said")
             spec.assert_eq(string.length(g.cell_text("A", 1)), 0, "A1 unchanged")
             g.enter("B2", "6")
             spec.assert_true(g.wait_cell("B", 2, "6"), "B2, unlocked, took it")
@@ -2345,8 +2374,8 @@ main() {
             g.command("formulas.use language=Excel")
             g.command("view.locale lang=es")
             spec.assert_true(b.wait_for_console("sheet: locale es"), "Spanish")
-            spec.assert_true(b.wait_for_text("Aspecto"), "the Looks tab in Spanish")
-            spec.assert_true(b.wait_for_text("Listo"), "the status line's Ready")
+            spec.assert_true(uidriver.wait_body_contains("/widgets", "\"text\":\"Aspecto\"", 40), "the Looks tab in Spanish")
+            spec.assert_true(uidriver.wait_body_contains("/widgets", "\"text\":\"Listo  ·", 40), "the status line's Ready")
             g.enter("K40", "=SUMA(1,5;2,25)")
             spec.assert_true(g.wait_cell("K", 40, "3.75"), "worked out")
             g.script("SAY GETEXPRESSION('K40')")
@@ -2354,7 +2383,7 @@ main() {
             g.goto("K40")
             spec.assert_true(wait_formula("=SUMA(1,5;2,25)"), "shown in Spanish in the formula bar")
             g.command("view.locale lang=en")
-            spec.assert_true(b.wait_for_text("Looks"), "English again")
+            spec.assert_true(uidriver.wait_body_contains("/widgets", "\"text\":\"Looks\"", 40), "English again")
             g.command("range.clear range=K40")
         }
         spec.it("a screen reader's view: the grid a grid of cells; each panel's buttons and fields named; F6 through the panels, the focus in each; a cell set said") callback {
@@ -2369,7 +2398,7 @@ main() {
                 if string.equals(role, "grid") == 1 { grids = uidriver.field_int(w, "id") }
                 if string.equals(role, "gridcell") == 1 && uidriver.field_int(w, "a11y_row") > 0 { gridcells = gridcells + 1 }
                 t = uidriver.field_str(w, "type")
-                if (string.equals(t, "button") == 1 || string.equals(t, "textfield") == 1) && uidriver.field_bool(w, "visible") == 1 && string.length(uidriver.field_str(w, "a11y_name")) == 0 && string.length(uidriver.field_str(w, "placeholder")) > 0 { unnamed = "${unnamed} ${uidriver.field_str(w, "placeholder")}" }
+                if (string.equals(t, "button") == 1 || string.equals(t, "textfield") == 1) && shown_(w) == 1 && string.length(uidriver.field_str(w, "a11y_name")) == 0 && string.length(uidriver.field_str(w, "placeholder")) > 0 { unnamed = "${unnamed} ${uidriver.field_str(w, "placeholder")}" }
                 i = i + 1
             }
             json.json_free(v)

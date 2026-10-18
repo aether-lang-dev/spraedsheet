@@ -4,7 +4,7 @@
 import type { SheetView } from "./view.ts";
 
 export function notesBar(v: SheetView): void {
-  ui.hstack(() => {
+  ui.wrap(() => {
     const comment = ui.on_submit(bind(ui.textfield("comment", () => {}), v.comment), () => v.run("cell.comment", { cell: v.here(), text: v.comment.value }));
     const format = ui.on_submit(bind(ui.textfield("format", () => {}), v.format), () => v.run("cell.format", { cell: v.here(), format: v.format.value }));
     // The menus' Comment and Number format go to the field.
@@ -24,7 +24,7 @@ export function commentsBar(v: SheetView): void {
     pane.set(Array.isArray(o.output) && o.output.length ? (o.output as string[]).join("\n") : "No comments");
   };
   const say = (id: string, params: Record<string, string> = {}) => async () => { await v.run(id, { cell: v.here(), ...params }); await listed(); };
-  ui.hstack(() => {
+  ui.wrap(() => {
     const field = bind(ui.textfield("comment thread text", () => {}), words);
     v.action("Comment thread field", () => ui.focus(field));
     v.btn("New comment", async () => { await v.run("comment.new", { cell: v.here(), text: words.value }); await listed(); });

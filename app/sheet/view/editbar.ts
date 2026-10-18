@@ -20,7 +20,7 @@ export function editBar(v: SheetView): void {
     }
     v.run(id, { range: v.range(), by: colName(addrOf(v.here())!.col) });
   };
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Undo", () => v.run("edit.undo"));
     v.btn("Redo", () => v.run("edit.redo"));
     bind(ui.text(""), v.history);
@@ -32,7 +32,7 @@ export function editBar(v: SheetView): void {
     v.btn("Delete column", () => v.run("columns.delete", span("col")));
   });
   const at = () => v.range().split(":")[0];
-  ui.hstack(() => {
+  ui.wrap(() => {
     v.btn("Fill series", () => v.run("edit.fillSeries", { range: v.range() }));
     v.btn("AutoSum", () => v.run("formulas.autoSum", { cell: v.here() }));
     v.btn("Paste values", () => v.run("edit.pasteSpecial", { at: at(), what: "values" }));
@@ -56,7 +56,7 @@ export function protectBar(v: SheetView): void {
   const password = state(""), said = state("");
   const told = async () => { const o = await v.run("protect.state"); said.set(o.message); };
   const pw = () => (password.value ? { password: password.value } : {});
-  ui.hstack(() => {
+  ui.wrap(() => {
     bind(ui.securefield("protection password", () => {}), password);
     v.btn("Lock cells", async () => { await v.run("protect.lock", { range: v.range() }); await told(); });
     v.btn("Unlock cells", async () => { await v.run("protect.lock", { range: v.range(), locked: "0" }); await told(); });
