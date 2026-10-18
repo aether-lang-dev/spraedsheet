@@ -7189,7 +7189,14 @@ async function executeRemoteCommand(interpreter, commandString, remote, command)
  */
 async function executeQuotedString(command) {
   const interpreter = this;
-  const commandString = command.value;
+  // A command built by concatenation (the parser's `expression`) is its
+  // value; but ADDRESS EXPECTATIONS reads its clause as written (its own
+  // language evaluates the expression: "LENGTH: " || LENGTH(t) || " should be 11").
+  const commandString = command.expression === undefined
+    ? command.value
+    : interpreter.address === 'expectations'
+      ? command.value
+      : String(await interpreter.evaluateConcatenation(command.expression));
 
   // Check if there's an active ADDRESS target
   if (interpreter.address && interpreter.address !== 'default') {
@@ -9261,7 +9268,16 @@ function executeAddressRemoteCommand(command, interpreter) {
  */
 async function executeAddressWithStringCommand(command, interpreter) {
   interpreter.address = command.target.toLowerCase();
-  await interpreter.executeQuotedString({ type: 'QUOTED_STRING', value: command.commandString });
+  if (command.expression === undefined) {
+    await interpreter.executeQuotedString({ type: 'QUOTED_STRING', value: command.commandString });
+    return;
+  }
+  // A clause that is an expression: its value is the command
+  const expression = command.expression;
+  const value = /^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(expression)
+    ? await interpreter.resolveValue(expression)
+    : await interpreter.evaluateConcatenation(expression);
+  await interpreter.executeQuotedString({ type: 'QUOTED_STRING', value: String(value) });
 }
 
 /**
@@ -23182,8 +23198,27 @@ function parse(scriptText) {
   // Merge lines when next line starts with |>
   lines = mergePipeContinuationLines(lines);
 
-  const tokens = tokenize(lines);
+  const tokens = joinThenClauses(tokenize(lines));
   return parseTokens(tokens);
+}
+
+// IF condition, then a clause starting THEN (on the next line, or after a
+// ';'), is the one clause IF condition THEN ... (TRL 4.1: THEN may start a
+// clause of its own after the condition's).
+function joinThenClauses(tokens) {
+  const joined = [];
+  for (const token of tokens) {
+    const prev = joined[joined.length - 1];
+    if (prev && prev.type === 'LINE' && token.type === 'LINE' &&
+        /^THEN(\s|$)/i.test(token.content) &&
+        /^(ELSE\s+)?IF\s+\S/i.test(prev.content) &&
+        !/\sTHEN(\s|$)/i.test(prev.content.replace(/"[^"]*"|'[^']*'/g, '""'))) {
+      joined[joined.length - 1] = { ...prev, content: prev.content + ' ' + token.content };
+    } else {
+      joined.push(token);
+    }
+  }
+  return joined;
 }
 
 function mergePipeContinuationLines(lines) {
@@ -23451,8 +23486,36 @@ function parseStatement(tokens, startIndex) {
     };
   }
 
-  // ADDRESS command with quoted string (combined form)
-  const addressWithStringMatch = line.match(/^ADDRESS\s+(\w+)\s+(["`'])(.*?)\2$/i);
+  // ADDRESS command with a command clause (combined form). The clause is an
+  // expression whose value is the command (TRL 2.3): one quoted string (a
+  // doubled quote in it is one quote), a variable, or terms concatenated.
+  const addressClauseMatch = line.match(/^ADDRESS\s+(\w+)\s+(\S.*)$/i);
+  if (addressClauseMatch && !/^(MATCHING|LINES|EXPECT|IT|SECTION)\b/i.test(addressClauseMatch[2])) {
+    const clause = addressClauseMatch[2].trim();
+    if (isSingleLiteral(clause)) {
+      return {
+        command: addLineNumber({
+          type: 'ADDRESS_WITH_STRING',
+          target: addressClauseMatch[1],
+          commandString: unquoteLiteral(clause)
+        }, token),
+        nextIndex: startIndex + 1
+      };
+    }
+    if (/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(clause) || hasTopLevelConcatenation(clause) || isTermConcatenation(clause)) {
+      return {
+        command: addLineNumber({
+          type: 'ADDRESS_WITH_STRING',
+          target: addressClauseMatch[1],
+          expression: clause
+        }, token),
+        nextIndex: startIndex + 1
+      };
+    }
+  }
+
+  // ADDRESS command with a back-ticked string
+  const addressWithStringMatch = line.match(/^ADDRESS\s+(\w+)\s+(`)(.*?)\2$/i);
   if (addressWithStringMatch) {
     return {
       command: addLineNumber({ 
@@ -23702,16 +23765,7 @@ function parseStatement(tokens, startIndex) {
           if (current.trim()) {
             const arg = current.trim();
             // Check if this argument looks like a function call and parse it as expression
-            if (callIsFunctionCallExpression(arg)) {
-              const funcCall = parseFunctionCall(arg);
-              if (funcCall) {
-                args.push(funcCall);
-              } else {
-                args.push(arg);
-              }
-            } else {
-              args.push(arg);
-            }
+            args.push(argumentOf(arg));
             current = '';
           }
         } else {
@@ -23722,16 +23776,7 @@ function parseStatement(tokens, startIndex) {
       if (current.trim()) {
         const arg = current.trim();
         // Check if this argument looks like a function call and parse it as expression
-        if (callIsFunctionCallExpression(arg)) {
-          const funcCall = parseFunctionCall(arg);
-          if (funcCall) {
-            args.push(funcCall);
-          } else {
-            args.push(arg);
-          }
-        } else {
-          args.push(arg);
-        }
+        args.push(argumentOf(arg));
         // Final argument parsed
       }
     }
@@ -23981,16 +24026,7 @@ function parseStatement(tokens, startIndex) {
             if (current.trim()) {
               const arg = current.trim();
               // Check if this argument looks like a function call and parse it as expression
-              if (callIsFunctionCallExpression(arg)) {
-                const funcCall = parseFunctionCall(arg);
-                if (funcCall) {
-                  args.push(funcCall);
-                } else {
-                  args.push(arg);
-                }
-              } else {
-                args.push(arg);
-              }
+              args.push(argumentOf(arg));
               current = '';
             }
           } else {
@@ -24001,16 +24037,7 @@ function parseStatement(tokens, startIndex) {
         if (current.trim()) {
           const arg = current.trim();
           // Check if this argument looks like a function call and parse it as expression
-          if (callIsFunctionCallExpression(arg)) {
-            const funcCall = parseFunctionCall(arg);
-            if (funcCall) {
-              args.push(funcCall);
-            } else {
-              args.push(arg);
-            }
-          } else {
-            args.push(arg);
-          }
+          args.push(argumentOf(arg));
         }
       }
       
@@ -24337,6 +24364,18 @@ function parseStatement(tokens, startIndex) {
     };
   }
 
+  // A command built by concatenation, starting with a literal: 'MOVE("' || sq || '")',
+  // 'MOVE("'sq'")', 'say' word. Classic REXX evaluates a command clause as an
+  // expression and sends its value (TRL 2.3), so this is evaluated when run.
+  if (/^["'`]/.test(line) && !isSingleLiteral(line) && (hasTopLevelConcatenation(line) || isTermConcatenation(line))) {
+    return {
+      // value: the text between the outer quotes, as before, for a target
+      // that reads its clause as written (ADDRESS EXPECTATIONS)
+      command: addLineNumber({ type: 'QUOTED_STRING', expression: line, value: line[line.length - 1] === line[0] ? line.slice(1, -1) : line }, token),
+      nextIndex: startIndex + 1
+    };
+  }
+
   // Bare quoted string (potential ADDRESS command) - supports double-quotes, single-quotes, and back-ticks
   const quotedStringMatch = line.match(/^(["`'])(.*?)\1$/);
   if (quotedStringMatch) {
@@ -24575,8 +24614,11 @@ function parseSingleLineIfStatement(tokens, startIndex, match) {
   const thenResult = parseStatement(thenTokens, 0);
   const thenCommands = thenResult.command ? [thenResult.command] : [];
 
-  // An ELSE clause after it (the next line, or after a ';').
-  const elseResult = isElseClause(tokens, startIndex + 1) ? parseElseClause(tokens, startIndex + 1) : { commands: [], nextIndex: startIndex + 1 };
+  // An ELSE clause after it (the next line, or after a ';'), its
+  // instruction on the same line or the next
+  const elseResult = isElseClause(tokens, startIndex + 1)
+    ? parseElseClause(tokens, startIndex + 1)
+    : nextLineElseClause(tokens, startIndex + 1) || { commands: [], nextIndex: startIndex + 1 };
 
   return {
     command: addLineNumber({
@@ -24621,6 +24663,64 @@ function parseElseClause(tokens, index) {
   return { commands: result.command ? [result.command] : [], nextIndex: index + result.nextIndex };
 }
 
+// The bare ELSE tokens that are an ENDIF block's own branch separator
+// (IF ... THEN, its instructions, ELSE, its instructions, ENDIF), set
+// aside before the block's instructions are parsed, so that an IF among
+// them does not take that ELSE as its own.
+const endifBlockElses = new WeakSet();
+
+// A bare ELSE at `index` with its instruction on the next line (TRL 4.1),
+// when it is not an ENDIF block's own: its commands and the index after
+// it; null when there is no such ELSE.
+function nextLineElseClause(tokens, index) {
+  if (index >= tokens.length || !/^ELSE\s*$/i.test(tokens[index].content) ||
+      endifBlockElses.has(tokens[index])) {
+    return null;
+  }
+  if (index + 1 >= tokens.length || /^(ELSE|END|ENDIF)(\s|$)/i.test(tokens[index + 1].content)) {
+    throw new Error(`ELSE at line ${tokens[index].lineNumber} has no instruction after it`);
+  }
+  // A DO on the next line begins a DO ... END group: ELSE DO
+  if (/^DO\s*$/i.test(tokens[index + 1].content)) {
+    const group = [{ ...tokens[index], content: 'ELSE DO' }, ...tokens.slice(index + 2)];
+    const result = parseElseClause(group, 0);
+    return { commands: result.commands, nextIndex: index + 1 + result.nextIndex };
+  }
+  const result = parseStatement(tokens, index + 1);
+  return { commands: result.command ? [result.command] : [], nextIndex: result.nextIndex };
+}
+
+// Whether an IF condition THEN at a line's end at `startIndex` is the ENDIF
+// block form: an ENDIF closes it, paired as brackets are (the nearest
+// unclosed IF ... THEN first), before the DO ... END or SELECT block it is
+// in ends. Returns that ENDIF block's own bare ELSE's index (-1 for none),
+// or null when no ENDIF closes it, and the IF is classic REXX's, governing
+// the one instruction after THEN.
+function endifBlockElse(tokens, startIndex) {
+  let open = 1;
+  let blocks = 0;
+  let ownElse = -1;
+  for (let j = startIndex + 1; j < tokens.length; j++) {
+    if (tokens[j].type !== 'LINE') continue;
+    const c = tokens[j].content;
+    if (/^ENDIF\s*$/i.test(c)) {
+      open--;
+      if (open === 0) return ownElse;
+    } else if (/^(ELSE\s+)?IF\s+.+?\s+THEN\s*$/i.test(c)) {
+      open++;
+    } else if (/^ELSE\s*$/i.test(c)) {
+      if (open === 1 && blocks === 0 && ownElse === -1) ownElse = j;
+    } else if (/^END(\s|$)/i.test(c)) {
+      blocks--;
+      if (blocks < 0) return null;
+    } else if (/^DO(\s|$)/i.test(c) || /\sTHEN\s+DO\s*$/i.test(c) ||
+               /^(ELSE|OTHERWISE)\s+DO\s*$/i.test(c) || /^SELECT\s*$/i.test(c)) {
+      blocks++;
+    }
+  }
+  return null;
+}
+
 function parseIfStatement(tokens, startIndex) {
   const ifLine = tokens[startIndex].content;
   
@@ -24663,6 +24763,13 @@ function parseIfStatement(tokens, startIndex) {
     if (isElseClause(tokens, nextIndex) && !/^ELSE\s+DO\s*$/i.test(tokens[nextIndex].content)
         && !/^ELSE\s+IF\s+.+?\s+THEN(?:\s+DO)?\s*$/i.test(tokens[nextIndex].content)) {
       const elseResult = parseElseClause(tokens, nextIndex);
+      elseCommands = elseResult.commands;
+      nextIndex = elseResult.nextIndex;
+    }
+    // A bare ELSE, its instruction on the next line
+    else if (nextIndex < tokens.length && /^ELSE\s*$/i.test(tokens[nextIndex].content) &&
+             !endifBlockElses.has(tokens[nextIndex])) {
+      const elseResult = nextLineElseClause(tokens, nextIndex);
       elseCommands = elseResult.commands;
       nextIndex = elseResult.nextIndex;
     }
@@ -24725,6 +24832,40 @@ function parseIfStatement(tokens, startIndex) {
   }
   
   const condition = parseCondition(conditionMatch[1]);
+
+  const ownElse = endifBlockElse(tokens, startIndex);
+  if (ownElse === null) {
+    // Classic REXX: the one instruction after THEN, on the next line, is
+    // the one governed, then an ELSE clause after it, if any (TRL 4.1)
+    const next = startIndex + 1;
+    if (next >= tokens.length || /^(ELSE|END|ENDIF)(\s|$)/i.test(tokens[next].content)) {
+      throw new Error(`IF ... THEN at line ${tokens[startIndex].lineNumber} has no instruction after it`);
+    }
+    // A DO on the next line begins a DO ... END group: IF ... THEN DO
+    if (/^DO\s*$/i.test(tokens[next].content)) {
+      const group = [{ ...tokens[startIndex], content: ifLine.replace(/\s*THEN\s*$/i, ' THEN DO') }, ...tokens.slice(next + 1)];
+      const result = parseIfStatement(group, 0);
+      return { command: result.command, nextIndex: startIndex + 1 + result.nextIndex };
+    }
+    const thenResult = parseStatement(tokens, next);
+    const elseResult = isElseClause(tokens, thenResult.nextIndex)
+      ? parseElseClause(tokens, thenResult.nextIndex)
+      : nextLineElseClause(tokens, thenResult.nextIndex) ||
+        { commands: [], nextIndex: thenResult.nextIndex };
+    return {
+      command: addLineNumber({
+        type: 'IF',
+        condition: condition,
+        thenCommands: thenResult.command ? [thenResult.command] : [],
+        elseCommands: elseResult.commands
+      }, tokens[startIndex]),
+      nextIndex: elseResult.nextIndex
+    };
+  }
+  if (ownElse >= 0) {
+    endifBlockElses.add(tokens[ownElse]);
+  }
+
   const thenCommands = [];
   const elseCommands = [];
   let currentIndex = startIndex + 1;
@@ -24916,7 +25057,52 @@ function parseLoopSpecification(specStr) {
   throw new Error(`Invalid DO loop specification: ${spec}`);
 }
 
+// The parts of `text` between its top-level `op` characters (| or &): not
+// inside quotes or parentheses, and not || (concatenation), |> (a pipe) or
+// && (exclusive or). One part when there is none.
+function splitTopLevelLogical(text, op) {
+  const parts = [];
+  let depth = 0, quote = '', start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) { if (c === quote) quote = ''; continue; }
+    if (c === '"' || c === "'") { quote = c; continue; }
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (depth === 0 && c === op && text[i + 1] !== op && text[i - 1] !== op && !(op === '|' && text[i + 1] === '>')) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
+// `text` with one pair of parentheses round all of it taken off, or as it is.
+function stripEnclosingParens(text) {
+  const t = text.trim();
+  if (!t.startsWith('(') || !t.endsWith(')')) return t;
+  let depth = 0, quote = '';
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (quote) { if (c === quote) quote = ''; continue; }
+    if (c === '"' || c === "'") { quote = c; continue; }
+    if (c === '(') depth++;
+    else if (c === ')' && --depth === 0 && i < t.length - 1) return t;
+  }
+  return t.slice(1, -1).trim();
+}
+
 function parseCondition(conditionStr) {
+  // | (or) and & (and), classic REXX's logical operators, & binding tighter
+  // (TRL 2.3): IF a \= 'x' | b \= 'y' THEN ... is two comparisons. Before,
+  // the first comparison operator split the whole condition in two.
+  const ors = splitTopLevelLogical(conditionStr, '|');
+  if (ors.length > 1) return { type: 'LOGICAL_OR', parts: ors.map((p) => parseCondition(p.trim())) };
+  const ands = splitTopLevelLogical(conditionStr, '&');
+  if (ands.length > 1) return { type: 'LOGICAL_AND', parts: ands.map((p) => parseCondition(p.trim())) };
+  const inner = stripEnclosingParens(conditionStr);
+  if (inner !== conditionStr.trim()) return parseCondition(inner);
   // Simple condition parsing - supports all comparison operators: =, !=, \=, ¬=, <>, ><, >, <, >=, <=
   const comparisonMatch = conditionStr.match(/^(.+?)\s*([><=¬!\\]+|><)\s*(.+)$/);
   
