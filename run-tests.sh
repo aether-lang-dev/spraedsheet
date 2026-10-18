@@ -62,6 +62,7 @@ spec_app_sheet_files|AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SAE_SHELL_LOG=$
 spec_app_sheet_rexx|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-rexx-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SHEET_ROOT=$ROOT|spec spec_app_sheet_rexx
 mcp||mcp
 cli||cli
+real_keys_x11||xkeys
 spec_app_sheet_mcp|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-mcp-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SHEET_ROOT=$ROOT|spec spec_app_sheet_mcp
 "
 
@@ -91,7 +92,13 @@ for line in $TABLE; do
         fi ;;
     esac
     set -- $cmd
+    # Real X11 key events (xdotool) need an X server: Linux only.
+    if [ "$1" = xkeys ] && { [ "$(uname -s)" != Linux ] || ! command -v xdotool >/dev/null 2>&1; }; then
+        echo "SKIP $label (Linux with xdotool only)"; IFS='
+'; continue
+    fi
     case "$1" in
+        xkeys) set -- sh "$ROOT/tests/specs/real_keys_x11.sh" ;;
         headless) set -- env SAE_LOWER_OUT="$T/lower-tests" SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/headless" ;;
         mcp) set -- node --test "$ROOT/tests/mcp/" ;;
         cli) set -- sh -c 'r=0; for t in "$0"/tests/cli/test_*.sh; do echo "== $t"; SAE_DIR="$1" sh "$t" || r=1; done; exit $r' "$ROOT" "$SAE" ;;

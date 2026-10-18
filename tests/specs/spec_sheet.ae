@@ -345,6 +345,71 @@ wait_tab(name: string, want: int) -> int {
     return 0
 }
 
+// The Name Box's cell: the text field showing a cell's name.
+namebox_() -> string {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return "" }
+    out = ""
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        t = uidriver.field_str(w, "text")
+        if string.equals(uidriver.field_str(w, "type"), "textfield") == 1 && string.length(t) >= 2 && string.length(t) <= 8 && string.char_at(t, 0) >= 65 && string.char_at(t, 0) <= 90 && string.char_at(t, string.length(t) - 1) >= 48 && string.char_at(t, string.length(t) - 1) <= 57 && string.length(out) == 0 { out = t }
+        i = i + 1
+    }
+    json.json_free(v)
+    return out
+}
+
+focus_() -> int {
+    v, _e = json.parse(uidriver.get_body("/focus"))
+    if v == null { return 0 }
+    h = uidriver.field_int(v, "handle")
+    json.json_free(v)
+    return h
+}
+
+// How much of the cursor's outline is round the cell col+row in a snapshot.
+outline_at(name: string, col: string, row: int) -> int {
+    id = g.cell_id(col, row)
+    if id == 0 { return 0 }
+    _s = snapshot(name)
+    bn = uidriver.widget_id_by_text("Under Remote Control")
+    banner = "${uidriver.widget_int_field_by_id(bn, "x")}:${uidriver.widget_int_field_by_id(bn, "y")}:${uidriver.widget_int_field_by_id(bn, "w")}:${uidriver.widget_int_field_by_id(1, "w")}"
+    box = "${uidriver.widget_int_field_by_id(id, "x")}:${uidriver.widget_int_field_by_id(id, "y")}:${uidriver.widget_int_field_by_id(id, "w")}:${uidriver.widget_int_field_by_id(id, "h")}"
+    out, _e = os.exec("python3 outline.py target/sheet-snapshots/${name}.png ${banner} ${box}")
+    n, _ne = string.to_int(string.trim(out))
+    return n
+}
+
+// From a real click on col+row, real keys: after each, the Name Box shows
+// the cell expected, the focus is where the click put it, and the cursor's
+// outline is drawn round that cell.
+keys_from(col: string, row: int, keys: string, wants: string) {
+    id = g.cell_id(col, row)
+    spec.assert_gt(id, 0, "${col}${row} shown")
+    uidriver.post_ok("/widget/${id}/click?real=1", "click ${col}${row}")
+    sleep(400)
+    grid = focus_()
+    ks = string.string_split(keys, " ")
+    ws = string.string_split(wants, " ")
+    k = 0
+    while k < string.string_array_size(ks) {
+        key = string.string_array_get(ks, k)
+        want = string.string_array_get(ws, k)
+        uidriver.post_ok("/window/key?combo=${key}&real=1", "the real key ${key}")
+        sleep(300)
+        spec.assert_str_eq(namebox_(), want, "${key}: at ${want}")
+        spec.assert_eq(focus_(), grid, "${key}: the focus still the grid's")
+        wc = string.substring(want, 0, 1)
+        wr, _wre = string.to_int(string.substring(want, 1, string.length(want)))
+        spec.assert_gt(outline_at("keys-${col}${row}-${k}-${key}", wc, wr), 4, "${key}: the outline round ${want}")
+        k = k + 1
+    }
+    string.string_array_free(ks)
+    string.string_array_free(ws)
+}
+
 // The grid's horizontal scrollbar: the scrollbar wider than it is tall.
 h_scrollbar() -> int {
     v, _jerr = json.parse(uidriver.get_body("/widgets"))
@@ -524,6 +589,23 @@ main() {
             click_and_type("A", 1, "1")
             click_and_type("D", 10, "4")
             g.command("range.clear range=A1,D10")
+        }
+        spec.it("real keys on the grid: arrows, Tab and Shift+Tab move the cursor, Return opens the editor, and the focus stays the grid's") callback {
+            keys_from("A", 6, "Up Up Up", "A5 A4 A3")
+            keys_from("A", 6, "Down Down Down", "A7 A8 A9")
+            keys_from("B", 6, "Left Right Right", "A6 B6 C6")
+            keys_from("B", 6, "Tab Tab Shift+Tab", "C6 D6 C6")
+            // Return opens the editor on the cell (in the grid), Escape
+            // closes it, the cursor where it was.
+            id = g.cell_id("C", 6)
+            uidriver.post_ok("/window/key?combo=Return&real=1", "Return")
+            spec.assert_true(g.editor() > 0, "Return opened the editor")
+            uidriver.post_ok("/window/key?combo=Escape&real=1", "Escape")
+            sleep(300)
+            spec.assert_eq(g.editor(), 0, "Escape closed it")
+            spec.assert_str_eq(namebox_(), "C6", "the cursor at C6")
+            spec.assert_gt(outline_at("keys-after-escape", "C", 6), 4, "its outline round C6")
+            _i = id
         }
         spec.it("the grid's horizontal scrollbar: its thumb the share of columns shown, a step, a drag and back") callback {
             hs = h_scrollbar()
