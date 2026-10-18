@@ -41,9 +41,12 @@ T=$ROOT/target
 LOGS=$T/run-tests
 rm -rf "$LOGS" "$T/sheet-shell.log" "$T/sheet-storage" "$T/sheet-bus-appdata" "$T/sheet-rexx-appdata" "$T/sheet-mcp-appdata"; mkdir -p "$LOGS"
 # label | environment (space-separated NAME=value) | command
+# spec_sheet is one page for its whole run: some sixty sheets, their charts
+# and drawings, and a hundred steps of undo, past the 32 MB a sae page gets
+# by default (QuickJS ran out of memory near its end), so it gets 128 MB.
 TABLE="
 headless||headless
-spec_sheet|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-storage|spec spec_sheet
+spec_sheet|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-storage SAE_PAGE_MEM=134217728|spec spec_sheet
 spec_app_sheet_bus|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-bus-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app|spec spec_app_sheet_bus
 spec_app_sheet_files|AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SAE_SHELL_LOG=$T/sheet-shell.log|spec spec_app_sheet_files
 spec_app_sheet_rexx|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-rexx-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SHEET_ROOT=$ROOT|spec spec_app_sheet_rexx

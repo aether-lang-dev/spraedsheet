@@ -1927,6 +1927,8 @@ main() {
         }
         spec.it("no cursor box left behind: after a cell's style changes under it, an edit with references, Escape, freeze and split") callback {
             g.command("sheet.add name=Boxes")
+            // Excel's formulas (an earlier case may have left another).
+            g.command("formulas.use language=Excel")
             g.command("cell.set cell=B3 input=5")
             g.command("cell.set cell=C4 input=1000")
             g.goto("C4")
@@ -2284,7 +2286,8 @@ main() {
             g.command("view.panel name=none")
         }
         spec.it("several workbooks from the File panel: a new one with its own cells, switched to and from, closed") callback {
-            g.command("sheet.activate name=Sheet1")
+            // A sheet of its own: Sheet1's J20 is part of an earlier spill.
+            g.command("sheet.add name=Books")
             g.command("cell.set cell=J20 input=first-book")
             g.command("view.panel name=file")
             // The first workbook's name: Untitled, or the file it was last

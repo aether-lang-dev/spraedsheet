@@ -155,7 +155,9 @@ export function sheetGrid(v: SheetView): void {
       // beat it).
       if ((pointing || pointable(t, t.length)) && key) {
         // A click to point: wait for the cell it selects (or, if none does,
-        // store the formula as it was).
+        // store the formula as it was). The selection is the same click's,
+        // but on a busy page a timer of 0 could run first and store the
+        // formula without its reference, so it is given 200 ms.
         held = { r, c, text: t };
         setTimeout(() => {
           if (held && held.r === r && held.c === c) {
@@ -163,7 +165,7 @@ export function sheetGrid(v: SheetView): void {
             v.wb.typing(null);
             v.run("cell.set", { cell: key, input: v.wb.enteredInput(key, t.trim()) });
           }
-        }, 0);
+        }, 200);
         return;
       }
       pointing = false;

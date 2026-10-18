@@ -57,7 +57,20 @@ const getOrAdd = <K, V>(m: Map<K, V>, k: K, make: () => V): V => {
   return v;
 };
 
-const byOrder = (a: string, b: string): number => order(cellAddr(a)!) - order(cellAddr(b)!);
+// A key's place in sheet order, kept once worked out: a sort compares each
+// key many times, and parsing its address every time made a big sheet's
+// recalculation outlast a page's turn. Bounded, as keys come and go.
+const ORDER = new Map<string, number>();
+const orderOf = (k: string): number => {
+  let n = ORDER.get(k);
+  if (n === undefined) {
+    if (ORDER.size > 200000) ORDER.clear();
+    n = order(cellAddr(k)!);
+    ORDER.set(k, n);
+  }
+  return n;
+};
+const byOrder = (a: string, b: string): number => orderOf(a) - orderOf(b);
 
 // This sheet's keys in sheet order, then other sheets' by name.
 const byKey = (a: string, b: string): number => {
@@ -464,7 +477,10 @@ export class Sheet {
     for (const k of cells) waiting.set(k, new Set(this.#readsOf(k).filter((r) => cells.has(r))).size);
     const ready = [...cells].filter((k) => waiting.get(k) === 0).sort(byOrder);
     const ordered: string[] = [];
-    for (let k = ready.shift(); k !== undefined; k = ready.shift()) {
+    // Taken from the front by an index: shift() is linear, and over a big
+    // recalculation quadratic.
+    for (let at = 0; at < ready.length; at++) {
+      const k = ready[at];
       ordered.push(k);
       for (const d of new Set(readers.get(k))) {
         if (!cells.has(d)) continue;
