@@ -48,6 +48,8 @@ export interface XlsxWritten {
   readonly report: string[];
 }
 
+const xmlAttr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
 export function writeXlsx(wb: Workbook): XlsxWritten {
   const report: string[] = [];
   const strings: string[] = [], stringAt = new Map<string, number>();
@@ -68,8 +70,8 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
     if (key === JSON.stringify(["", {}])) return 0;
     let i = xfKeys.indexOf(key);
     if (i >= 0) return i;
-    const font = look.bold || look.italic || look.underline || look.strike || look.size || look.color
-      ? index(fonts, `<font>${look.bold ? "<b/>" : ""}${look.italic ? "<i/>" : ""}${look.strike ? "<strike/>" : ""}${look.underline ? "<u/>" : ""}<sz val="${look.size ? Math.round(look.size * 0.75 * 100) / 100 : 11}"/>${look.color ? colourXml("color", look.color) : ""}<name val="Calibri"/></font>`) : 0;
+    const font = look.bold || look.italic || look.underline || look.strike || look.size || look.color || look.family || look.script
+      ? index(fonts, `<font>${look.bold ? "<b/>" : ""}${look.italic ? "<i/>" : ""}${look.strike ? "<strike/>" : ""}${look.underline === "double" ? '<u val="double"/>' : look.underline ? "<u/>" : ""}${look.script ? `<vertAlign val="${look.script === "super" ? "superscript" : "subscript"}"/>` : ""}<sz val="${look.size ? Math.round(look.size * 0.75 * 100) / 100 : 11}"/>${look.color ? colourXml("color", look.color) : ""}<name val="${xmlAttr(look.family || "Calibri")}"/></font>`) : 0;
     const fill = look.fill ? index(fills, `<fill><patternFill patternType="solid">${colourXml("fgColor", look.fill)}<bgColor indexed="64"/></patternFill></fill>`) : 0;
     const b = look.borders ?? {};
     const side = (n: "left" | "right" | "top" | "bottom") => {
@@ -132,7 +134,10 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
     return 164 + ownCodes.indexOf(c);
   };
   const xfXml = xfs.map((x) => {
-    const id = fmtId(x.code), al = x.look.align || x.look.wrap ? `<alignment${x.look.align ? ` horizontal="${({ start: "left", center: "center", end: "right" } as Record<string, string>)[x.look.align]}"` : ""}${x.look.wrap ? ' wrapText="1"' : ""}/>` : "";
+    // Excel's textRotation: 0 to 90 counter-clockwise, 91 to 180 clockwise (90 + degrees).
+    const rot = x.look.rotation ? (x.look.rotation > 0 ? x.look.rotation : 90 - x.look.rotation) : 0;
+    const id = fmtId(x.code), al = x.look.align || x.look.wrap || x.look.valign || x.look.indent || rot
+      ? `<alignment${x.look.align ? ` horizontal="${({ start: "left", center: "center", end: "right" } as Record<string, string>)[x.look.align]}"` : ""}${x.look.valign ? ` vertical="${x.look.valign === "middle" ? "center" : x.look.valign}"` : ""}${x.look.indent ? ` indent="${x.look.indent}"` : ""}${rot ? ` textRotation="${rot}"` : ""}${x.look.wrap ? ' wrapText="1"' : ""}/>` : "";
     const unlocked = (x.look as { unlocked?: boolean }).unlocked, pr = unlocked ? '<protection locked="0"/>' : "";
     return `<xf numFmtId="${id}" fontId="${x.font}" fillId="${x.fill}" borderId="${x.border}" xfId="0"${id ? ' applyNumberFormat="1"' : ""}${x.font ? ' applyFont="1"' : ""}${x.fill ? ' applyFill="1"' : ""}${x.border ? ' applyBorder="1"' : ""}${al ? ' applyAlignment="1"' : ""}${pr ? ' applyProtection="1"' : ""}${al || pr ? `>${al}${pr}</xf>` : "/>"}`;
   }).join("");

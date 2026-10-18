@@ -78,6 +78,18 @@ const state = async (exec: Exec) => (await must(exec, "sheet.state")).output as 
 // The app's arguments: text, 1 for yes, rows counted from 1, a column by
 // its letter or its number.
 const text = (a: unknown) => (a === undefined || a === null ? "" : String(a));
+// "name=value;name=value" as parameters, each one of those named.
+function namedPairs(spec: string, names: readonly string[], fn: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of spec.split(";")) {
+    if (!part.trim()) continue;
+    const eq = part.indexOf("=");
+    const k = (eq < 0 ? part : part.slice(0, eq)).trim().toLowerCase(), v = eq < 0 ? "" : part.slice(eq + 1).trim();
+    if (!names.includes(k)) throw new Error(`${fn}: ${k} is not one of ${names.join(", ")}`);
+    out[k] = v;
+  }
+  return out;
+}
 const yes = (a: unknown) => a === 1 || a === "1" || a === true || a === "true";
 function row(a: unknown, fn: string): number {
   const n = parseInt(text(a), 10);
@@ -369,7 +381,11 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // Format Painter: COPYFORMAT("A1", "B1:B9").
   COPYFORMAT: async (exec, from, to) => (await must(exec, "format.painter", { from: text(from), to: text(to) })).message,
   // The toolbar's looks over a range.
-  SETALIGNMENT: async (exec, r, how) => (await must(exec, "format.align", { range: text(r), align: text(how) }), "OK"),
+  // SETALIGNMENT("A1", "left") and its place in the cell's height, indent
+  // and turn: SETALIGNMENT("A1", "", "vertical=top;indent=2;rotation=45").
+  SETALIGNMENT: async (exec, r, how, more) => (await must(exec, "format.align", { range: text(r), ...(text(how).trim() ? { align: text(how) } : {}), ...namedPairs(text(more), ["vertical", "indent", "rotation"], "SETALIGNMENT") }), "OK"),
+  // SETFONT("A1", "family=Georgia;size=14;bold=1;underline=double;script=super").
+  SETFONT: async (exec, r, spec) => (await must(exec, "format.font", { range: text(r), ...namedPairs(text(spec), ["family", "size", "bold", "italic", "underline", "strike", "script"], "SETFONT") })).message,
   SETFILLCOLOR: async (exec, r, c) => (await must(exec, "format.fill", { range: text(r), color: text(c) }), "OK"),
   SETTEXTCOLOR: async (exec, r, c) => (await must(exec, "format.color", { range: text(r), color: text(c) }), "OK"),
   // Conditional formatting: ADDRULE("A1:A9", "formula", "=A1>B1",

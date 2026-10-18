@@ -98,7 +98,11 @@ function lookOf(xf: El, fonts: El[], fills: El[], borders: El[]): Look | null {
   if (font && Number(attr(xf, "fontId") ?? 0) > 0) {
     if (kid(font, "b") && attr(kid(font, "b")!, "val") !== "0") look.bold = true;
     if (kid(font, "i") && attr(kid(font, "i")!, "val") !== "0") look.italic = true;
-    if (kid(font, "u") && attr(kid(font, "u")!, "val") !== "none") look.underline = true;
+    if (kid(font, "u") && attr(kid(font, "u")!, "val") !== "none") look.underline = /^double/.test(attr(kid(font, "u")!, "val") ?? "") ? "double" : true;
+    const va = attr(kid(font, "vertAlign") ?? EMPTY, "val");
+    if (va === "superscript") look.script = "super"; else if (va === "subscript") look.script = "sub";
+    const name = attr(kid(font, "name") ?? EMPTY, "val");
+    if (name && name !== "Calibri") look.family = name;
     if (kid(font, "strike") && attr(kid(font, "strike")!, "val") !== "0") look.strike = true;
     const sz = Number(attr(kid(font, "sz") ?? EMPTY, "val") ?? 0);
     if (sz && sz !== 11) look.size = Math.round(sz * 4 / 3);
@@ -126,6 +130,12 @@ function lookOf(xf: El, fonts: El[], fills: El[], borders: El[]): Look | null {
     const h = attr(al, "horizontal");
     if (h === "left") look.align = "start"; else if (h === "center" || h === "centerContinuous") look.align = "center"; else if (h === "right") look.align = "end";
     if (attr(al, "wrapText") === "1" || attr(al, "wrapText") === "true") look.wrap = true;
+    const v = attr(al, "vertical");
+    if (v === "top") look.valign = "top"; else if (v === "center") look.valign = "middle"; else if (v === "bottom") look.valign = "bottom";
+    const ind = Number(attr(al, "indent") ?? 0);
+    if (ind > 0) look.indent = Math.min(15, Math.round(ind));
+    const tr = Number(attr(al, "textRotation") ?? 0);
+    if (tr > 0 && tr <= 90) look.rotation = tr; else if (tr > 90 && tr <= 180) look.rotation = 90 - tr;
   }
   return Object.keys(look).length ? (look as Look) : null;
 }

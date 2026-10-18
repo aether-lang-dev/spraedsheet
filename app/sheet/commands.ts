@@ -698,7 +698,9 @@ const themeSaid = (t: Theme): string => `accents ${["accent1", "accent2", "accen
 
 // A look as words: "bold, size 15, fill accent1, bottom border thick accent1".
 function describeLook(l: Look): string {
-  const parts = [l.bold ? "bold" : "", l.italic ? "italic" : "", l.underline ? "underline" : "", l.strike ? "strikethrough" : "", l.size ? `size ${l.size}` : "",
+  const parts = [l.bold ? "bold" : "", l.italic ? "italic" : "", l.underline === "double" ? "double underline" : l.underline ? "underline" : "", l.strike ? "strikethrough" : "", l.size ? `size ${l.size}` : "",
+    l.family ? `font ${l.family}` : "", l.script ? `${l.script}script` : "", l.valign ? `${l.valign} of the cell` : "",
+    l.indent ? `indent ${l.indent}` : "", l.rotation ? `turned ${l.rotation}°` : "",
     l.fill ? `fill ${l.fill}` : "", l.color ? `text ${l.color}` : "", l.number ? `number ${l.number}` : "",
     ...Object.entries(l.borders ?? {}).map(([side, line]) => `${side} border ${line}`)].filter((x) => x);
   return parts.length ? parts.join(", ") : "as Normal";
@@ -2108,13 +2110,26 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "format.font", label: "Font", params: ["range"], optional: ["bold", "italic", "underline", "strike", "size"], journaled: true,
+    id: "format.font", label: "Font", params: ["range"], optional: ["bold", "italic", "underline", "strike", "size", "family", "script"], journaled: true,
     run: async (wb, p) => {
       const r = rangeOf(p.range);
       const size = p.size === undefined ? undefined : Number(p.size) > 0 ? Number(p.size) : refuse(`${p.size} is not a size`);
+      // underline=double, Excel's double underline; family= a font's name
+      // ("" takes it off); script=super|sub|none.
+      const dbl = p.underline !== undefined && /^double$/i.test(p.underline.trim());
+      const script = p.script === undefined ? undefined : p.script.trim().toLowerCase();
+      if (script !== undefined && !["super", "sub", "none", ""].includes(script)) refuse(`${p.script} is not a script (super, sub or none)`);
+      const family = p.family === undefined ? undefined : p.family.trim();
+      if (family !== undefined && !/^[\w .,'-]*$/.test(family)) refuse(`${p.family} is not a font's name`);
       const parts = (["bold", "italic", "underline", "strike"] as const).filter((k) => p[k] !== undefined);
-      const keys = relook(wb, r, (look) => ({ ...look, ...Object.fromEntries(parts.map((k) => [k, flag(p[k])])), ...(size ? { size } : {}) }));
-      const said = [...parts.map((k) => (flag(p[k]) ? k : `not ${k}`)), ...(size ? [`size ${size}`] : [])].join(", ");
+      const keys = relook(wb, r, (look) => ({
+        ...look, ...Object.fromEntries(parts.map((k) => [k, k === "underline" && dbl ? "double" : flag(p[k])])), ...(size ? { size } : {}),
+        ...(family !== undefined ? { family: family || undefined } : {}),
+        ...(script !== undefined ? { script: script === "super" || script === "sub" ? script : undefined } : {}),
+      }));
+      const said = [...parts.map((k) => (k === "underline" && dbl ? "double underline" : flag(p[k]) ? k : `not ${k}`)), ...(size ? [`size ${size}`] : []),
+        ...(family !== undefined ? [family ? `font ${family}` : "the theme's font"] : []),
+        ...(script !== undefined ? [script === "super" ? "superscript" : script === "sub" ? "subscript" : "no script"] : [])].join(", ");
       return changedBy(wb, keys, `${rangeName(r)}: ${said || "no change"}`);
     },
   },
@@ -2170,12 +2185,30 @@ const SPECS: readonly Spec[] = [
   {
     // Align Left, Center and Right, as the toolbar's; general: by the value
     // (numbers to the right), as Excel's default.
-    id: "format.align", label: "Alignment", params: ["range", "align"], journaled: true,
+    id: "format.align", label: "Alignment", params: ["range"], optional: ["align", "vertical", "indent", "rotation"], journaled: true,
     run: async (wb, p) => {
       const r = rangeOf(p.range);
       const align = ({ left: "start", center: "center", centre: "center", right: "end", general: undefined } as Record<string, "start" | "center" | "end" | undefined>);
-      if (!(p.align.toLowerCase() in align)) refuse(`${p.align} is not an alignment (left, center, right, general)`);
-      return changedBy(wb, relook(wb, r, (look) => ({ ...look, align: align[p.align.toLowerCase()] })), `${rangeName(r)}: aligned ${p.align.toLowerCase()}`);
+      if (p.align !== undefined && !(p.align.toLowerCase() in align)) refuse(`${p.align} is not an alignment (left, center, right, general)`);
+      // vertical=top|middle|bottom|general, indent= levels (0 to 15),
+      // rotation= degrees counter-clockwise (-90 to 90; 0 takes it off).
+      const vertical = p.vertical === undefined ? undefined : p.vertical.trim().toLowerCase();
+      if (vertical !== undefined && !["top", "middle", "center", "bottom", "general"].includes(vertical)) refuse(`${p.vertical} is not a vertical alignment (top, middle, bottom, general)`);
+      const indent = p.indent === undefined ? undefined : Number(p.indent);
+      if (indent !== undefined && (!Number.isInteger(indent) || indent < 0 || indent > 15)) refuse(`${p.indent} is not an indent (0 to 15)`);
+      const rotation = p.rotation === undefined ? undefined : Number(p.rotation);
+      if (rotation !== undefined && (!Number.isFinite(rotation) || rotation < -90 || rotation > 90)) refuse(`${p.rotation} is not a rotation (-90 to 90 degrees)`);
+      if (p.align === undefined && vertical === undefined && indent === undefined && rotation === undefined) refuse("format.align needs align=, vertical=, indent= or rotation=");
+      const keys = relook(wb, r, (look) => ({
+        ...look,
+        ...(p.align !== undefined ? { align: align[p.align.toLowerCase()] } : {}),
+        ...(vertical !== undefined ? { valign: vertical === "general" ? undefined : vertical === "center" ? "middle" : (vertical as "top" | "middle" | "bottom") } : {}),
+        ...(indent !== undefined ? { indent: indent || undefined } : {}),
+        ...(rotation !== undefined ? { rotation: rotation || undefined } : {}),
+      }));
+      const said = [p.align !== undefined ? `aligned ${p.align.toLowerCase()}` : "", vertical !== undefined ? `vertically ${vertical}` : "",
+        indent !== undefined ? `indent ${indent}` : "", rotation !== undefined ? `turned ${rotation}°` : ""].filter((x) => x).join(", ");
+      return changedBy(wb, keys, `${rangeName(r)}: ${said}`);
     },
   },
   {

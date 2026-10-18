@@ -369,6 +369,31 @@ focus_() -> int {
     return h
 }
 
+// Where the ink of the cell col+row falls in a snapshot: "top bottom left
+// right rows" in points relative to its box (ink.py), or "col+row none".
+ink_at(name: string, col: string, row: int) -> string {
+    id = g.cell_id(col, row)
+    if id == 0 { return "" }
+    _s = snapshot(name)
+    bn = uidriver.widget_id_by_text("Under Remote Control")
+    banner = "${uidriver.widget_int_field_by_id(bn, "x")}:${uidriver.widget_int_field_by_id(bn, "y")}:${uidriver.widget_int_field_by_id(bn, "w")}:${uidriver.widget_int_field_by_id(1, "w")}"
+    box = "c:${uidriver.widget_int_field_by_id(id, "x")}:${uidriver.widget_int_field_by_id(id, "y")}:${uidriver.widget_int_field_by_id(id, "w")}:${uidriver.widget_int_field_by_id(id, "h")}"
+    out, _e = os.exec("python3 ink.py target/sheet-snapshots/${name}.png ${banner} ${box}")
+    return string.trim(out)
+}
+
+// The n-th number of an ink measure (0 top, 1 bottom, 2 left, 3 right, 4 rows).
+ink_num(m: string, n: int) -> float {
+    parts = string.string_split(m, " ")
+    v = 0.0
+    if string.string_array_size(parts) > n + 1 {
+        f, _e = string.to_float(string.string_array_get(parts, n + 1))
+        v = f
+    }
+    string.string_array_free(parts)
+    return v
+}
+
 // How much of the cursor's outline is round the cell col+row in a snapshot.
 outline_at(name: string, col: string, row: int) -> int {
     id = g.cell_id(col, row)
@@ -606,6 +631,87 @@ main() {
             spec.assert_str_eq(namebox_(), "C6", "the cursor at C6")
             spec.assert_gt(outline_at("keys-after-escape", "C", 6), 4, "its outline round C6")
             _i = id
+        }
+        spec.it("fonts and alignment from the Looks panel: double underline, super- and subscript, a font family, the place in the cell, indent and angle, read back from the cell and measured in a snapshot") callback {
+            g.command("sheet.add name=Faces")
+            g.command("view.panel name=looks")
+            g.enter("D3", "Hi")
+            g.enter("D5", "Hi")
+            g.pick("D", 3)
+            plain = ink_at("faces-plain", "D", 3)
+            g.pick("D", 3)
+            b.click("Underline")
+            spec.assert_true(b.wait_for_console("sheet: D3: underline"), "underline")
+            g.pick("D", 5)
+            single = ink_at("faces-single", "D", 3)
+            g.pick("D", 3)
+            b.click("Double underline")
+            spec.assert_true(b.wait_for_console("sheet: D3: double underline"), "double underline")
+            spec.assert_eq(g.cell_has("D", 3, "\"typography\":\"u2 s0 v0 i0 r0\""), 1, "the cell reports it")
+            g.pick("D", 5)
+            dbl = ink_at("faces-double", "D", 3)
+            spec.assert_true(ink_num(dbl, 4) > ink_num(single, 4) || ink_num(dbl, 1) > ink_num(single, 1) + 0.4, "more ink below than a single underline's (${dbl}; single: ${single}; plain: ${plain})")
+            spec.assert_true(ink_num(single, 1) > ink_num(plain, 1) + 0.9, "a single underline's below plain's")
+            g.pick("D", 3)
+            b.click("Double underline")
+            spec.assert_true(b.wait_for_console("sheet: D3: not underline"), "and off")
+            spec.assert_eq(g.cell_has("D", 3, "typography"), 0, "typography taken off")
+            b.click("Superscript")
+            spec.assert_true(b.wait_for_console("sheet: D3: superscript"), "superscript")
+            spec.assert_eq(g.cell_has("D", 3, "\"typography\":\"u0 s1 v0 i0 r0\""), 1, "reported s1")
+            b.click("Subscript")
+            spec.assert_true(b.wait_for_console("sheet: D3: subscript"), "subscript")
+            spec.assert_eq(g.cell_has("D", 3, "\"typography\":\"u0 s2 v0 i0 r0\""), 1, "reported s2")
+            g.pick("D", 5)
+            sub = ink_at("faces-sub", "D", 3)
+            spec.assert_true(ink_num(sub, 1) - ink_num(sub, 0) < ink_num(plain, 1) - ink_num(plain, 0), "smaller than plain (${sub} vs ${plain})")
+            g.pick("D", 3)
+            b.click("Subscript")
+            spec.assert_true(b.wait_for_console("sheet: D3: no script"), "taken off")
+            b.set_field_by("font family", "monospace")
+            b.click("Font family")
+            spec.assert_true(b.wait_for_console("sheet: D3: font monospace"), "a family")
+            spec.assert_eq(g.cell_has("D", 3, "\"fontFamily\":\"monospace\""), 1, "reported on the cell")
+            b.set_field_by("font family", "")
+            b.click("Font family")
+            spec.assert_true(b.wait_for_console("sheet: D3: the theme's font"), "and the theme's again")
+            spec.assert_eq(g.cell_has("D", 3, "fontFamily"), 0, "none reported")
+            b.click("Align bottom")
+            spec.assert_true(b.wait_for_console("sheet: D3: vertically bottom"), "bottom")
+            spec.assert_eq(g.cell_has("D", 3, "\"typography\":\"u0 s0 v3 i0 r0\""), 1, "reported v3")
+            g.pick("D", 5)
+            low = ink_at("faces-bottom", "D", 3)
+            spec.assert_true(ink_num(low, 1) > ink_num(plain, 1) - 0.5, "the ink no higher than plain's (${low} vs ${plain})")
+            g.pick("D", 3)
+            b.click("Align top")
+            spec.assert_true(b.wait_for_console("sheet: D3: vertically top"), "top")
+            g.pick("D", 5)
+            top = ink_at("faces-top", "D", 3)
+            spec.assert_true(ink_num(top, 0) < ink_num(low, 0), "top above bottom (${top} vs ${low})")
+            g.pick("D", 3)
+            b.click("Increase indent")
+            b.click("Increase indent")
+            spec.assert_true(b.wait_for_console("sheet: D3: indent 2"), "indent 2")
+            spec.assert_eq(g.cell_has("D", 3, "i20"), 1, "reported i20")
+            g.pick("D", 5)
+            ind = ink_at("faces-indent", "D", 3)
+            spec.assert_true(ink_num(ind, 2) > ink_num(plain, 2) + 15.0, "the ink 20 to the right (${ind} vs ${plain})")
+            g.pick("D", 3)
+            b.click("Decrease indent")
+            spec.assert_true(b.wait_for_console("sheet: D3: indent 1"), "indent 1")
+            b.click("Rotate text up")
+            spec.assert_true(b.wait_for_console("sheet: D3: turned 90"), "rotated")
+            spec.assert_eq(g.cell_has("D", 3, "r90"), 1, "reported r90")
+            g.pick("D", 5)
+            rot = ink_at("faces-rotated", "D", 3)
+            spec.assert_true(ink_num(rot, 1) - ink_num(rot, 0) > ink_num(rot, 3) - ink_num(rot, 2), "taller than wide (${rot})")
+            g.pick("D", 3)
+            b.click("Horizontal text")
+            spec.assert_true(b.wait_for_console("sheet: D3: turned 0"), "horizontal again")
+            g.command("range.clearFormats range=D3")
+            spec.assert_eq(g.cell_has("D", 3, "typography"), 0, "cleared: none")
+            g.command("view.panel name=none")
+            g.command("sheet.activate name=Sheet1")
         }
         spec.it("the grid's horizontal scrollbar: its thumb the share of columns shown, a step, a drag and back") callback {
             hs = h_scrollbar()

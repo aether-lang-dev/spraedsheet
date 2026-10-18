@@ -60,9 +60,11 @@ export const MENUS: readonly Menu[] = [
     i("Name the selection", "names.define"), i("Name the formula", "names.define"), i("Delete name", "names.delete"),
   ] },
   { label: "Format", items: [
-    i("Bold", "format.font", "Ctrl+B"), i("Italic", "format.font", "Ctrl+I"), i("Underline", "format.font", "Ctrl+U"), i("Strikethrough", "format.font"), "-",
+    i("Bold", "format.font", "Ctrl+B"), i("Italic", "format.font", "Ctrl+I"), i("Underline", "format.font", "Ctrl+U"), i("Strikethrough", "format.font"), i("Double underline", "format.font"), i("Superscript", "format.font"), i("Subscript", "format.font"), i("Font family", "format.font"), "-",
     i("Outline borders", "format.border"), i("All borders", "format.border"), i("Inside borders", "format.border"), i("Bottom border", "format.border"), i("Thick outline", "format.border"), i("No borders", "format.border"), "-",
     i("Align left", "format.align"), i("Align center", "format.align"), i("Align right", "format.align"),
+    i("Align top", "format.align"), i("Align middle", "format.align"), i("Align bottom", "format.align"), i("Increase indent", "format.align"), i("Decrease indent", "format.align"),
+    i("Angle counterclockwise", "format.align"), i("Angle clockwise", "format.align"), i("Rotate text up", "format.align"), i("Rotate text down", "format.align"), i("Horizontal text", "format.align"),
     i("Comma style", "format.number"), i("Currency style", "format.number"), i("Percent style", "format.number"),
     i("Fill yellow", "format.fill"), i("Text red", "format.color"), "-",
     i("Style Normal", "style.apply"), i("Style Good", "style.apply"), i("Style Bad", "style.apply"), i("Style Neutral", "style.apply"), i("Style Title", "style.apply"), i("Style Heading 1", "style.apply"), i("Style Total", "style.apply"), i("Style Input", "style.apply"), i("Style Note", "style.apply"), "-",

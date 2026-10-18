@@ -134,7 +134,15 @@ export function formatStyle(v: Value, format: string): string {
 export interface Look {
   readonly bold?: boolean;
   readonly italic?: boolean;
-  readonly underline?: boolean;
+  readonly underline?: boolean | "double";
+  // 4.2: the font's family; super- or subscript; the text's place in the
+  // cell's height; an indent (Excel's levels, 10 px each); a rotation
+  // (degrees, counter-clockwise, -90 to 90).
+  readonly family?: string;
+  readonly script?: "super" | "sub";
+  readonly valign?: "top" | "middle" | "bottom";
+  readonly indent?: number;
+  readonly rotation?: number;
   readonly strike?: boolean;
   readonly size?: number;
   readonly wrap?: boolean;
@@ -158,6 +166,9 @@ export function borderLine(kept: string): string {
   return `${LINE_WIDTH[style] ?? 1}px ${style === "dashed" || style === "dotted" || style === "double" ? style : "solid"} ${resolved(c)}`;
 }
 
+// One indent level, as Excel's (about a character's width).
+export const INDENT_PX = 10;
+
 export function lookStyle(look: Look | undefined): string {
   if (!look) return "";
   const lines = [look.underline ? "underline" : "", look.strike ? "line-through" : ""].filter((x) => x).join(" ");
@@ -165,6 +176,10 @@ export function lookStyle(look: Look | undefined): string {
   return [
     look.bold ? "font-weight: bold" : "", look.italic ? "font-style: italic" : "", lines ? `text-decoration: ${lines}` : "",
     look.size ? `font-size: ${look.size}px` : "", look.wrap ? "white-space: normal" : "", look.align ? `text-align: ${look.align}` : "",
+    look.underline === "double" ? "text-decoration-style: double" : "",
+    look.family ? `font-family: ${look.family}` : "", look.script ? `vertical-align: ${look.script}` : "",
+    look.valign ? `vertical-align: ${look.valign}` : "", look.indent ? `padding-left: ${look.indent * INDENT_PX}px` : "",
+    look.rotation ? `--rotate: ${look.rotation}deg` : "",
     look.fill ? `background: ${resolved(look.fill)}` : "", look.color ? `color: ${resolved(look.color)}` : "",
     ...(["top", "right", "bottom", "left"] as const).map((e) => (b[e] ? `border-${e}: ${borderLine(b[e]!)}` : "")),
   ].filter((p) => p).join("; ");
