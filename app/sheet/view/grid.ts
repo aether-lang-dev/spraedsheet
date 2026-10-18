@@ -245,6 +245,12 @@ export function sheetGrid(v: SheetView): void {
     }
     if (!ui.datagrid_has_focus(v.grid) || ui.datagrid_editor(v.grid) !== 0) return;
     if (!v.selection()) return;
+    // A key the menu bar's accelerator has is the menu's (it ran there).
+    if (v.menuKeys.size) {
+      const named = key.length === 1 ? key.toUpperCase() : key;
+      const combo = `${(mods & (CTRL | SUPER)) !== 0 ? "Ctrl+" : ""}${(mods & SHIFT) !== 0 ? "Shift+" : ""}${named}`;
+      if (v.menuKeys.has(combo)) return;
+    }
     const range = v.range();
     // F9 Calculate Now, Shift+F9 Calculate Sheet, as Excel's.
     if (key === "F9") {

@@ -86,6 +86,9 @@ export class SheetView {
   zoomLabel = 0;
   // The Extra controls' toggle (sheettabs.ts) and the rows it shows.
   extraToggle = 0;
+  // The keys the menu bar's accelerators have (menubar.ts), as the key
+  // table writes them ("Ctrl+S"): the grid's on_key leaves them to the menu.
+  readonly menuKeys = new Set<string>();
   #extras = 0;
   // The formula bar's row (formulabar.ts), shown or hidden by View.
   formulaRow = 0;

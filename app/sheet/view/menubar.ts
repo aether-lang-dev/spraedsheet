@@ -2,9 +2,10 @@
 // runs the action of the panel button it is named for, or a key's (Copy,
 // Paste), so it does just what the panel does, its panel opened first; View
 // opens and closes each panel; one with neither runs its
-// command on the selection. In a web page there is no menu bar (sae
+// command on the selection. An item's key is its accelerator, the
+// platform's own (menuAccel), but for the grid's own keys (GRID_KEYED). In a web page there is no menu bar (sae
 // refuses ui.menu there): the panels are the way in.
-import { MENUS, PANELS, panelItem, shownLabel } from "../menus.ts";
+import { MENUS, PANELS, menuAccel, panelItem, shownLabel } from "../menus.ts";
 import type { MenuItem } from "../menus.ts";
 import type { SheetView } from "./view.ts";
 
@@ -29,7 +30,13 @@ export function menuBar(v: SheetView): void {
           const run = runOf(e);
           if (!run) { left++; continue; }
           items++;
-          ui.menu_item(shownLabel(e), () => run());
+          // Its key, the platform's own accelerator (drawn in the menu, and
+          // the key runs it, once); the grid's own keys stay the grid's.
+          const accel = menuAccel(e);
+          if (accel && typeof (ui as any).menu_item_accel === "function") {
+            (ui as any).menu_item_accel(e.label, accel, () => run());
+            v.menuKeys.add(e.key!);
+          } else ui.menu_item(shownLabel(e), () => run());
         }
       });
     }

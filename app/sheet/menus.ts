@@ -131,3 +131,16 @@ export function menuLines(): string[] {
 
 // An item as the menu shows it: its label, then its shortcut.
 export const shownLabel = (e: MenuItem): string => (e.key ? `${e.label} (${e.key})` : e.label);
+
+// The items whose key is the grid's own, as it means something different in
+// a text field (cut, copy and paste a field's text, undo its typing, delete
+// a character): the grid's on_key keeps them, with the grid focused, and
+// the item shows its key in its label. Every other item's key is its menu
+// accelerator (menuAccel).
+export const GRID_KEYED = new Set(["Undo", "Redo", "Cut", "Copy", "Paste", "Clear contents"]);
+
+// An item's key as a menu accelerator: the Control of the key table is
+// each platform's Primary (Command on macOS, Ctrl elsewhere), or null for an
+// item whose key the grid keeps.
+export const menuAccel = (e: MenuItem): string | null =>
+  !e.key || GRID_KEYED.has(e.label) ? null : e.key.replace(/^Ctrl\+/, "Primary+");
