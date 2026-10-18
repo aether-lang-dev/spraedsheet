@@ -268,7 +268,7 @@ scrolled() -> string {
     n = 0
     while i < json.json_array_size(v) && n < 2 {
         w = json.json_array_get_raw(v, i)
-        if string.equals(uidriver.field_str(w, "type"), "slider") == 1 {
+        if string.equals(uidriver.field_str(w, "type"), "scrollbar") == 1 {
             out = "${out}${uidriver.get_body("/widget/${uidriver.field_int(w, "id")}")};"
             n = n + 1
         }
@@ -276,6 +276,32 @@ scrolled() -> string {
     }
     json.json_free(v)
     return out
+}
+
+// The grid's horizontal scrollbar: the scrollbar wider than it is tall.
+h_scrollbar() -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 }
+    id = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(w, "type"), "scrollbar") == 1 && uidriver.field_int(w, "w") > uidriver.field_int(w, "h") { id = uidriver.field_int(w, "id") }
+        i = i + 1
+    }
+    json.json_free(v)
+    return id
+}
+
+// Wait for the header of column `col` to be shown.
+wait_header(col: string) -> int {
+    t = 0
+    while t < 40 {
+        if g.header_id(col) > 0 { return 1 }
+        sleep(100)
+        t = t + 1
+    }
+    return 0
 }
 
 // A cell clicked and a key typed, as a person does (no Name Box), with what
@@ -336,6 +362,37 @@ main() {
             click_and_type("A", 1, "1")
             click_and_type("D", 10, "4")
             g.command("range.clear range=A1,D10")
+        }
+        spec.it("the grid's horizontal scrollbar: its thumb the share of columns shown, a step, a drag and back") callback {
+            hs = h_scrollbar()
+            spec.assert_gt(hs, 0, "a horizontal scrollbar under the grid")
+            b0 = uidriver.get_body("/widget/${hs}")
+            spec.assert_contains(b0, "\"type\":\"scrollbar\"", "a native scrollbar, not a slider")
+            spec.assert_contains(b0, "\"page\":10.00", "a window of the 10 columns shown")
+            spec.assert_contains(b0, "\"max\":16384.00", "onto the sheet's 16,384 (A to XFD)")
+            spec.assert_contains(b0, "\"value\":0.00", "at column A")
+            d0 = snapshot("hscroll-1-at-A")
+            uidriver.post_ok("/widget/${hs}/scroll?by=step", "an arrow's step")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${hs}", "\"value\":1.00", 20) == 1, "one column on")
+            spec.assert_true(wait_header("K") == 1, "column K comes into view")
+            spec.assert_eq(g.header_id("A"), 0, "and A goes out of it")
+            d1 = snapshot("hscroll-2-a-step")
+            // A drag on the thumb: the room it moves in is the track less
+            // the thumb (10 of 16,384 of it), so a few pixels are many
+            // columns.
+            uidriver.post_ok("/widget/${hs}/drag?x=2&y=2&dx=40&dy=0", "drag the thumb right")
+            moved = uidriver.widget_int_field_by_id(hs, "value")
+            spec.assert_gt(moved, 20, "the drag scrolled across (${moved})")
+            spec.assert_eq(g.header_id("B"), 0, "B is out of view")
+            d2 = snapshot("hscroll-3-dragged")
+            uidriver.post_ok("/widget/${hs}/drag?x=2&y=2&dx=-4000&dy=0", "drag the thumb back")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${hs}", "\"value\":0.00", 20) == 1, "back at A")
+            spec.assert_true(wait_header("A") == 1, "column A shown again")
+            spec.assert_gt(g.cell_id("A", 1), 0, "and A1")
+            d3 = snapshot("hscroll-4-back")
+            spec.assert_str_eq(d1, d0, "the window keeps its size (${d1})")
+            spec.assert_str_eq(d2, d0, "the window keeps its size (${d2})")
+            spec.assert_str_eq(d3, d0, "the window keeps its size (${d3})")
         }
         spec.it("formulas read the cells they name") callback {
             g.enter("A1", "2")
