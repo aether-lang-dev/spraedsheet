@@ -19,6 +19,7 @@ const ROW_HEIGHT = 24;
 import type { ChartView, DrawingView, SlicerView, Watch } from "../workbook.ts";
 import { Workbooks } from "../books.ts";
 import { statsLine } from "../workbook.ts";
+import { sliderToZoom, zoomToSlider } from "./zoom.ts";
 import type { CellEditor } from "../editors.ts";
 
 export class SheetView {
@@ -80,6 +81,9 @@ export class SheetView {
   readonly slicers = state<SlicerView[]>([]);
   readonly drawings = state<DrawingView[]>([]);
   grid = 0;
+  // The status bar's zoom slider and its percentage (lists.ts statusBar).
+  zoomSlider = 0;
+  zoomLabel = 0;
   // The formula bar's row (formulabar.ts), shown or hidden by View.
   formulaRow = 0;
   // Page Break Preview's page edges (commands.ts's pageEdges), or null.
@@ -245,6 +249,8 @@ export class SheetView {
     const cells = this.wb.sheet.keys().length;
     const words = (s: string) => (this.wb.locale === "en" ? s : s.replace(/\b(Ready|Average|Numerical Count|Count|Min|Max|Sum)\b/g, (w) => t(this.wb.locale, w)));
     const bar = [words(many ? statsLine(this.wb.stats([...others, sel!])) : "Ready"), `${cells} cell${cells === 1 ? "" : "s"}`, `Zoom ${this.wb.zoom}%`, this.wb.calculation.manual && this.wb.stale().length ? "Calculate" : "", this.bus ? "Control bus" : ""];
+    if (this.zoomSlider && sliderToZoom(ui.get_slider(this.zoomSlider)) !== this.wb.zoom) ui.set_slider(this.zoomSlider, zoomToSlider(this.wb.zoom));
+    if (this.zoomLabel) ui.set_text(this.zoomLabel, `${this.wb.zoom}%`);
     batch(() => {
       this.figures.set(bar.filter((x) => x).join("  ·  "));
       this.input.set(this.wb.shownInput(key));

@@ -293,6 +293,21 @@ h_scrollbar() -> int {
     return id
 }
 
+// The status bar's zoom slider: the slider named "Zoom".
+zoom_slider() -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 }
+    id = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(w, "type"), "slider") == 1 && string.equals(uidriver.field_str(w, "a11y_name"), "Zoom") == 1 { id = uidriver.field_int(w, "id") }
+        i = i + 1
+    }
+    json.json_free(v)
+    return id
+}
+
 // Wait for the header of column `col` to be shown.
 wait_header(col: string) -> int {
     t = 0
@@ -393,6 +408,30 @@ main() {
             spec.assert_str_eq(d1, d0, "the window keeps its size (${d1})")
             spec.assert_str_eq(d2, d0, "the window keeps its size (${d2})")
             spec.assert_str_eq(d3, d0, "the window keeps its size (${d3})")
+        }
+        spec.it("the status bar's zoom slider: it zooms, and a zoom from anywhere moves it") callback {
+            zs = zoom_slider()
+            spec.assert_gt(zs, 0, "a slider named Zoom in the status bar")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${zs}", "\"value\":50.00", 20) == 1, "at its middle, 100%")
+            spec.assert_true(b.wait_for_text("100%"), "the percentage beside it")
+            d0 = snapshot("zoom-1-100")
+            uidriver.post_ok("/widget/${zs}/set_value?v=75", "slide to three quarters")
+            spec.assert_true(b.wait_for_text("250%"), "250%: the right half runs 100% to 400%")
+            spec.assert_true(uidriver.wait_body_contains("/widgets", "Zoom 250%", 20) == 1, "the sheet zoomed")
+            d1 = snapshot("zoom-2-250")
+            b.click("−")
+            spec.assert_true(b.wait_for_text("200%"), "the − button zooms out a step")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${zs}", "\"value\":66.67", 20) == 1, "and the slider follows")
+            g.command("view.zoom percent=55")
+            spec.assert_true(b.wait_for_text("55%"), "a zoom from the command bar")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${zs}", "\"value\":25.00", 20) == 1, "moves the slider to a quarter")
+            d2 = snapshot("zoom-3-55")
+            b.click("+")
+            spec.assert_true(b.wait_for_text("75%"), "the + button zooms in a step")
+            uidriver.post_ok("/widget/${zs}/set_value?v=50", "back to the middle")
+            spec.assert_true(uidriver.wait_body_contains("/widgets", "Zoom 100%", 20) == 1, "100% again")
+            spec.assert_str_eq(d1, d0, "the window keeps its size (${d1})")
+            spec.assert_str_eq(d2, d0, "the window keeps its size (${d2})")
         }
         spec.it("formulas read the cells they name") callback {
             g.enter("A1", "2")
