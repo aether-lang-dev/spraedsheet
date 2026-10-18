@@ -39,7 +39,7 @@ eq("each toolbar button runs an action a menu item runs too", TOOLS.filter(([, ,
 eq("each has its tooltip", TOOLS.filter(([, tip]) => !tip).length, 0);
 eq("each tool has its icon, and every icon a tool (3.0.6)", [TOOLS.filter(([l]) => !ICONS[l]).map(([l]) => l), Object.keys(ICONS).filter((k) => !TOOLS.some(([l]) => l === k))], [[], []]);
 eq("an icon is strokes, a fill or a letter, and its paths are path data", Object.entries(ICONS).filter(([, i]) => !(i.strokes || i.fills || i.text) || [i.strokes, i.fills].some((d) => d !== undefined && !/^M[\d\s.MLHVCSQTAZmlhvcsqtaz-]+$/.test(d))).map(([k]) => k), []);
-eq("the groups start at tools there are, in order", GROUPS.map((g) => TOOLS.findIndex(([l]) => l === g)), [0, 2, 5, 8, 11, 14, 15, 17, 19]);
+eq("the groups start at tools there are, in order", GROUPS.map((g) => TOOLS.findIndex(([l]) => l === g)), [0, 2, 5, 12, 21, 24, 25, 27, 29]);
 
 // expect: ok Alignment over a range, and general again
 // expect: ok Fill Color and Font Color, by name or #rrggbb; none takes it off

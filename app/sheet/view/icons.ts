@@ -7,7 +7,8 @@ export interface Icon {
   readonly strokes?: string;       // path data, stroked
   readonly fills?: string;         // path data, filled
   readonly text?: string;          // a letter or sign, centred
-  readonly weight?: "bold" | "italic" | "underline";
+  readonly weight?: "bold" | "italic" | "underline" | "double";
+  readonly size?: number;          // a text's size, where not the default
   readonly bar?: string;           // a colour bar along the foot
 }
 
@@ -26,6 +27,17 @@ export const ICONS: Readonly<Record<string, Icon>> = {
   ",": { text: "000" },
   "$": { text: "$" },
   "%": { text: "%" },
+  // 4.2: fonts and alignment on the toolbar.
+  "Font": { text: "Aa", size: 12 },
+  "Double U": { text: "U", weight: "double" },
+  "Super": { strokes: "M3 11 L10 21 M10 11 L3 21 M14 8.5 C14 3 20 3 20 6 C20 8 14 9 14 10.5 H20" },
+  "Sub": { strokes: "M3 3 L10 13 M10 3 L3 13 M14 20.5 C14 15 20 15 20 18 C20 20 14 21 14 22.5 H20" },
+  "Top": { strokes: "M4 4 H20 M9 8 H15 V20 H9 Z" },
+  "Middle": { strokes: "M4 12 H20 M9 5 H15 V19 H9 Z" },
+  "Bottom": { strokes: "M4 20 H20 M9 4 H15 V16 H9 Z" },
+  "Indent+": { strokes: "M4 5 H20 M12 10 H20 M12 15 H20 M4 20 H20 M4 9 L8 12.5 L4 16" },
+  "Indent-": { strokes: "M4 5 H20 M12 10 H20 M12 15 H20 M4 20 H20 M8 9 L4 12.5 L8 16" },
+  "Angle": { strokes: "M4 20 L17 7 M10 7 H17 V14 M3 4 H9" },
   "Borders": { strokes: "M4 4 H20 V20 H4 Z M4 12 H20 M12 4 V20" },
   "Fill": { strokes: "M5 11 L11 5 L18 12 L12 18 Z M5 11 H18 M20 13 C21 15 21.5 16 21.5 17 A1.5 1.5 0 0 1 18.5 17 C18.5 16 19 15 20 13", bar: "#ffff00" },
   "Color": { strokes: "M6 17 L12 3 L18 17 M8.4 11.5 H15.6", bar: "#ff0000" },

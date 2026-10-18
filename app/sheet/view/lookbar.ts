@@ -17,7 +17,7 @@ export const toggleFont = (v: SheetView, part: FontPart) =>
   v.run("format.font", { range: v.range(), [part]: v.wb.notes.get(v.here()).look?.[part] ? "0" : "1" });
 
 // The font part set over the selection, or taken off when the selected cell has it.
-const fontPart = (v: SheetView, key: "underline" | "script", on: string) => {
+export const fontPart = (v: SheetView, key: "underline" | "script", on: string) => {
   const look = v.wb.notes.get(v.here()).look;
   const has = key === "underline" ? look?.underline === "double" : look?.script === on;
   return v.run("format.font", { range: v.range(), [key]: has ? (key === "underline" ? "0" : "none") : on });
