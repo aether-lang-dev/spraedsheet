@@ -19,7 +19,7 @@ const why = (src: string): string => {
 };
 
 eq("arithmetic", [ev("1+2*3"), ev("2^10"), ev("7/2"), ev("-A1"), ev("10-A2-A1")], ["7", "1024", "3.5", "-2", "5"]);
-eq("an empty cell is 0, or ''", [ev("AA1"), ev("C9+1"), ev(`C9&"x"`)], ["#REF!", "1", "x"]);
+eq("an empty cell is 0, or ''", [ev("XFE1"), ev("C9+1"), ev(`C9&"x"`)], ["#REF!", "1", "x"]);
 eq("numeric text and TRUE count as numbers", [ev("A3*2"), ev("A5+1")], ["8", "2"]);
 eq("& joins, numbers as they read", [ev(`A1&"-"&A4`), ev(`1/4&""`)], ["2-pears", "0.25"]);
 eq("comparisons give TRUE or FALSE", [ev("A1<A2"), ev("A1=2"), ev(`A4="PEARS"`), ev(`"a"<"b"`), ev("A1<>2")], ["TRUE", "TRUE", "TRUE", "TRUE", "FALSE"]);
@@ -37,7 +37,7 @@ eq("text where a number goes", why("A4*2"), "#VALUE! 'pears' is not a number");
 eq("an error flows through what reads it", [why("B1+1"), why("SUM(A1:B1)"), why("B1")], [
   "#DIV/0! divide by zero", "#DIV/0! divide by zero", "#DIV/0! divide by zero",
 ]);
-eq("off the sheet", [why("AA1"), why("SUM(A1:AA2)")], ["#REF! AA1 is not on the sheet", "#REF! AA2 is not on the sheet"]);
+eq("off the sheet", [why("XFE1"), why("SUM(A1:XFE2)")], ["#REF! XFE1 is not on the sheet", "#REF! XFE2 is not on the sheet"]);
 eq("an error written in a formula is that error", [why("#REF!+1"), ev("IFERROR(#N/A, 0)")], ["#REF! a reference moved off the sheet", "0"]);
 eq("no such function", why("NOPE(1)"), "#NAME? no function NOPE");
 eq("a range in arithmetic is worked out cell by cell (a dynamic array: sheet_arrays)", (() => {

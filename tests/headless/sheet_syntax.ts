@@ -1,16 +1,16 @@
 // app/sheet/address.ts, lexer.ts and parser.ts: addresses, tokens with
 // their positions, the AST for each form, precedence, and parse errors that
 // say where.
-import { addrOf, allKeys, keyOf, range } from "./sheet/address.ts";
+import { COLS, ROWS, addrOf, keyOf, range } from "./sheet/address.ts";
 import { FormulaError, tokens } from "./sheet/lexer.ts";
 import { parse } from "./sheet/parser.ts";
 import { eq, throws } from "./lib/check.ts";
 
 eq("addresses read either case, with spaces", [addrOf("b12"), addrOf(" Z100 ")], [{ col: 1, row: 11 }, { col: 25, row: 99 }]);
-eq("off the sheet is null", [addrOf("AA1"), addrOf("A101"), addrOf("A0"), addrOf("ZZZ1"), addrOf("1A")], [null, null, null, null, null]);
+eq("Excel's last cell, and off the sheet is null", [addrOf("XFD1048576"), addrOf("XFE1"), addrOf("A1048577"), addrOf("A0"), addrOf("1A")], [{ col: 16383, row: 1048575 }, null, null, null, null]);
 eq("keyOf writes them back", keyOf({ col: 2, row: 4 }), "C5");
 eq("a range is a rectangle, row by row, either corner first", [...range(addrOf("B2")!, addrOf("A1")!)], ["A1", "B1", "A2", "B2"]);
-eq("the sheet is 26 x 100", [...allKeys()].length, 2600);
+eq("the sheet is Excel's, 16,384 x 1,048,576", [COLS, ROWS], [16384, 1048576]);
 
 const toks = (src: string) => [...tokens(src)].map((t) => `${t.kind}@${t.at}:${t.text}`);
 eq("tokens and where they start (after the '=')", toks(`SUM(a1:B2) >= 1.5e2 & "x""y"`), [
@@ -67,10 +67,10 @@ throws("a stray ')'", () => parse("1)"), FormulaError, "unexpected ')'");
 const at = (src: string) => { try { parse(src); return 0; } catch (e) { return (e as FormulaError).at; } };
 eq("each error's position, counting the '='", [at("SUM(A1"), at("1+"), at("1 2"), at("(1+2"), at("1+*2")], [8, 4, 4, 6, 4]);
 // expect: ok addresses read either case, with spaces
-// expect: ok off the sheet is null
+// expect: ok Excel's last cell, and off the sheet is null
 // expect: ok keyOf writes them back
 // expect: ok a range is a rectangle, row by row, either corner first
-// expect: ok the sheet is 26 x 100
+// expect: ok the sheet is Excel's, 16,384 x 1,048,576
 // expect: ok tokens and where they start (after the '=')
 // expect: ok a string's doubled quote is one quote
 // expect: ok refs and names are upper-cased

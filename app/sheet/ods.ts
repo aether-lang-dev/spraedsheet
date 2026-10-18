@@ -47,6 +47,13 @@ export function readOds(bytes: Uint8Array, fileName = "Workbook"): { file: Recor
     collect(t);
     for (const r of rows) {
       const repeat = Math.min(Number(attr(r, "number-rows-repeated") ?? 1), ROWS + 1);
+      // A file's trailing rows are often one empty row repeated to the
+      // sheet's end (a million): with nothing in it, stepped over at once.
+      const cellsOf = kids(r).filter((x) => /table-cell$|covered-table-cell$/.test(x.name));
+      if (cellsOf.every((c) => !attr(c, "value-type") && !cellText(c) && Number(attr(c, "number-columns-spanned") ?? 1) <= 1 && Number(attr(c, "number-rows-spanned") ?? 1) <= 1)) {
+        row += repeat;
+        continue;
+      }
       for (let rr = 0; rr < repeat; rr++, row++) {
         let col = 0;
         for (const c of kids(r).filter((x) => /table-cell$|covered-table-cell$/.test(x.name))) {
@@ -62,8 +69,8 @@ export function readOds(bytes: Uint8Array, fileName = "Workbook"): { file: Recor
             else input = cellText(c);
             if (attr(c, "formula")) formulas++;
           }
-          for (let k = 0; k < rep; k++, col++) {
-            if (input === "") continue;
+          if (input === "") col += rep;
+          else for (let k = 0; k < rep; k++, col++) {
             if (row >= ROWS || col >= COLS) { off++; continue; }
             const key = keyOf({ col, row });
             const fmt = type === "percentage" ? "0%" : type === "date" ? (/T/.test(attr(c, "date-value") ?? "") ? "yyyy-mm-dd hh:mm" : "yyyy-mm-dd") : type === "time" ? "[h]:mm:ss" : "";

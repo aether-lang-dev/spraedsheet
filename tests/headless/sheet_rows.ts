@@ -25,8 +25,8 @@ eq("AutoFilter: a table's rows whose column fails the criterion hidden; its head
   ["filtered A1:B5 by B >100: 2 rows hidden", [1, 3]]);
 eq("a text criterion, any case", [await message("data.filter range=A1:B5 column=A criterion=north"), wb.hidden().rows], ["filtered A1:B5 by A north: 3 rows hidden", [2, 3, 4]]);
 eq("a filter's rows are its own: hiding by hand stays", [(await cmds.run("rows.hide range=A7")) && await message("data.clearFilter"), wb.hidden().rows], ["filter cleared: 3 rows shown", [6]]);
-eq("refusals", [await message("data.filter range=A1:B5 column=D criterion=1"), await message("data.clearFilter"), await message("rows.hide range=AA9")],
-  ["D is not a column of A1:B5", "no filter", "AA9 is not a range on the sheet"]);
+eq("refusals", [await message("data.filter range=A1:B5 column=D criterion=1"), await message("data.clearFilter"), await message("rows.hide range=XFE9")],
+  ["D is not a column of A1:B5", "no filter", "XFE9 is not a range on the sheet"]);
 
 eq("view.freezeRows", [await message("view.freezeRows count=1"), wb.frozenRows(), await message("view.freezeRows count=0"), wb.frozenRows()], ["froze 1 row", 1, "unfroze rows", 0]);
 await cmds.run("view.freezeRows count=2");

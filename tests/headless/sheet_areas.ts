@@ -17,7 +17,7 @@ eq("undone at once", ["A1", "B2", "D4", "D9"].map((k) => show(wb.sheet.value(k))
 eq("one line of the journal", cmds.journal().filter((l) => l.startsWith("range.clear")), ["range.clear range=A1:B2,D4:D9"]);
 await cmds.execute("format.font", { range: "A1,C3", bold: "1" });
 eq("a look over areas", [wb.notes.get("A1").look, wb.notes.get("B2").look, wb.notes.get("C3").look], [{ bold: true }, undefined, { bold: true }]);
-eq("an area that is none: nothing done", [(await cmds.execute("range.clear", { range: "A1,ZZ9" })).message, show(wb.sheet.value("A1"))], ["ZZ9 is not a range on the sheet", "1"]);
+eq("an area that is none: nothing done", [(await cmds.execute("range.clear", { range: "A1,XFE9" })).message, show(wb.sheet.value("A1"))], ["XFE9 is not a range on the sheet", "1"]);
 eq("the status bar's figures over them all, each cell once", (await cmds.execute("range.stats", { range: "A1:B2,B2:D4" })).message, "Average: 2.5  Count: 4  Numerical Count: 4  Min: 1  Max: 4  Sum: 10");
 eq("a command that works on one area refuses several, as Excel's do", (await cmds.execute("data.sortAscending", { range: "A1:A3,C1:C3", by: "A" })).message, "Sort A to Z cannot be used on several areas (A1:A3,C1:C3)");
 const said: string[] = [];

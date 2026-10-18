@@ -1,9 +1,21 @@
-// Cell addresses on a 26 x 100 sheet, as the Tauri app's: columns A to Z,
-// rows 1 to 100. A key is the address as written ("B12"); an Addr is where
-// it is (0-based). Columns past Z are AA, AB and on, as a spreadsheet's, so
-// the sheet grows by these two numbers alone.
-export const COLS = 26;
-export const ROWS = 100;
+// Cell addresses on Excel's sheet: columns A to XFD (16,384), rows 1 to
+// 1,048,576. A key is the address as written ("B12"); an Addr is where it is
+// (0-based). The sheet keeps only the cells that hold something, so this is
+// an address space, not what is stored.
+export const COLS = 16384;
+export const ROWS = 1048576;
+
+// A whole column or row ("B:B", "3:5") is taken as far as the sheet is used
+// (its last row or column that holds something, and at least the 100 rows
+// and 26 columns a sheet began with): a command over it, or a name of it,
+// goes no further, as nothing is there. The workbook says how far
+// (setExtent).
+let extent = (): { rows: number; cols: number } => ({ rows: 100, cols: 26 });
+export function setExtent(f: () => { rows: number; cols: number }): void { extent = f; }
+export const usedExtent = (): { rows: number; cols: number } => {
+  const e = extent();
+  return { rows: Math.min(ROWS, Math.max(100, e.rows)), cols: Math.min(COLS, Math.max(26, e.cols)) };
+};
 
 export type Key = `${Uppercase<string>}${number}`;
 
@@ -74,10 +86,10 @@ export function parseRange(s: string): [Addr, Addr] | null {
   if (whole) {
     if (/\d/.test(whole[1])) {
       const [r1, r2] = [Number(whole[1]) - 1, Number(whole[2]) - 1];
-      return r1 >= 0 && r2 >= 0 && r1 < ROWS && r2 < ROWS ? [{ col: 0, row: r1 }, { col: COLS - 1, row: r2 }] : null;
+      return r1 >= 0 && r2 >= 0 && r1 < ROWS && r2 < ROWS ? [{ col: 0, row: r1 }, { col: usedExtent().cols - 1, row: r2 }] : null;
     }
     const [c1, c2] = [addrOf(`${whole[1]}1`), addrOf(`${whole[2]}1`)];
-    return c1 && c2 ? [{ col: c1.col, row: 0 }, { col: c2.col, row: ROWS - 1 }] : null;
+    return c1 && c2 ? [{ col: c1.col, row: 0 }, { col: c2.col, row: usedExtent().rows - 1 }] : null;
   }
   const a = addrOf(from), b = addrOf(to);
   return a && b ? [a, b] : null;
@@ -93,4 +105,18 @@ export function* range(a: Addr, b: Addr): Generator<Key, void, undefined> {
   }
 }
 
-export const allKeys = (): Generator<Key, void, undefined> => range({ col: 0, row: 0 }, { col: COLS - 1, row: ROWS - 1 });
+// The keys of a rectangle that are among `have` (a sheet's cells): the
+// rectangle walked when it is small, else what is had looked through, so a
+// command over a whole column of a big sheet costs what the sheet holds.
+export function* within(a: Addr, b: Addr, have: Iterable<string>, size?: number): Generator<Key, void, undefined> {
+  const area = (Math.abs(a.col - b.col) + 1) * (Math.abs(a.row - b.row) + 1);
+  if (size !== undefined && area <= size * 4) { yield* range(a, b); return; }
+  const lo = { col: Math.min(a.col, b.col), row: Math.min(a.row, b.row) }, hi = { col: Math.max(a.col, b.col), row: Math.max(a.row, b.row) };
+  const found: Addr[] = [];
+  for (const k of have) {
+    const x = addrOf(k);
+    if (x && x.col >= lo.col && x.col <= hi.col && x.row >= lo.row && x.row <= hi.row) found.push(x);
+  }
+  found.sort((p, q) => order(p) - order(q));
+  for (const x of found) yield keyOf(x);
+}

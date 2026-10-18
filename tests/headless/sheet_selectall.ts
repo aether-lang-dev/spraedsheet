@@ -17,7 +17,7 @@ await cmds.run("edit.undo");
 eq("undone", show(wb.sheet.value("B50")), "2");
 eq("a row's sum", (await cmds.execute("range.stats", { range: "3:3" })).message, "Average: 3.5  Count: 2  Numerical Count: 2  Min: 3  Max: 4  Sum: 7");
 eq("selected, and read back", [(await cmds.execute("view.select", { range: "B:B" })).message, wb.selecting, (await cmds.execute("view.select", { range: "all" })).output, (await cmds.execute("view.selection")).output],
-  ["selected B1:B100", true, "A1:Z100", "A1:Z100"]);
+  ["selected B1:B100", true, "A1:XFD1048576", "A1:XFD1048576"]);
 const said: string[] = [];
 eq("SELECTRANGE and GETSELECTION from REXX", [(await cmds.script('SAY SELECTRANGE("3:5")\nSAY GETSELECTION()\nCALL CLEARCELL "C:C"\nSAY GETCELL("C3") "|"', (l) => said.push(l))).message, said], ["ran", ["A3:Z5", "A3:Z5", " |"]]);
 

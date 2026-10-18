@@ -15,7 +15,9 @@ eq("by a percentage, or a step in or out", [await z({ percent: "150" }), await z
 eq("refused", [await z({ percent: "5" }), await z({})], ["5 is not a zoom (10 to 400)", "view.zoom needs percent= or by=in|out"]);
 eq("at 100% only the columns set", wb.shownColWidths(80), [[1, 100]]);
 await z({ percent: "50" });
-eq("at 50%: every column and row scaled, from its own or the grid's", [wb.shownColWidths(80).slice(0, 3), wb.shownRowHeights(24)[0], wb.colWidths()], [[[0, 40], [1, 50], [2, 40]], [0, 12], [[1, 100]]]);
+// The grid's own size the view scales itself (a sheet has too many rows
+// and columns to list): only those set are listed, scaled.
+eq("at 50%: the columns and rows set scaled", [wb.shownColWidths(80), wb.shownRowHeights(24), wb.colWidths()], [[[1, 50]], [], [[1, 100]]]);
 eq("and the font", wb.styleOf("A1"), "font-size: 7px");
 eq("a view: not a step to undo", wb.undoLabel, "Set a cell");
 const said: string[] = [];
@@ -24,7 +26,7 @@ eq("SETZOOM and GETZOOM from REXX", [(await cmds.script('SAY SETZOOM(75)\nSAY SE
 // expect: ok by a percentage, or a step in or out
 // expect: ok refused
 // expect: ok at 100% only the columns set
-// expect: ok at 50%: every column and row scaled, from its own or the grid's
+// expect: ok at 50%: the columns and rows set scaled
 // expect: ok and the font
 // expect: ok a view: not a step to undo
 // expect: ok SETZOOM and GETZOOM from REXX

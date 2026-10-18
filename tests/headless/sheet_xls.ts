@@ -16,7 +16,7 @@ import { eq } from "./lib/check.ts";
 
 eq("the compound file's streams", [...compoundStreams(fromBase64(BOOK)).keys()], ["Workbook"]);
 eq("tokens as text", [formulaText(new Uint8Array([0x1e, 1, 0, 0x1e, 2, 0, 0x03, 0x15]), () => null, () => null), formulaText(new Uint8Array([0x24, 0, 0, 0, 0xc0, 0x14]), () => null, () => null)], ["(1+2)", "A1%"]);
-eq("the report", readXls(fromBase64(BOOK)).report, ["1 cell past Z100, the sheet's edge, left out", "1 formula kept as the value cached (an add-in or VBA function)"]);
+eq("the report", readXls(fromBase64(BOOK)).report, ["1 formula kept as the value cached (an add-in or VBA function)"]);
 const wb = new Workbook();
 const cmds = new Commands(wb);
 const o = await cmds.run(`file.importXls name=Old.xls base64=${BOOK}`);

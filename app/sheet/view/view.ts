@@ -187,7 +187,12 @@ export class SheetView {
 
   // Where a sheet column is on screen now (columns can be dragged).
   viewCol(modelCol: number): number {
-    for (let c = 0; c <= COLS; c++) if (ui.datagrid_col_model(this.grid, c) === modelCol) return c;
+    // Where it was made, unless a column was moved: then looked for, out
+    // from there (a move is a step or two, and the sheet has 16,384).
+    if (ui.datagrid_col_model(this.grid, modelCol) === modelCol) return modelCol;
+    for (let d = 1; d <= COLS; d++) {
+      for (const c of [modelCol - d, modelCol + d]) if (c >= 0 && c <= COLS && ui.datagrid_col_model(this.grid, c) === modelCol) return c;
+    }
     return modelCol;
   }
 
@@ -331,7 +336,8 @@ export class SheetView {
       this.history.set([u ? `Undo ${u}` : "", r ? `Redo ${r}` : ""].filter((x) => x).join(" · "));
       this.follow();
     });
-    if (this.wb.panel !== this.#shownPanel || this.wb.split !== this.#shownSplit) {
+    if (this.wb.panel !== this.#shownPanel || this.wb.split !== this.#shownSplit || (this.wb.zoom !== 100) !== this.#zoomedHeight) {
+      this.#zoomedHeight = this.wb.zoom !== 100;
       for (const [n, h] of this.#panels) ui.set_visible(h, n === this.wb.panel);
       if (this.paneBox && this.wb.split !== this.#shownSplit) {
         if (this.wb.split) buildPane(this);
@@ -342,7 +348,8 @@ export class SheetView {
       }
       // The grid takes the height back when no panel is open (and gives
       // the split pane room when split).
-      const rows = this.wb.split ? ROWS_WHEN_SPLIT : this.wb.panel ? ROWS_WITH_PANEL : 0;
+      // Zoomed, the grid keeps the height it had (its rows taller, fewer).
+      const rows = this.wb.split ? ROWS_WHEN_SPLIT : this.wb.panel ? ROWS_WITH_PANEL : this.wb.zoom !== 100 ? 36 : 0;
       if (this.grid) {
         const was = ui.datagrid_height(this.grid);
         ui.datagrid_set_height(this.grid, rows * ROW_PX);
@@ -397,9 +404,22 @@ export class SheetView {
   }
 
   // Columns set to a width that width; columns no longer set the grid's.
+  #shownZoom = 100;
+  #zoomedHeight = false;
   #sizeCols(): void {
+    // A zoom: the grid's own column width and row height scaled (every
+    // column and row of 16,384 and 1,048,576 at once), its row numbers
+    // kept narrow, its height kept; then those set, scaled.
+    if (this.wb.zoom !== this.#shownZoom) {
+      const z = this.wb.zoom / 100;
+      ui.datagrid_set_col_widths(this.grid, Math.round(COLUMN_WIDTH * z));
+      ui.datagrid_set_col_width(this.grid, 0, 34);
+      ui.datagrid_set_row_heights(this.grid, Math.round(ROW_HEIGHT * z));
+      this.#shownZoom = this.wb.zoom;
+      this.#sized = new Map();
+    }
     const set = new Map(this.wb.shownColWidths(COLUMN_WIDTH));
-    for (const [c] of this.#sized) if (!set.has(c)) ui.datagrid_set_col_width(this.grid, this.viewCol(c + 1), COLUMN_WIDTH);
+    for (const [c] of this.#sized) if (!set.has(c)) ui.datagrid_set_col_width(this.grid, this.viewCol(c + 1), Math.round(COLUMN_WIDTH * this.wb.zoom / 100));
     for (const [c, w] of set) if (this.#sized.get(c) !== w) ui.datagrid_set_col_width(this.grid, this.viewCol(c + 1), w);
     this.#sized = set;
   }

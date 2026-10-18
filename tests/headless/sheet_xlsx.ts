@@ -28,13 +28,13 @@ const x = parseXml('<?xml version="1.0"?><!-- c --><r a="1" b=\'two &amp; three\
 eq("XML: attributes, prefixes, entities, CDATA", [x.name, attr(x, "b"), all(x, "c").map(textOf), textOf(x)], ["r", "two & three", ["t<1"], "t<1<raw>"]);
 
 const read = readXlsx(fromBase64(BASIC), "Shop.xlsx");
-eq("the report: what was left out", read.report, ["2 cells past Z100, the sheet's edge, left out", "Print_Area (a print setting) left out"]);
+eq("the report: what was left out", read.report, ["Print_Area (a print setting) left out"]);
 const wb = new Workbook();
 const cmds = new Commands(wb);
 const o = await cmds.run(`file.importXlsx name=Shop.xlsx base64=${BASIC}`);
 const v = (k: string) => show(wb.sheet.value(k));
 eq("opened: its sheets, the first active", [o.ok, o.message, wb.pages().map((p) => p.name), wb.page("Notes & more")!.hiddenSheet, wb.name],
-  [true, "opened Shop: 16 cells, Excel formulas; left out: 2 cells past Z100, the sheet's edge, left out; Print_Area (a print setting) left out", ["Sales", "Notes & more"], true, "Shop"]);
+  [true, "opened Shop: 18 cells, Excel formulas; left out: Print_Area (a print setting) left out", ["Sales", "Notes & more"], true, "Shop"]);
 eq("strings shared, rich and inline; booleans; text like a number kept text", [v("A1"), v("A2"), v("A3"), v("C1"), v("A4"), wb.sheet.input("D4"), v("D4")], ["Item", "pens", "ink & nib", "Total", "TRUE", "'007", "007"]);
 eq("formulas, a shared one moved, names", [wb.sheet.input("C2"), wb.sheet.input("C3"), v("C3"), wb.sheet.input("B4"), v("B4"), wb.names().map(([n]) => n).sort()],
   ["=B2*(1+$D$1)", "=B3*(1+$D$1)", "1.8", "=SUM(QTY)", "4.5", ["DOUBLE", "QTY"]]);
@@ -49,8 +49,8 @@ const o2 = await cmds.run(`file.importXlsx base64=${STORED}`);
 eq("stored entries, 1904 dates", [o2.message, wb.dateSystem, show(wb.sheet.value("A1"))], ["opened Workbook: 1 cells, Excel formulas", 1904, "1"]);
 eq("not an XLSX", (await cmds.run("file.importXlsx base64=aGVsbG8=")).message, "not a ZIP archive (an XLSX or ODS file is one)");
 const said: string[] = [];
-await cmds.script(`SAY OPENXLSX("${BASIC}", "Again.xlsx")\nr = FILEREPORT()\nSAY r.0 r.2`, (l) => said.push(l));
-eq("OPENXLSX and FILEREPORT from REXX", said, ["opened Again: 16 cells, Excel formulas; left out: 2 cells past Z100, the sheet's edge, left out; Print_Area (a print setting) left out", "2 Print_Area (a print setting) left out"]);
+await cmds.script(`SAY OPENXLSX("${BASIC}", "Again.xlsx")\nr = FILEREPORT()\nSAY r.0 r.1`, (l) => said.push(l));
+eq("OPENXLSX and FILEREPORT from REXX", said, ["opened Again: 18 cells, Excel formulas; left out: Print_Area (a print setting) left out", "1 Print_Area (a print setting) left out"]);
 
 // expect: ok CRC-32
 // expect: ok deflate then inflate gives it back, smaller

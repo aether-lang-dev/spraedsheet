@@ -8,7 +8,7 @@
 // script.ts), and the specs, headless and in the browser (the page's
 // command bar). The commands that change the workbook are journaled as
 // command lines, which replay.
-import { COLS, ROWS, cellAddr, colName, colOf, keyOf, order, parseRange, range, sheetPrefix, splitKey } from "./address.ts";
+import { cellAddr, colName, colOf, COLS, keyOf, order, parseRange, range, ROWS, setExtent, sheetPrefix, splitKey, usedExtent, within } from "./address.ts";
 import { evaluationSteps } from "./audit.ts";
 import type { Addr } from "./address.ts";
 import { copied, filled, pasted } from "./copy.ts";
@@ -73,7 +73,7 @@ import { infer, run as runFill } from "./flashfill.ts";
 const resolvedColour = (c: string | null): string | null => (c === null ? null : resolved(c));
 const NUMERIC_TEXT = /^\s*[-+]?(?:\d+\.?\d*|\.\d+)\s*$/;
 import { CellError } from "./values.ts";
-import { PROTECTED, STRUCTURE, allowsOf, needOf, opens, passwordHash, within } from "./protection.ts";
+import { PROTECTED, STRUCTURE, allowsOf, needOf, opens, passwordHash, within as inEditRange } from "./protection.ts";
 import type { Saved } from "./workbook.ts";
 import { MACRO_NAME, parameters, parseLine, toRexx } from "./recorder.ts";
 export { parseLine };
@@ -151,7 +151,21 @@ const cellOf = (s: string): string => {
   const r = parseRange(s);
   return r && keyOf(r[0]) === keyOf(r[1]) ? keyOf(r[0]) : refuse(`${s} is not a cell on the sheet`);
 };
-const rangeOf = (s: string): [Addr, Addr] => parseRange(s) ?? refuse(`${s} is not a range on the sheet`);
+// A range a command works over: as far as the sheet is used when it is big
+// (a whole column typed out, A1:A1048576), and refused past what the app
+// works over at once.
+export const MOST_CELLS = 5_000_000;
+const rangeOf = (s: string): [Addr, Addr] => {
+  const r = parseRange(s) ?? refuse(`${s} is not a range on the sheet`);
+  const area = (Math.abs(r[0].col - r[1].col) + 1) * (Math.abs(r[0].row - r[1].row) + 1);
+  if (area <= 100_000) return r;
+  const e = usedExtent(), lo = { col: Math.min(r[0].col, r[1].col), row: Math.min(r[0].row, r[1].row) }, hi = { col: Math.max(r[0].col, r[1].col), row: Math.max(r[0].row, r[1].row) };
+  const clipped: [Addr, Addr] = [lo, { col: Math.max(lo.col, Math.min(hi.col, e.cols - 1)), row: Math.max(lo.row, Math.min(hi.row, e.rows - 1)) }];
+  const left = (clipped[1].col - lo.col + 1) * (clipped[1].row - lo.row + 1);
+  const n = (x: number) => String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (left > MOST_CELLS) refuse(`${s} is ${n(left)} cells where the sheet is used: more than the ${n(MOST_CELLS)} this app works over at once`);
+  return clipped;
+};
 const named = ([a, b]: [Addr, Addr]) => `${keyOf(a)}:${keyOf(b)}`;
 const flag = (s: string | undefined) => /^(1|true|yes|on)$/i.test(s ?? "");
 const topLeft = ([a, b]: [Addr, Addr]): Addr => ({ col: Math.min(a.col, b.col), row: Math.min(a.row, b.row) });
@@ -1661,8 +1675,8 @@ const SPECS: readonly Spec[] = [
     id: "ids.find", label: "Find by ID", params: ["id"], journaled: false,
     run: async (wb, p) => {
       const auto = wb.page(wb.active)!.autoId ?? refuse("no auto-ID column on this sheet");
-      for (let row = 0; row < ROWS; row++) {
-        if (show(wb.sheet.value(keyOf({ col: auto.column, row }))) === p.id) return { ok: true, message: `${p.id} is row ${row + 1}`, changed: [], output: row + 1 };
+      for (const k of within({ col: auto.column, row: 0 }, { col: auto.column, row: ROWS - 1 }, wb.sheet.keys())) {
+        if (show(wb.sheet.value(k)) === p.id) return { ok: true, message: `${p.id} is row ${cellAddr(k)!.row + 1}`, changed: [], output: cellAddr(k)!.row + 1 };
       }
       return { ok: true, message: `no row ${p.id}`, changed: [], output: "" };
     },
@@ -2341,8 +2355,8 @@ const SPECS: readonly Spec[] = [
       const page = wb.page(wb.active)!, { at, said } = spanOf(rangeOf(p.range), false), widths: number[] = [];
       for (const col of at) {
         let w = 0;
-        for (let row = 0; row < ROWS; row++) {
-          const key = keyOf({ col, row }), t = wb.textOf(key);
+        for (const key of within({ col, row: 0 }, { col, row: ROWS - 1 }, wb.sheet.keys())) {
+          const t = wb.textOf(key);
           if (!t) continue;
           const size = wb.notes.get(key).look?.size ?? 13;
           w = Math.max(w, Math.ceil(Math.max(...t.split("\n").map((l) => l.length)) * 7.5 * size / 13) + 14);
@@ -2361,8 +2375,8 @@ const SPECS: readonly Spec[] = [
       const page = wb.page(wb.active)!, { at, said } = spanOf(rangeOf(p.range), true), heights: number[] = [];
       for (const row of at) {
         let h = 0;
-        for (let col = 0; col < COLS; col++) {
-          const key = keyOf({ col, row }), t = wb.textOf(key);
+        for (const key of within({ col: 0, row }, { col: COLS - 1, row }, wb.sheet.keys())) {
+          const t = wb.textOf(key);
           if (!t) continue;
           const size = wb.notes.get(key).look?.size ?? 13, lines = t.split("\n").length;
           if (lines > 1 || size > 13) h = Math.max(h, Math.ceil(lines * size * 1.45 + 8));
@@ -4100,6 +4114,8 @@ export class Commands {
 
   async execute(id: string, params: Params = {}): Promise<Outcome> {
     const spec = BY_ID.get(id);
+    // Whole rows and columns go as far as this workbook's active sheet is used.
+    setExtent(() => this.#wb.extent());
     try {
       if (!spec) refuse(`no command ${id}`);
       for (const name of spec!.params) if (params[name] === undefined) refuse(`${id} needs ${name}`);
@@ -4174,7 +4190,7 @@ export class Commands {
     if (!old || !page.protection) return "";
     const now = page.sheet.saved(), looks = new Set(["look", "format", "style", "cellStyle", "styleExpression"]);
     const noteText = (n: object | undefined) => JSON.stringify(Object.entries(n ?? {}).filter(([k]) => !(g.looks && looks.has(k))).sort());
-    const open = (k: string) => page.editRanges.some((r) => within(cellAddr(k)!, r.range) && (!r.hash || wb.openedRanges.has(`${page.name}!${r.title}`)));
+    const open = (k: string) => page.editRanges.some((r) => inEditRange(cellAddr(k)!, r.range) && (!r.hash || wb.openedRanges.has(`${page.name}!${r.title}`)));
     const keys = new Set([...old.sheet.inputs.keys(), ...now.inputs.keys(), ...old.notes.keys(), ...page.notes.keys()]);
     for (const k of keys) {
       const changed = (old.sheet.inputs.get(k) ?? "") !== (now.inputs.get(k) ?? "") || noteText(old.notes.get(k)) !== noteText(page.notes.get(k));

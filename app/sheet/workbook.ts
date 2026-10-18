@@ -11,7 +11,7 @@
 // and its status line.
 // Commands (commands.ts) change it; the page's panels read it.
 import { drawn } from "./editors.ts";
-import { COLS, ROWS, addrOf, cellAddr, keyOf, order, parseRange, range, splitKey } from "./address.ts";
+import { addrOf, cellAddr, keyOf, order, parseRange, range, setExtent, splitKey, within } from "./address.ts";
 import { movedBy } from "./shift.ts";
 import { REFERENCE_COLOURS } from "./typing.ts";
 import type { Addr } from "./address.ts";
@@ -419,6 +419,21 @@ export class Workbook {
     setDates(1900);
     this.#active = this.#make("Sheet1", EXCEL);
     this.#pages.push(this.#active);
+    // How far the active sheet is used, for whole rows and columns
+    // (address.ts): its last row and column holding an input or a note.
+    setExtent(() => this.extent());
+  }
+
+  // The active sheet's used extent: rows and columns, counted from 1.
+  extent(): { rows: number; cols: number } {
+    let rows = 0, cols = 0;
+    for (const k of [...this.sheet.keys(), ...this.notes.keys()]) {
+      const a = addrOf(k);
+      if (!a) continue;
+      if (a.row >= rows) rows = a.row + 1;
+      if (a.col >= cols) cols = a.col + 1;
+    }
+    return { rows, cols };
   }
 
   // The active sheet, and its notes.
@@ -1074,13 +1089,15 @@ export class Workbook {
 
   // As the grid draws them at the zoom: every column and row scaled from
   // its own size or the grid's (`col`, `row`), or, at 100%, those set.
+  // At another zoom the grid's own size is scaled too (the view gives it
+  // the grid as its default), so only the rows and columns set are listed.
   shownColWidths(col: number): [number, number][] {
     if (this.zoom === 100) return this.colWidths();
-    return Array.from({ length: COLS }, (_, c): [number, number] => [c, Math.round((this.#active.widths.get(c) ?? col) * this.zoom / 100)]);
+    return [...this.#active.widths].sort(([a], [b]) => a - b).map(([c, w]): [number, number] => [c, Math.round((w ?? col) * this.zoom / 100)]);
   }
   shownRowHeights(row: number): [number, number][] {
     if (this.zoom === 100) return this.rowHeights();
-    return Array.from({ length: ROWS }, (_, r): [number, number] => [r, Math.round((this.#active.heights.get(r) ?? row) * this.zoom / 100)]);
+    return [...this.#active.heights].sort(([a], [b]) => a - b).map(([r, h]): [number, number] => [r, Math.round((h ?? row) * this.zoom / 100)]);
   }
 
   // A formula being typed in the active sheet (null once it is entered or
@@ -1137,7 +1154,7 @@ export class Workbook {
     const keys = new Set<string>();
     for (const [a, b] of areas) {
       const lo = { col: Math.min(a.col, b.col), row: Math.min(a.row, b.row) }, hi = { col: Math.max(a.col, b.col), row: Math.max(a.row, b.row) };
-      for (let row = lo.row; row <= hi.row; row++) for (let col = lo.col; col <= hi.col; col++) keys.add(keyOf({ col, row }));
+      for (const k of within(lo, hi, this.sheet.keys(), this.sheet.keys().length)) keys.add(k);
     }
     const values: Value[] = [...keys].map((k) => this.sheet.value(k));
     const nums = values.filter((v): v is number => typeof v === "number");

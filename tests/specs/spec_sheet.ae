@@ -2420,6 +2420,23 @@ main() {
             g.enter("B2", "5")
             spec.assert_true(uidriver.wait_body_contains("/widget/${grids}/a11y", "B2: 5", 40), "a cell set, said")
         }
+        spec.it("the full-size sheet: the Name Box goes far, a cell typed there, a formula reads it back; Excel's last cell") callback {
+            g.command("sheet.add name=Far")
+            g.goto("ZZ100000")
+            i = 0
+            while i < 40 && g.cell_id("ZZ", 100000) == 0 { sleep(50); i = i + 1 }
+            spec.assert_gt(g.cell_id("ZZ", 100000), 0, "ZZ100000 shown")
+            g.enter("ZZ100000", "42")
+            spec.assert_true(g.wait_cell("ZZ", 100000, "42"), "typed there")
+            g.goto("A1")
+            g.enter("A1", "=ZZ100000*2")
+            spec.assert_true(g.wait_cell("A", 1, "84"), "a formula reads it back")
+            g.goto("XFD1048576")
+            i = 0
+            while i < 40 && g.cell_id("XFD", 1048576) == 0 { sleep(50); i = i + 1 }
+            spec.assert_gt(g.cell_id("XFD", 1048576), 0, "Excel's last cell shown")
+            g.goto("A1")
+        }
     }
     return spec.run_summary(fw)
 }

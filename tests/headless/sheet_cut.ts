@@ -57,8 +57,8 @@ await cmds.run("edit.undo");
 eq("one undo puts everything back", [input("A1", "A3", "C2", "B5", "D9"), wb.page("Costs")!.sheet.input("B1"), wb.notes.get("A1").comment],
   [["1", "=A1+A2", "old", "=A3*10", "=C2"], "=Sheet1!A3+1", "first"]);
 
-eq("a cut that would leave the sheet is refused", [await message("edit.cut range=A1:A3"), await message("edit.paste at=Z99")],
-  ["cut A1:A3", "A1:A3 moved to Z99 does not fit on the sheet"]);
+eq("a cut that would leave the sheet is refused", [await message("edit.cut range=A1:A3"), await message("edit.paste at=A1048575")],
+  ["cut A1:A3", "A1:A3 moved to A1048575 does not fit on the sheet"]);
 await cmds.run("sheet.activate name=Costs");
 eq("as is one pasted on another sheet", await message("edit.paste at=A1"), "cut cells are pasted on the sheet they were cut from, Sheet1");
 await cmds.run("sheet.activate name=Sheet1");
