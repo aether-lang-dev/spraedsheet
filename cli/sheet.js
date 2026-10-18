@@ -137,9 +137,8 @@ async function main(argv) {
       console.log(`${args[0]} -> ${args[1]}`);
     } else if (sub === 'run') {
       for (const line of args) {
-        // RUNCOMMAND, the line carried as JSON: RexxJS's ADDRESS hands a
-        // string's doubled quotes on as they are, so a command line with a
-        // quoted value cannot go through ADDRESS SHEET.
+        // RUNCOMMAND, the line carried as JSON: nothing in it read as REXX on
+        // the way in, and one bus request per line, its answer what it gave.
         let said;
         try { said = await bus(`RUNCOMMAND(${carried(line)}, "json")`); } catch (e) {
           if (e instanceof Refused) throw new Refused(`${line}: ${e.message}`);

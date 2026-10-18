@@ -38,27 +38,26 @@ const ran = await cmds2.run("macro.run name=Budget");
 const same = (a: Workbook, b: Workbook) => { const { macros: _a, ...x } = writeSheetFile(a) as Record<string, unknown>; const { macros: _b, ...y } = writeSheetFile(b) as Record<string, unknown>; return JSON.stringify(x) === JSON.stringify(y); };
 eq("run on a new workbook, it makes the same one", [ran.message, show(again.sheet.value("B3")), again.textOf("B3"), again.pages().map((p) => p.name), same(wb, again)], ["Budget ran", "1500", "$1,500.00", ["Sheet1", "Notes"], true]);
 eq("one step of undo", [(await cmds2.run("edit.undo")).ok, again.sheet.input("B3"), again.pages().length], [true, "", 1]);
-// Edited: a loop, then run. (SETCELL called as a function: RexxJS's CALL
-// passes an argument with || in it unevaluated.)
-await cmds.execute("macro.set", { name: "Fill", text: 'DO i = 1 TO 3\n  r = SETCELL("D" || i, i * 10)\nEND\nSAY "filled"' });
+// Edited: a loop, then run.
+await cmds.execute("macro.set", { name: "Fill", text: 'DO i = 1 TO 3\n  CALL SETCELL "D" || i, i * 10\nEND\nSAY "filled"' });
 const filled = await cmds.run("macro.run name=Fill");
 eq("an edited macro: a loop", [filled.message, filled.output, show(wb.sheet.value("D3"))], ["Fill ran", ["filled"], "30"]);
 eq("listed, and saved with the workbook", [(await cmds.run("macro.list")).output, Object.keys((writeSheetFile(wb) as { macros: object }).macros)], [["Budget", "Fill"], ["Budget", "Fill"]]);
 const third = new Workbook(), cmds3 = new Commands(third);
 await cmds3.execute("file.import", { text: JSON.stringify(writeSheetFile(wb)) });
-eq("opened again, the macros with it", [(await cmds3.run("macro.list")).output, (await cmds3.run("macro.get name=Fill")).output], [["Budget", "Fill"], 'DO i = 1 TO 3\n  r = SETCELL("D" || i, i * 10)\nEND\nSAY "filled"']);
+eq("opened again, the macros with it", [(await cmds3.run("macro.list")).output, (await cmds3.run("macro.get name=Fill")).output], [["Budget", "Fill"], 'DO i = 1 TO 3\n  CALL SETCELL "D" || i, i * 10\nEND\nSAY "filled"']);
 // Recording while a macro runs: the run, not what it did.
 await cmds.run("macro.record name=Twice");
 await cmds.run("macro.run name=Fill");
 eq("a macro run while recording is one line", (await cmds.run("macro.stop")).output, '/* Twice: recorded by the spreadsheet, 1 command */\nADDRESS SHEET "macro.run name=Fill"');
 eq("refusals", [(await cmds.run("macro.record name=9lives")).message, (await cmds.run("macro.stop")).message, (await cmds.run("macro.run name=Nope")).message, (await cmds.run("macro.delete name=Nope")).message],
   ["9lives is not a macro's name (a letter, then letters, digits or _)", "nothing is being recorded", "no macro Nope", "no macro Nope"]);
-// 7.2: parameters, and triggers. (SETCELL as a function: RexxJS's CALL
-// takes a bare name first as a function, and a call among its arguments
-// as text.)
+// 7.2: parameters, and triggers. (SETCELL called as a function where an
+// argument is an upper-case variable alone: RexxJS's CALL still takes such
+// a name for a function, "CALL SETCELL CELL, ..." failing; RexxJS b3d5e4e.)
 await cmds.execute("macro.set", { name: "Put", text: 'r = SETCELL(CELL, N * 2)' });
 eq("a macro run with parameters", [(await cmds.run('macro.run name=Put args="CELL=H1;N=21"')).message, show(wb.sheet.value("H1")), (await cmds.run('macro.run name=Put args="1x=2"')).message], ["Put ran", "42", "1x=2 is not a parameter (NAME=value)"]);
-await cmds.execute("macro.set", { name: "Twice", text: 'r = SETCELL("J1", GETCELL("I1") * 2)' });
+await cmds.execute("macro.set", { name: "Twice", text: 'CALL SETCELL "J1", GETCELL("I1") * 2' });
 eq("on a change to a range: run after it", [(await cmds.run("macro.trigger name=Twice on=change range=I1:I5")).message, (await cmds.run("cell.set cell=I1 input=8")).ok, show(wb.sheet.value("J1"))],
   ["Twice runs after a change to Sheet1!I1:I5", true, "16"]);
 await cmds.run("cell.set cell=K1 input=1");
