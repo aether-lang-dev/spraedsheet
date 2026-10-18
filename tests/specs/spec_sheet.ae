@@ -394,6 +394,72 @@ ink_num(m: string, n: int) -> float {
     return v
 }
 
+// The id of the last vg canvas w x h wide and high (a drawing's or a chart's
+// scene, floating over the grid), 0 for none.
+canvas_sized(w: int, h: int) -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 }
+    id = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        n = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(n, "type"), "canvas") == 1 && uidriver.field_int(n, "w") == w && uidriver.field_int(n, "h") == h { id = uidriver.field_int(n, "id") }
+        i = i + 1
+    }
+    json.json_free(v)
+    return id
+}
+
+// 1 once widget id's field is `want` (a layout lands a frame after its cause).
+field_is(id: int, field: string, want: int) -> int {
+    i = 0
+    while i < 60 {
+        if uidriver.widget_int_field_by_id(id, field) == want { return 1 }
+        sleep(50)
+        i = i + 1
+    }
+    return 0
+}
+
+// How many red pixels (the demo's #d82626) a snapshot has in the box x:y:w:h
+// (points), -1 where the screenshot is not a whole-scale picture of the window.
+red_in(name: string, box: string) -> int {
+    dims = snapshot(name)
+    if string.length(dims) == 0 { return 0 - 1 }
+    xw = string.index_of(dims, "x")
+    pw, _pe = string.to_int(string.substring(dims, 0, xw))
+    rw = uidriver.widget_int_field_by_id(1, "w")
+    if rw <= 0 || pw % rw != 0 { return 0 - 1 }
+    bn = uidriver.widget_id_by_text("Under Remote Control")
+    banner = "${uidriver.widget_int_field_by_id(bn, "x")}:${uidriver.widget_int_field_by_id(bn, "y")}:${uidriver.widget_int_field_by_id(bn, "w")}:${rw}"
+    out, _e = os.exec("python3 redbox.py target/sheet-snapshots/${name}.png ${banner} ${box}")
+    n, _ne = string.to_int(string.trim(out))
+    return n
+}
+
+// 1 once the newest vg scene has a node holding `part` (a scene is read back
+// once the layout has given its canvas a size: a moment after it is made).
+nodes_have(part: string) -> int {
+    i = 0
+    while i < 60 {
+        if string.contains(b.vg_nodes(), part) == 1 { return 1 }
+        sleep(50)
+        i = i + 1
+    }
+    return 0
+}
+
+// 1 once no canvas w x h is left.
+wait_gone_canvas(w: int, h: int) -> int {
+    i = 0
+    while i < 60 {
+        if canvas_sized(w, h) == 0 { return 1 }
+        sleep(50)
+        i = i + 1
+    }
+    return 0
+}
+
 // How much of the cursor's outline is round the cell col+row in a snapshot.
 outline_at(name: string, col: string, row: int) -> int {
     id = g.cell_id(col, row)
@@ -1726,11 +1792,11 @@ main() {
             b.click("Bar chart")
             spec.assert_true(b.wait_for_console("sheet: inserted a bar chart of A15:B17"), "inserted")
             spec.assert_true(b.wait_for_text("Chart 1: bar chart of A15:B17"), "listed")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"Tue\"") == 1, "its categories drawn")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"fill\":\"#4472c4\"") == 1, "its bars, in the palette")
+            spec.assert_true(nodes_have("\"text\":\"Tue\""), "its categories drawn")
+            spec.assert_true(nodes_have("\"fill\":\"#4472c4\""), "its bars, in the palette")
             g.enter("B17", "40")
             spec.assert_true(b.wait_for_console("sheet: B17 = 40"), "an edit")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"40\"") == 1, "the scale follows it")
+            spec.assert_true(nodes_have("\"text\":\"40\""), "the scale follows it")
             g.pick("B", 15)
             g.key("Shift+Down")
             g.key("Shift+Down")
@@ -2374,11 +2440,11 @@ main() {
             spec.assert_true(b.wait_for_text("Chart 1: doughnut chart of A1:B3"), "a doughnut")
             b.click("Stacked column chart")
             spec.assert_true(b.wait_for_text("Chart 2: barStacked chart of A1:B3"), "a stacked column")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"Q2\"") == 1, "the stacked column's categories drawn")
+            spec.assert_true(nodes_have("\"text\":\"Q2\""), "the stacked column's categories drawn")
             b.click("Delete chart 2")
             spec.assert_true(b.wait_for_text_gone("Chart 2: barStacked chart of A1:B3"), "deleted")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"75%\"") == 1, "the doughnut's share drawn")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"fill\":\"#ed7d31\"") == 1, "its second slice in the palette")
+            spec.assert_true(nodes_have("\"text\":\"75%\""), "the doughnut's share drawn")
+            spec.assert_true(nodes_have("\"fill\":\"#ed7d31\""), "its second slice in the palette")
             b.click("Delete chart 1")
             g.command("view.panel name=none")
         }
@@ -2391,10 +2457,10 @@ main() {
             spec.assert_true(b.wait_for_text("Chart 1: bar chart of A1:C3"), "a chart")
             b.click("Data labels 1")
             spec.assert_true(b.wait_for_console("sheet: chart 1: labels true"), "labels on")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"9\"") == 1, "a value drawn over its bar")
+            spec.assert_true(nodes_have("\"text\":\"9\""), "a value drawn over its bar")
             b.click("Switch row/column 1")
             spec.assert_true(b.wait_for_console("sheet: chart 1: labels true, byRows true"), "switched")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"Q2\"") == 1, "the rows now the series, named in the legend")
+            spec.assert_true(nodes_have("\"text\":\"Q2\""), "the rows now the series, named in the legend")
             b.click("Delete chart 1")
             g.command("view.panel name=none")
         }
@@ -2407,7 +2473,7 @@ main() {
             spec.assert_true(b.wait_for_text("Chart 1: line chart of A1:B4"), "a chart")
             b.click("Linear trendline 1")
             spec.assert_true(b.wait_for_console("sheet: chart 1, N: a linear trendline: y = 2x   R² = 1"), "fitted")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"y = 2x   R² = 1\"") == 1, "its label drawn")
+            spec.assert_true(nodes_have("\"text\":\"y = 2x   R² = 1\""), "its label drawn")
             b.click("Delete chart 1")
             g.command("view.panel name=none")
         }
@@ -2419,8 +2485,8 @@ main() {
             g.command("view.select range=A1:B3")
             b.click("Waterfall chart")
             spec.assert_true(b.wait_for_text("Chart 1: waterfall chart of A1:B3"), "inserted")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"fill\":\"#ed7d31\"") == 1, "the fall in its colour")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"fill\":\"#a5a5a5\"") == 1, "the total in its")
+            spec.assert_true(nodes_have("\"fill\":\"#ed7d31\""), "the fall in its colour")
+            spec.assert_true(nodes_have("\"fill\":\"#a5a5a5\""), "the total in its")
             b.click("Delete chart 1")
             g.command("view.panel name=none")
         }
@@ -2432,8 +2498,8 @@ main() {
             g.command("view.select range=A1:C3")
             b.click("Treemap")
             spec.assert_true(b.wait_for_text("Chart 1: treemap chart of A1:C3"), "inserted")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"Veg\"") == 1, "a group")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"Kale\"") == 1, "an item")
+            spec.assert_true(nodes_have("\"text\":\"Veg\""), "a group")
+            spec.assert_true(nodes_have("\"text\":\"Kale\""), "an item")
             b.click("Delete chart 1")
             g.command("view.panel name=none")
         }
@@ -2592,7 +2658,7 @@ main() {
             spec.assert_true(b.wait_for_text("Chart 1: combo chart of A1:C3"), "inserted")
             g.command("chart.option index=1 secondary=2")
             spec.assert_true(b.wait_for_console("sheet: chart 1: secondary 1"), "the line on the right axis")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"0.4\"") == 1, "its scale drawn at the right")
+            spec.assert_true(nodes_have("\"text\":\"0.4\""), "its scale drawn at the right")
             b.click("Delete chart 1")
             g.command("view.panel name=none")
         }
@@ -2622,11 +2688,11 @@ main() {
             g.command("view.panel name=chart")
             g.command("chart.pivot id=pc kind=bar")
             spec.assert_true(b.wait_for_text("SUM of amount: bar chart of pivot pc"), "listed")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"South\"") == 1, "the pivot's rows its categories")
+            spec.assert_true(nodes_have("\"text\":\"South\""), "the pivot's rows its categories")
             g.command("cell.set cell=A3 input=West")
             g.command("pivot.update id=pc")
             spec.assert_true(g.wait_cell("D", 3, "West"), "the pivot written again")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"West\"") == 1, "and the chart follows it")
+            spec.assert_true(nodes_have("\"text\":\"West\""), "and the chart follows it")
             b.click("Delete chart 1")
             g.command("view.panel name=none")
         }
@@ -2686,8 +2752,8 @@ main() {
             b.click("Oval")
             spec.assert_true(b.wait_for_console("sheet: Oval 1: oval at B2, 96x64, \"Hi\""), "an oval at the selected cell")
             spec.assert_true(wait_button("Delete Oval 1"), "its own Delete")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"text\":\"Hi\"") == 1, "its text drawn")
-            spec.assert_true(string.contains(b.vg_nodes(), "\"fill\":\"#4472c4\"") == 1, "in the theme's accent")
+            spec.assert_true(nodes_have("\"text\":\"Hi\""), "its text drawn")
+            spec.assert_true(nodes_have("\"fill\":\"#4472c4\""), "in the theme's accent")
             b.click("Text box")
             spec.assert_true(b.wait_for_console("sheet: TextBox 2: textbox at B2, 160x60, \"Hi\""), "a text box")
             b.click("Delete Oval 1")
@@ -2696,6 +2762,79 @@ main() {
             spec.assert_true(b.wait_for_text("Picture 2: picture at D4, 2x2 (Dot)"), "a picture, from REXX")
             spec.assert_true(wait_button("Delete Picture 2"), "with its own Delete")
             g.command("view.panel name=none")
+            g.command("sheet.activate name=Sheet1")
+        }
+        spec.it("a shape and a chart float over the grid at their cells, scroll with them, and the pointer passes through to the cells beneath") callback {
+            g.command("sheet.add name=Floating")
+            g.command("view.panel name=none")
+            g.enter("A1", "x")
+            g.enter("B1", "1")
+            g.command("insert.shape shape=rectangle at=C5 w=97 h=65 fill=#d82626 line=#d82626")
+            g.command("chart.insert kind=bar range=A1:B2 at=F8")
+            spec.assert_true(g.wait_cell("B", 1, "1"), "the cells")
+            sh = canvas_sized(97, 65)
+            ch = canvas_sized(400, 240)
+            i = 0
+            while (sh == 0 || ch == 0) && i < 40 {
+                sleep(100)
+                sh = canvas_sized(97, 65)
+                ch = canvas_sized(400, 240)
+                i = i + 1
+            }
+            spec.assert_gt(sh, 0, "the shape's scene over the grid")
+            spec.assert_gt(ch, 0, "the chart's scene over the grid")
+            c5 = g.cell_id("C", 5)
+            f8 = g.cell_id("F", 8)
+            spec.assert_true(field_is(sh, "x", uidriver.widget_int_field_by_id(c5, "x")) == 1, "the shape's left edge at C5's")
+            spec.assert_true(field_is(sh, "y", uidriver.widget_int_field_by_id(c5, "y")) == 1, "and its top")
+            spec.assert_true(field_is(ch, "x", uidriver.widget_int_field_by_id(f8, "x")) == 1, "the chart's left edge at F8's")
+            spec.assert_true(field_is(ch, "y", uidriver.widget_int_field_by_id(f8, "y")) == 1, "and its top")
+            // Drawn there: red in its rectangle, none a cell's width left of it.
+            sx = uidriver.widget_int_field_by_id(sh, "x")
+            sy = uidriver.widget_int_field_by_id(sh, "y")
+            inside = red_in("float-shape", "${sx + 10}:${sy + 10}:60:40")
+            if inside >= 0 {
+                spec.assert_gt(inside, 1000, "the shape drawn red in its rectangle (${inside})")
+                spec.assert_eq(red_in("float-shape-left", "${sx - 60}:${sy + 10}:50:40"), 0, "none left of it")
+            }
+            // The pointer goes through: a pick at the shape's middle is a cell.
+            px = uidriver.widget_int_field_by_id(sh, "x") + 48
+            py = uidriver.widget_int_field_by_id(sh, "y") + 32
+            pick = uidriver.get_body("/window/pick?x=${px}&y=${py}")
+            spec.assert_false(string.contains(pick, "\"handle\":${sh},") == 1, "a press at the shape's middle is not the shape's (${pick})")
+            spec.assert_false(string.contains(pick, "\"handle\":0,") == 1, "but something is there")
+            // The grid scrolled down: the shape goes up with its cell.
+            y0 = uidriver.widget_int_field_by_id(sh, "y")
+            g.goto("A40")
+            g.goto("A1")
+            spec.assert_true(field_is(sh, "y", y0) == 1, "back at the top: the shape where it was")
+            g.command("view.zoom percent=150")
+            c5 = g.cell_id("C", 5)
+            // Zoomed, the scene is made again at the zoom (the old one gone).
+            i = 0
+            sh = canvas_sized(146, 98)
+            while sh == 0 && i < 40 {
+                sleep(100)
+                sh = canvas_sized(146, 98)
+                i = i + 1
+            }
+            spec.assert_gt(sh, 0, "zoomed to 150%, the shape's scene 146 x 98 (97 x 65 x 1.5)")
+            spec.assert_true(field_is(sh, "x", uidriver.widget_int_field_by_id(c5, "x")) == 1, "and still at C5: ${uidriver.widget_int_field_by_id(sh, "x")} for ${uidriver.widget_int_field_by_id(c5, "x")}")
+            g.command("view.zoom percent=100")
+            g.command("chart.move index=1 at=B12")
+            i = 0
+            ch = canvas_sized(400, 240)
+            while ch == 0 && i < 40 {
+                sleep(100)
+                ch = canvas_sized(400, 240)
+                i = i + 1
+            }
+            b12 = g.cell_id("B", 12)
+            spec.assert_true(b12 > 0 && field_is(ch, "y", uidriver.widget_int_field_by_id(b12, "y")) == 1, "a chart moved to B12 floats there: ${uidriver.widget_int_field_by_id(ch, "y")} for ${uidriver.widget_int_field_by_id(b12, "y")}")
+            spec.assert_true(field_is(ch, "x", uidriver.widget_int_field_by_id(b12, "x")) == 1, "at its left edge")
+            g.command("drawing.delete name=\"Rectangle 1\"")
+            g.command("chart.delete index=1")
+            spec.assert_true(wait_gone_canvas(97, 65) == 1, "deleted, the shape's scene is gone")
             g.command("sheet.activate name=Sheet1")
         }
         spec.it("Forecast sheet from the Data panel: a line forecast on a new sheet, with its chart") callback {

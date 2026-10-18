@@ -520,7 +520,7 @@ async function reshaped(wb: Workbook, axis: "row" | "col" | null, editOf: (moves
   });
   page.charts = page.charts.flatMap((c): ChartSpec[] => {
     const to = edit.range(c.range[0], c.range[1], still, still);
-    return to ? [{ ...c, range: to }] : [];
+    return to ? [{ ...c, range: to, ...(c.at ? { at: edit.cell(c.at, still) ?? c.at } : {}) }] : [];
   });
   // Drawings move with their cells; one whose cell went stays where it was.
   page.drawings = page.drawings.map((d) => ({ ...d, at: edit.cell(d.at, still) ?? d.at }));
@@ -3068,11 +3068,12 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "chart.insert", label: "Insert Chart", params: ["kind", "range"], optional: ["title"], journaled: true,
+    id: "chart.insert", label: "Insert Chart", params: ["kind", "range"], optional: ["title", "at"], journaled: true,
     run: async (wb, p) => {
       const kind = CHART_KINDS.find((k) => k.toLowerCase() === p.kind.trim().toLowerCase()) ?? refuse(`${p.kind} is not a chart (${CHART_KINDS.join(", ")})`);
       const page = wb.page(wb.active)!, r = rangeOf(p.range);
-      page.charts.push({ kind, range: r, title: p.title ?? `Chart ${page.charts.length + 1}` });
+      const at = p.at === undefined ? undefined : cellAddr(cellOf(p.at))!;
+      page.charts.push({ kind, range: r, title: p.title ?? `Chart ${page.charts.length + 1}`, ...(at ? { at } : {}) });
       return changedBy(wb, [], `inserted a ${kind} chart of ${named(r)}`);
     },
   },
@@ -3148,6 +3149,16 @@ const SPECS: readonly Spec[] = [
     run: async (wb) => {
       const listed = wb.charts().map((c, i) => `${i + 1}. ${c.title}: ${c.kind} chart of ${c.range}`);
       return { ok: true, message: listed.length ? listed.join("; ") : "no charts", changed: [], output: listed };
+    },
+  },
+  {
+    // Move Chart: where it floats over the grid, its top-left cell.
+    id: "chart.move", label: "Move Chart", params: ["index", "at"], journaled: true,
+    run: async (wb, p) => {
+      const page = wb.page(wb.active)!, i = Number(p.index) - 1, c = page.charts[i] ?? refuse(`no chart ${p.index}`);
+      const at = cellAddr(cellOf(p.at))!;
+      page.charts[i] = { ...c, at };
+      return changedBy(wb, [], `${c.title} moved to ${keyOf(at)}`);
     },
   },
   {

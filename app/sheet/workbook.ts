@@ -11,7 +11,7 @@
 // and its status line.
 // Commands (commands.ts) change it; the page's panels read it.
 import { drawn } from "./editors.ts";
-import { addrOf, cellAddr, keyOf, order, parseRange, range, setExtent, splitKey, within } from "./address.ts";
+import { COLS, addrOf, cellAddr, keyOf, order, parseRange, range, setExtent, splitKey, within } from "./address.ts";
 import { movedBy } from "./shift.ts";
 import { REFERENCE_COLOURS } from "./typing.ts";
 import type { Addr } from "./address.ts";
@@ -74,10 +74,15 @@ export interface ChartSpec {
   // A PivotChart's pivot (by its id): its range what the pivot last wrote,
   // its grand totals left out, so it follows the pivot.
   readonly pivot?: string;
+  // Where it floats over the grid: its top-left cell (6.11c-b); not said,
+  // two columns right of its range, at its top row.
+  readonly at?: Addr;
 }
 
 // A chart as the page draws it, its shapes laid out in CHART_W x CHART_H.
 export interface ChartView {
+  readonly at: Addr;
+  readonly where: string;
   readonly kind: ChartKind;
   readonly title: string;
   readonly range: string;
@@ -966,7 +971,8 @@ export class Workbook {
       const written = c.pivot ? page.pivots.get(c.pivot)?.written : null, r = written ?? c.range;
       let data = chartData(r, (k) => page.sheet.value(k), c.options?.byRows);
       if (c.pivot) data = { ...data, labels: data.labels.filter((l) => l !== "Grand Total"), series: data.series.filter((x) => x.name !== "Grand Total").map((x) => ({ ...x, values: x.values.filter((_, i) => data.labels[i] !== "Grand Total") })) };
-      return { kind: c.kind, title: c.title, range: c.pivot ? `pivot ${c.pivot}` : rangeName(r), data, shapes: layout(c.kind, data, c.title, CHART_W, CHART_H, c.options ?? {}) };
+      const at = c.at ?? { col: Math.min(COLS - 1, Math.max(c.range[0].col, c.range[1].col) + 2), row: Math.min(c.range[0].row, c.range[1].row) };
+      return { at, where: keyOf(at), kind: c.kind, title: c.title, range: c.pivot ? `pivot ${c.pivot}` : rangeName(r), data, shapes: layout(c.kind, data, c.title, CHART_W, CHART_H, c.options ?? {}) };
     });
   }
 

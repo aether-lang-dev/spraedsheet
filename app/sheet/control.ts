@@ -538,7 +538,9 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // areaStacked, pie, doughnut, scatter, scatterLines, bubble, radar,
   // histogram, waterfall, funnel, treemap, sunburst, box, stock, combo);
   // LISTCHARTS(), DELETECHART(n).
-  INSERTCHART: async (exec, r, kind, title) => (await must(exec, "chart.insert", { range: text(r), kind: text(kind) || "bar", ...(text(title).trim() ? { title: text(title) } : {}) })).message,
+  // INSERTCHART's fourth argument is the cell it floats at; MOVECHART(1, "H2") moves it.
+  INSERTCHART: async (exec, r, kind, title, at) => (await must(exec, "chart.insert", { range: text(r), kind: text(kind) || "bar", ...(text(title).trim() ? { title: text(title) } : {}), ...(text(at).trim() ? { at: text(at) } : {}) })).message,
+  MOVECHART: async (exec, n, at) => (await must(exec, "chart.move", { index: text(n), at: text(at) })).message,
   // SETCHARTOPTION(1, "legend", "right"), (1, "xTitle", "Quarter"),
   // (1, "labels", 1), (1, "gridlines", 0), (1, "byRows", 1), (1, "title", "Sales");
   // SETCHARTDATA(1, "A1:C9"); SETCHARTTYPE(1, "area").

@@ -4,23 +4,10 @@
 // Open link, the selected cell's followed (a place selected, a URL handed
 // to the system: the installed app's shell.open). Then pictures (a file
 // picked: documents), shapes and text boxes at the selected cell, and each
-// drawing on the sheet drawn in vg, with its own buttons: Delete, to the
+// drawing on the sheet (floating over the grid: floats.ts) with its own buttons: Delete, to the
 // front, moved to the selected cell.
-import { fromBase64 } from "../csv.ts";
-import type { Shape } from "../charts.ts";
 import type { DrawingView } from "../workbook.ts";
 import type { SheetView } from "./view.ts";
-
-function draw(s: Shape): void {
-  switch (s.kind) {
-    case "rect": vg.rect(s.x, s.y, s.w, s.h, () => vg.fill(s.fill)); return;
-    case "line": vg.line(s.x1, s.y1, s.x2, s.y2, () => vg.stroke(s.stroke, s.width)); return;
-    case "polyline": vg.polyline([...s.points], () => { vg.fill("none"); vg.stroke(s.stroke, s.width); }); return;
-    case "circle": vg.circle(s.cx, s.cy, s.r, () => vg.fill(s.fill)); return;
-    case "path": vg.path(s.d, () => { vg.fill(s.fill); vg.stroke(s.stroke, 1); }); return;
-    case "text": vg.text_anchored(s.x, s.y, s.size, s.anchor, s.text, () => vg.fill(s.fill)); return;
-  }
-}
 
 export function insertBar(v: SheetView): void {
   const target = state(""), shown = state(""), tip = state(""), words = state("");
@@ -64,13 +51,6 @@ export function insertBar(v: SheetView): void {
       ui.btn(`${d.name} to front`, () => v.run("drawing.order", { name: d.name, to: "front" }));
       ui.btn(`Move ${d.name} here`, () => v.run("drawing.edit", { name: d.name, at: v.here() }));
       if (d.kind === "picture") ui.btn(`Place ${d.name} in cell`, () => v.run("insert.cellPicture", { name: d.name }));
-    });
-    vg.scene(`0 0 ${d.w} ${d.h}`, d.w, d.h, () => {
-      if (d.kind === "picture" && d.picture) {
-        vg.image(fromBase64(d.picture), () => { vg.box(0, 0, d.w, d.h); vg.fit("contain"); });
-        return;
-      }
-      d.shapes.forEach(draw);
     });
   });
 }

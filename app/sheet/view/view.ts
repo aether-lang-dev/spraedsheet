@@ -20,6 +20,7 @@ import type { ChartView, DrawingView, SlicerView, Watch } from "../workbook.ts";
 import { Workbooks } from "../books.ts";
 import { statsLine } from "../workbook.ts";
 import { sliderToZoom, zoomToSlider } from "./zoom.ts";
+import { syncFloats } from "./floats.ts";
 import type { CellEditor } from "../editors.ts";
 
 export class SheetView {
@@ -399,6 +400,7 @@ export class SheetView {
         this.follow();
       }
     }
+    syncFloats(this);
     this.#showAppearance();
     // View > Animations: the grid's own glide, about Excel's 120 ms.
     const glide = this.wb.animations ? this.wb.glideMs : 0;
