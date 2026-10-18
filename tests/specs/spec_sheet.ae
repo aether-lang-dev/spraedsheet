@@ -247,6 +247,76 @@ wait_tabs(l1: string, l2: string, l3: string) -> int {
     return 0
 }
 
+// What is on the screen at a step: GET /screenshot saved as
+// target/sheet-snapshots/<name>.png (to be looked at), and its size from the
+// PNG's header, "WxH" ("" with no screenshot or no python3).
+snapshot(name: string) -> string {
+    dir = "${os.os_getenv("PWD")}/target/sheet-snapshots"
+    _m, _me = os.exec("mkdir -p ${dir}")
+    out, _ce = os.exec("curl -s -o ${dir}/${name}.png -w '%{http_code}' ${uidriver.url_of("/screenshot")}")
+    if string.contains(out, "200") == 0 { return "" }
+    dims, _de = os.exec("python3 -c \"import struct,sys; b=open(sys.argv[1],'rb').read(24); print('%dx%d' % struct.unpack('>II', b[16:24]))\" ${dir}/${name}.png")
+    return string.trim(dims)
+}
+
+// The grid's scrollbars' values: where it is scrolled to.
+scrolled() -> string {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return "" }
+    out = ""
+    i = 0
+    n = 0
+    while i < json.json_array_size(v) && n < 2 {
+        w = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(w, "type"), "slider") == 1 {
+            out = "${out}${uidriver.get_body("/widget/${uidriver.field_int(w, "id")}")};"
+            n = n + 1
+        }
+        i = i + 1
+    }
+    json.json_free(v)
+    return out
+}
+
+// A cell clicked and a key typed, as a person does (no Name Box), with what
+// is on the screen read back at each step: the cell and A1 where they were,
+// the grid's scrollbars not moved, a snapshot of the window each time
+// (before the click, after it, after typing, after Return); an editor
+// opened by the key, on the cell, with the focus; Return stores it. The
+// click and the key are real events where the platform makes them (?real=1).
+click_and_type(col: string, row: int, ch: string) {
+    id = g.cell_id(col, row)
+    spec.assert_gt(id, 0, "${col}${row} shown")
+    x0 = uidriver.widget_int_field_by_id(id, "x")
+    y0 = uidriver.widget_int_field_by_id(id, "y")
+    a1 = g.cell_id("A", 1)
+    ax = uidriver.widget_int_field_by_id(a1, "x")
+    ay = uidriver.widget_int_field_by_id(a1, "y")
+    s0 = scrolled()
+    d0 = snapshot("${col}${row}-1-before-click")
+    uidriver.post_ok("/widget/${id}/click?real=1", "click ${col}${row}")
+    sleep(300)
+    d1 = snapshot("${col}${row}-2-after-click")
+    spec.assert_eq(g.cell_id(col, row), id, "${col}${row}: the same cell shown")
+    spec.assert_true(uidriver.widget_int_field_by_id(id, "x") == x0 && uidriver.widget_int_field_by_id(id, "y") == y0, "on the screen: ${col}${row} where it was (${x0},${y0})")
+    spec.assert_true(uidriver.widget_int_field_by_id(a1, "x") == ax && uidriver.widget_int_field_by_id(a1, "y") == ay, "on the screen: A1 still where it was")
+    spec.assert_str_eq(scrolled(), s0, "the grid's scrollbars where they were")
+    spec.assert_str_eq(d1, d0, "the window's snapshot the same size (${d0})")
+    spec.assert_true(b.wait_for_text("${col}${row}: (empty)"), "${col}${row} selected")
+    uidriver.post_ok("/window/key?combo=${ch}&real=1", "type ${ch}")
+    ed = g.editor()
+    spec.assert_gt(ed, 0, "typing ${ch} opened an editor")
+    d2 = snapshot("${col}${row}-3-after-typing")
+    spec.assert_eq(uidriver.focused_widget(), ed, "the editor has the focus")
+    spec.assert_true(uidriver.wait_body_contains("/widget/${ed}", "\"text\":\"${ch}\"", 40), "holding ${ch}")
+    spec.assert_true(uidriver.widget_int_field_by_id(ed, "x") == x0 && uidriver.widget_int_field_by_id(ed, "y") == y0, "on the screen: the editor over ${col}${row}")
+    spec.assert_str_eq(scrolled(), s0, "still not scrolled")
+    spec.assert_str_eq(d2, d0, "the snapshot the same size")
+    uidriver.post_ok("/widget/${ed}/submit", "Return in the editor")
+    spec.assert_true(g.wait_cell(col, row, ch), "${col}${row} holds ${ch}")
+    _d3 = snapshot("${col}${row}-4-after-return")
+}
+
 main() {
     fw = spec.init()
     uidriver.wait_server()
@@ -261,6 +331,11 @@ main() {
             spec.assert_gt(g.cell_id("J", 20), 0, "and J20, the last")
             spec.assert_eq(g.cell_id("K", 1), 0, "and no column K")
             spec.assert_eq(string.length(g.cell_text("A", 1)), 0, "A1 is empty")
+        }
+        spec.it("a click on a fresh sheet's A1, then typing, as a person does: the grid stays where it is, an editor opens on A1 with the focus, Return stores it; and on D10") callback {
+            click_and_type("A", 1, "1")
+            click_and_type("D", 10, "4")
+            g.command("range.clear range=A1,D10")
         }
         spec.it("formulas read the cells they name") callback {
             g.enter("A1", "2")

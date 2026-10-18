@@ -40,12 +40,24 @@ import { menuBar } from "./sheet/view/menubar.ts";
 import { toolBar } from "./sheet/view/toolbar.ts";
 import { panelTabs } from "./sheet/view/paneltabs.ts";
 
+// What this page needs of the sae it runs on (its ui API): an older sae
+// build than the spreadsheet (sae's ./build.sh not run since a pull) lacks
+// some, and the page then stopped partway, its grid half wired (a click on
+// it scrolled the page away and typing did nothing). Each one missing is
+// said, on the page and the console, and stood in for where it can be.
+const NEEDS = ["wrap", "datagrid_widget", "datagrid_show_header", "datagrid_set_row_heights", "datagrid_cell_picture", "datagrid_selection_glide"];
+const lacking = NEEDS.filter((n) => typeof (ui as any)[n] !== "function");
+if (typeof (ui as any).wrap !== "function") (ui as any).wrap = ui.hstack;
+if (typeof (ui as any).datagrid_widget !== "function") (ui as any).datagrid_widget = () => 0;
+if (lacking.length) print(`sheet: this sae lacks ui.${lacking.join(", ui.")}: rebuild it (../sae, its ./build.sh)`);
+
 const sheet = new SheetView();
 
 // The page in one column with the window's own padding round it.
 ui.vstack(() => {
 ui.margin(8, 12, 8, 12);
 ui.text("Spreadsheet");
+if (lacking.length) ui.text(`This sae is older than the spreadsheet: it lacks ui.${lacking.join(", ui.")}. Rebuild it (../sae, its ./build.sh).`);
 toolBar(sheet);
 ui.divider();
 // The Name Box and the formula bar, one row under the toolbar.

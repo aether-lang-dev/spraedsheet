@@ -33,6 +33,16 @@ if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] \
    && [ -z "${SHEET_RUN_XVFB:-}" ] && command -v xvfb-run >/dev/null 2>&1; then
     SHEET_RUN_XVFB=1 exec xvfb-run -a sh "$0" "$@"
 fi
+# A sae built before its sources were last changed (a pull, ./build.sh not
+# run since) runs this checkout's app on an older API: refused, rather than
+# testing something other than what is checked out.
+if [ -x "$SAE/target/build/bin/sae-driver" ]; then
+    newer=$(find "$SAE/src" "$SAE/services" "$SAE/aether-ui/ui" "$SAE/aether-ui/backend" -newer "$SAE/target/build/bin/sae-driver" -type f \( -name '*.ae' -o -name '*.c' -o -name '*.m' -o -name '*.h' -o -name '*.js' \) 2>/dev/null | head -1)
+    if [ -n "$newer" ]; then
+        echo "run-tests.sh: $SAE's build is older than $newer: rebuild it (sae's AGENTS.md \"Build and test\")" >&2
+        exit 2
+    fi
+fi
 for f in target/build/bin/sae target/build/bin/sae-driver target/pageserver target/saelower target/saejs target/sae-bus; do
     [ -x "$SAE/$f" ] || { echo "run-tests.sh: no $SAE/$f (sae's AGENTS.md \"Build and test\")" >&2; exit 2; }
 done
