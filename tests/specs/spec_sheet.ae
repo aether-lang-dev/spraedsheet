@@ -2357,6 +2357,37 @@ main() {
             spec.assert_true(b.wait_for_text("Looks"), "English again")
             g.command("range.clear range=K40")
         }
+        spec.it("a screen reader's view: the grid a grid of cells; each panel's buttons and fields named; F6 through the panels, the focus in each; a cell set said") callback {
+            v, _jerr = json.parse(uidriver.get_body("/widgets"))
+            grids = 0
+            gridcells = 0
+            unnamed = ""
+            i = 0
+            while i < json.json_array_size(v) {
+                w = json.json_array_get_raw(v, i)
+                role = uidriver.field_str(w, "role")
+                if string.equals(role, "grid") == 1 { grids = uidriver.field_int(w, "id") }
+                if string.equals(role, "gridcell") == 1 && uidriver.field_int(w, "a11y_row") > 0 { gridcells = gridcells + 1 }
+                t = uidriver.field_str(w, "type")
+                if (string.equals(t, "button") == 1 || string.equals(t, "textfield") == 1) && uidriver.field_bool(w, "visible") == 1 && string.length(uidriver.field_str(w, "a11y_name")) == 0 && string.length(uidriver.field_str(w, "placeholder")) > 0 { unnamed = "${unnamed} ${uidriver.field_str(w, "placeholder")}" }
+                i = i + 1
+            }
+            json.json_free(v)
+            spec.assert_gt(grids, 0, "a grid")
+            spec.assert_gt(gridcells, 100, "of cells, each its row and column")
+            spec.assert_str_eq(unnamed, "", "every field named for a screen reader")
+            g.goto("A1")
+            g.pick("A", 1)
+            g.key("F6")
+            spec.assert_true(b.wait_for_console("sheet: the edit panel"), "F6: the first panel")
+            f1 = uidriver.focused_widget()
+            g.key("F6")
+            spec.assert_true(b.wait_for_console("sheet: the looks panel"), "F6 again: the next")
+            spec.assert_true(uidriver.focused_widget() != f1 && uidriver.focused_widget() > 0, "the focus in it")
+            g.command("view.panel name=none")
+            g.enter("B2", "5")
+            spec.assert_true(uidriver.wait_body_contains("/widget/${grids}/a11y", "B2: 5", 40), "a cell set, said")
+        }
     }
     return spec.run_summary(fw)
 }

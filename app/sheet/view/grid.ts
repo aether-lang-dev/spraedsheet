@@ -227,6 +227,11 @@ export function sheetGrid(v: SheetView): void {
       pointing = false;
       setTimeout(() => typed(null), 0);
     }
+    // F6, Shift+F6: the panels in turn, the focus in each (keyboard only).
+    if (key === "F6") {
+      v.cyclePanel((mods & SHIFT) !== 0 ? -1 : 1);
+      return;
+    }
     // F4 with the grid not focused: the formula bar's reference cycled.
     if (key === "F4" && !ui.datagrid_has_focus(v.grid)) {
       v.actions.get("Cycle reference")?.();

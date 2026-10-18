@@ -6,6 +6,7 @@
 import { COLS, addrOf, keyOf, parseRange } from "../address.ts";
 import type { Addr } from "../address.ts";
 import { Commands, pageEdges } from "../commands.ts";
+import { PANELS } from "../menus.ts";
 import type { Outcome, Params } from "../commands.ts";
 import type { Problem } from "../sheet.ts";
 import { Workbook } from "../workbook.ts";
@@ -90,6 +91,24 @@ export class SheetView {
   readonly #panels = new Map<string, number>();
   readonly #panelOf = new Map<string, string>();
   #building: string | null = null;
+  // Each panel's first field, and first button, where the focus goes when F6
+  // opens it; and every text field named for a screen reader by its
+  // placeholder, as a sighted person reads the hint (7.10).
+  readonly #firstOf = new Map<string, number>();
+  readonly #firstButton = new Map<string, number>();
+  readonly #named = (() => {
+    for (const kind of ["textfield", "securefield"] as const) {
+      const made = ui[kind];
+      if (typeof made !== "function") continue;
+      (ui as any)[kind] = (placeholder: string, fn: (s: string) => void) => {
+        const h = made(placeholder, fn);
+        if (placeholder) ui.a11y_label(h, placeholder);
+        if (this.#building && !this.#firstOf.has(this.#building)) this.#firstOf.set(this.#building, h);
+        return h;
+      };
+    }
+    return true;
+  })();
   #shownPanel: string | null = null;
   // The rows made as tall as their wrapped text; the rows, columns (model)
   // and frozen rows the grid was last given.
@@ -103,7 +122,24 @@ export class SheetView {
   // A panel's button, its action kept by its label for the menus.
   btn(label: string, fn: () => unknown): number {
     this.action(label, fn);
-    return ui.btn(label, fn);
+    const h = ui.btn(label, fn);
+    ui.a11y_label(h, label);
+    if (this.#building && !this.#firstButton.has(this.#building)) this.#firstButton.set(this.#building, h);
+    return h;
+  }
+
+  // F6 (Shift+F6 back): the next panel opened, the focus in it, as Excel's
+  // F6 moves between its panes; past the last, none open and the focus back
+  // on the grid.
+  async cyclePanel(dir: 1 | -1): Promise<void> {
+    const names = PANELS.map((p) => p.name), i = this.wb.panel ? names.indexOf(this.wb.panel) : -1;
+    const j = i + dir, next = j < 0 || j >= names.length ? (i < 0 ? names[dir > 0 ? 0 : names.length - 1] : null) : names[j];
+    await this.run("view.panel", { name: next ?? "none" });
+    // A field if it has one (a button takes no focus where the system's
+    // keyboard access leaves buttons out), else its first button.
+    const target = next ? this.#firstOf.get(next) ?? this.#firstButton.get(next) : this.grid;
+    if (target) try { ui.focus(target); } catch { /* not focusable here */ }
+    if (next) ui.a11y_announce(this.#panels.get(next)!, `${PANELS.find((p) => p.name === next)!.label} panel`);
   }
 
   // An action the menus may run, by its label (the first one kept), and
@@ -209,7 +245,11 @@ export class SheetView {
 
   // A command run, its outcome printed, the workbook shown again.
   run(id: string, params: Params = {}): Promise<Outcome> {
-    return this.#outcome(() => this.cmds.execute(id, params));
+    return this.#outcome(() => this.cmds.execute(id, params)).then((o) => {
+      // A cell set from the page: a screen reader told what it came to.
+      if (o.ok && id === "cell.set" && this.grid && params.cell) ui.a11y_announce(this.grid, `${params.cell}: ${this.wb.textOf(params.cell) || "empty"}`);
+      return o;
+    });
   }
 
   // The same, from a command line (the command bar, and specs through it).
