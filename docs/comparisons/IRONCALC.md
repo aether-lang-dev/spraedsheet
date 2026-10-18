@@ -58,6 +58,66 @@ for assuming either engine has perfect Excel fidelity.
   import parsing, and timezone-dependent functions. Inject the clock for tests;
   avoid making saved results depend silently on the host locale.
 
+## Candidates for direct reuse with credit
+
+IronCalc's README offers **MIT OR Apache-2.0**, at the recipient's option.
+For selected reused material, choose MIT and retain its notices. This extends
+the original independent-implementation proposal: attributed copies of selected
+fixtures and adapted tests are worthwhile, followed by small production-code
+ports where evidence demonstrates a benefit. Nothing is copied by this document.
+
+### Copy fixtures and adapt their assertions first
+
+| Candidate | Material to reuse | Value for Spraedsheet |
+|---|---|---|
+| Volatile shared-formula regression | `xlsx/tests/shared_formula_volatile.xlsx` and assertions from `xlsx/tests/test_import_shared_formula_volatile.rs` | Check that an empty shared-formula daughter element carrying `ca="1"` retains its translated formula, rather than being mistaken for a spill placeholder |
+| Optional XLSX style attribute | `xlsx/tests/optional_xf_id.xlsx` and assertions from `xlsx/tests/optional_xf_id_import.rs` | Accept styles whose `xfId` attribute is absent while preserving their supported alignment/wrapping properties |
+| Number-format cases | Selected inputs and expected outputs from `base/src/test/test_number_format.rs` and `base/src/formatter/test/` | Exercise rounding, sections, dates, fractions, scientific notation, and text preservation against our formatter |
+| Editing regressions | Selected scenarios from `base/src/test/user_model/`, including autofill, cut/paste, merged cells, arrays, and undo | Check interactions between features, not only isolated edit commands |
+| Formula compatibility workbooks | A curated subset of `xlsx/tests/calc_tests/` | Broaden workbook-based formula coverage without authoring every fixture ourselves |
+
+Copy approved workbook fixtures unchanged where practical, and translate the Rust
+assertions into our headless harness. Record which assertions were adapted and
+which behaviours we intentionally handle differently. These cases supplement
+our original corpus; neither IronCalc's expected values nor cached workbook
+results should automatically become the oracle for every disputed behaviour.
+
+### Consider small production-code ports after the tests
+
+- **Series detection:** `base/src/user_model/sequence_detector.rs` is a candidate
+  for an attributed port into the existing `app/sheet/series.ts` functionality.
+  Useful areas include locale-aware number sequences, month/day names, case
+  preservation, and decimal progression handling. Demonstrate gaps with the
+  imported/adapted tests first; retain existing behaviour such as padded suffixes
+  where it is intentional.
+- **Specific formatter routines:** inspect `base/src/formatter/` for a small
+  routine that solves a demonstrated gap in `app/sheet/numfmt.ts`. Port the
+  smallest useful unit together with its relevant cases, accounting for runtime
+  and numeric differences between Rust and sae.
+
+The Rust workbook engine and history machinery would require substantial
+adaptation. Keep our current implementations unless measurements identify a
+concrete benefit that justifies replacing them.
+
+### Attribution and provenance
+
+For each copied fixture, adapted test, or port:
+
+1. Check its individual provenance and any third-party notices, particularly for
+   workbooks and generated data. Do not assume every bundled asset has identical
+   provenance merely because the repository offers MIT.
+2. Preserve IronCalc's applicable copyright and full MIT permission/warranty
+   notice, including `LICENSE-MIT`, with the reused material.
+3. Record the upstream repository, exact commit, original paths, selected licence,
+   and local destinations in a provenance file. The reviewed short revision is
+   `297553d`; resolve and store the full commit when material is imported.
+4. Mark adaptations and ports, describe local modifications, and keep upstream
+   fixtures separate from our original cases so later updates are reviewable.
+
+**First reuse batch:** the volatile shared-formula and optional-`xfId` XLSX
+regressions, plus selected number-format cases. Run those against the current app
+before deciding which production routines warrant a port.
+
 ## First proof and priority
 
 Use independently authored workbooks covering mixed absolute references,
