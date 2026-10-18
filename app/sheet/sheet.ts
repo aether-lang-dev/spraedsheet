@@ -150,6 +150,11 @@ export const alone = (): Context => ({
   value: (key) => new CellError("#REF!", `no sheet ${splitKey(key).sheet}`),
 });
 
+// The most cells a sheet holds (Sheet.#checked): what the installed app's
+// page heap (app.json's memory, 512 MB) works with, opened, recalculated and
+// scrolled within the times tests/headless/sheet_large.ts asserts.
+export const MOST_HELD = 200_000;
+
 export class Sheet {
   readonly #inputs = new Map<string, string>();
   readonly #compiled = new Map<string, Compiled>();
@@ -233,13 +238,30 @@ export class Sheet {
     return this.#inTurn(() => this.#apply(list));
   }
 
-  // Entries with their keys normalised; a key off the sheet is refused.
+  // Entries with their keys normalised; a key off the sheet is refused, as
+  // is a change that would leave the sheet holding more than MOST_HELD
+  // cells (what the app's page, 512 MB, works with: 100,000 cells take
+  // about 256 MB), refused whole, before anything is set.
   #checked(entries: Iterable<readonly [string, string]>): [string, string][] {
-    return [...entries].map(([k, input]): [string, string] => {
+    const list = [...entries].map(([k, input]): [string, string] => {
       const a = addrOf(k);
       if (!a) throw new RangeError(`${k} is not a cell on the sheet`);
       return [keyOf(a), input];
     });
+    if (this.#inputs.size + list.length > MOST_HELD) {
+      let held = this.#inputs.size;
+      const seen = new Set<string>();
+      for (const [k, input] of list) {
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const had = this.#inputs.has(k);
+        if (input === "" && had) held--;
+        else if (input !== "" && !had) held++;
+      }
+      const n = (x: number) => String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      if (held > MOST_HELD) throw new RangeError(`that would leave the sheet holding ${n(held)} cells: the most a sheet holds here is ${n(MOST_HELD)}`);
+    }
+    return list;
   }
 
   // What the sheet holds, to be put back (the workbook's undo): its
@@ -524,7 +546,10 @@ export class Sheet {
   async #recompute(set: readonly string[], depth = 0, all = false): Promise<string[]> {
     const calc = this.#context.calc?.() ?? AUTOMATIC;
     const before = new Map<string, string>();
-    const anchors = [...this.#areas].filter(([, area]) => area.some((k) => set.includes(k))).map(([a]) => a);
+    // As a set: includes() over a big change (a file opened, 100,000 cells)
+    // made the passes below quadratic.
+    const inSet = new Set(set);
+    const anchors = [...this.#areas].filter(([, area]) => area.some((k) => inSet.has(k))).map(([a]) => a);
     let affected = this.#downstream([...set, ...anchors, ...(calc.manual && !all ? [] : this.#volatile)]);
     if (calc.manual && !all) {
       const now = new Set([...set, ...anchors].filter((k) => !k.includes("!")));
@@ -552,7 +577,7 @@ export class Sheet {
       for (const k of this.#ordered(rest).ordered) await this.#evaluate(k);
     }
 
-    let changed = mine.filter((k) => set.includes(k) || before.get(k) !== show(this.value(k))).sort(byOrder);
+    let changed = mine.filter((k) => inSet.has(k) || before.get(k) !== show(this.value(k))).sort(byOrder);
     for (const k of changed) this.#listener?.changed(k, this.value(k));
     const moved = [...this.#spillChanged];
     if (moved.length && depth < 4) changed = [...new Set([...changed, ...(await this.#recompute(moved, depth + 1, all))])].sort(byOrder);

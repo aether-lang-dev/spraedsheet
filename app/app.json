@@ -1,6 +1,7 @@
 {
   "name": "Spreadsheet",
   "start": "/sheet",
+  "memory": 512,
   "capabilities": {
     "documents": {},
     "shell": {
