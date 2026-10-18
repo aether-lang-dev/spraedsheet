@@ -54,6 +54,15 @@ claude mcp add spreadsheet -- node /path/to/mcp/spreadsheet-mcp.js --tools=all
 | `spreadsheet_run_program` | Runs a whole REXX program in the app, next to the data: loops, conditions, routines, `SAY`, calling the same functions as `spreadsheet_call`. One step of undo, all or nothing; its `SAY` lines and `RESULT` come back. A loop over hundreds of cells is one call, not hundreds. Sent as it is (base64 JSON to the app's `RUN_PROGRAM`), so nothing in it needs escaping. |
 | `spreadsheet_read_range` | Reads a range (`"A1:C5"`) as rows of shown values, with the formulas behind them. |
 | `spreadsheet_list_commands` | Lists the app's functions (about 130), each as its signature (`SORTRANGE(range, by, [ascending])`), what it does and what it gives, from the app's `LISTCOMMANDS(1)` (`app/sheet/described.ts`); with a `name`, one in full, each parameter said. |
+| `spreadsheet_screenshot` | The window as an image: the grid, the panels, the drawings and charts floating over it. Needs the app's ui channel (below). |
+| `spreadsheet_key` | A key pressed in the window as a person presses it (`Down`, `Shift+Tab`, `Ctrl+C`, `F2`, `7`). Needs the ui channel. |
+| `spreadsheet_ui` | One request to the window's UI driver: `GET /widgets`, `/widget/<id>`, `/focus`, `/window/pick`; `POST /widget/<id>/click`, `/window/key`, `/window/resize`. Nothing else is passed. Needs the ui channel. |
+
+The ui channel: the app's `app.json` grants `capabilities.controlBus.ui`, and the
+app runs from a sae-driver build (aether-ui's driver on, started with
+`AETHER_UI_TEST_PORT`) with `--control-bus`; a release sae answers that it has no
+driver (sae's `docs/control-bus.md`, "The ui channel"). The three tools are listed in
+every setting; without the channel they answer with why.
 | `spreadsheet_run` | Runs one command of REXX, e.g. `SETCELL("A1", "100"); SETCELL("A2", "=A1*2")`; queries too (`RESULT(RANGE("A1:C9") \|> WHERE("amount > 100"))`), which `spreadsheet_call` does not take. |
 
 There is one generic `spreadsheet_call`, not a tool for each of the app's

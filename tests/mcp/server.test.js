@@ -64,7 +64,7 @@ const names = (r) => r.result.tools.map((t) => t.name);
 
 test('json, the default: the four tools that take JSON, a whole program, and no REXX command to escape', async () => {
   const { replies } = await talk([INIT, LIST]);
-  assert.deepEqual(names(replies[1]), ['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands']);
+  assert.deepEqual(names(replies[1]), ['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands', 'spreadsheet_screenshot', 'spreadsheet_key', 'spreadsheet_ui']);
   for (const t of replies[1].result.tools) {
     assert.equal(t.inputSchema.type, 'object', t.name);
     assert.match(t.description, /one step of its undo/, t.name);
@@ -75,7 +75,7 @@ test('json, the default: the four tools that take JSON, a whole program, and no 
 
 test('--tools=rexx: spreadsheet_run, with REXX\'s escaping said, and the two that read', async () => {
   const { replies } = await talk([INIT, LIST], {}, REXX);
-  assert.deepEqual(names(replies[1]), ['spreadsheet_run', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands']);
+  assert.deepEqual(names(replies[1]), ['spreadsheet_run', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands', 'spreadsheet_screenshot', 'spreadsheet_key', 'spreadsheet_ui']);
   assert.match(replies[1].result.tools[0].description, /a quote inside one is written twice/);
   assert.match(replies[1].result.tools[4].description, /Every function spreadsheet_run or a program may call/);
 });
@@ -84,13 +84,13 @@ test('--tools=all, or SPREADSHEET_MCP_TOOLS=all: all six', async () => {
   const flag = await talk([INIT, LIST], {}, ['--tools=all']);
   const env = await talk([INIT, LIST], { SPREADSHEET_MCP_TOOLS: 'ALL' });
   for (const { replies } of [flag, env]) {
-    assert.deepEqual(names(replies[1]), ['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands', 'spreadsheet_run']);
+    assert.deepEqual(names(replies[1]), ['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run_program', 'spreadsheet_read_range', 'spreadsheet_inspect', 'spreadsheet_list_commands', 'spreadsheet_run', 'spreadsheet_screenshot', 'spreadsheet_key', 'spreadsheet_ui']);
   }
 });
 
 test('the flag wins over the environment', async () => {
   const { replies } = await talk([INIT, LIST], { SPREADSHEET_MCP_TOOLS: 'all' }, REXX);
-  assert.equal(names(replies[1]).length, 5);
+  assert.equal(names(replies[1]).length, 8);
 });
 
 // ---- spreadsheet_run_program
@@ -375,3 +375,27 @@ test('--headless: the server starts the app itself (no window, its control bus o
   assert.ok(fs.readFileSync(appLog, 'utf8').includes('"stopped"'), 'stopped when the client went');
 });
 
+// ---- the window: spreadsheet_screenshot, spreadsheet_key, spreadsheet_ui (7.5)
+
+test('spreadsheet_screenshot: the window as an image, from the bus\'s ui channel', async () => {
+  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_screenshot', {})]);
+  assert.deepEqual(replies[1].result.content, [{ type: 'image', data: 'iVBORw0KGgoAAAANSUhEUg==', mimeType: 'image/png' }]);
+  assert.equal(calls[0][1], '@ui GET /screenshot?b64=1');
+});
+
+test('spreadsheet_key: a combo to the driver\'s window key, encoded', async () => {
+  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_key', { combo: 'Shift+Tab' }), call(3, 'spreadsheet_key', { combo: '' })]);
+  assert.equal(replies[1].result.isError, false);
+  assert.deepEqual(replies[1].result.structuredContent, { result: { fired: true } });
+  assert.equal(calls[0][1], '@ui POST /window/key?combo=Shift%2BTab');
+  assert.equal(replies[2].result.isError, true);
+});
+
+test('spreadsheet_ui: a request the driver answers, a refusal the bus gives as an error, a bad shape refused before the bus', async () => {
+  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_ui', { method: 'GET', path: '/widgets' }), call(3, 'spreadsheet_ui', { method: 'POST', path: '/shutdown' }), call(4, 'spreadsheet_ui', { method: 'PUT', path: '/widgets' })]);
+  assert.deepEqual(replies[1].result.structuredContent, { result: [{ id: 1, type: 'vstack' }] });
+  assert.equal(replies[2].result.isError, true);
+  assert.match(replies[2].result.content[0].text, /not a path the control bus passes/);
+  assert.equal(replies[3].result.isError, true);
+  assert.equal(calls.length, 2, 'the bad shape never reached the bus');
+});

@@ -79,6 +79,14 @@ if (process.env.FAKE_BUS_NO_APP) {
   answer(JSON.stringify({ name: 'Untitled', active: 'Sheet1', language: 'Excel', names: ['TOTAL=Sheet1!B1:B3'],
     sheets: [{ name: 'Sheet1', used: 'A1:C4', cells: 9, formulas: 2, hidden: 0, names: [], tables: ['Sales=A1:C4'], charts: [], pivots: [], drawings: [] },
       { name: 'Costs', used: '', cells: 0, formulas: 0, hidden: 0, names: [], tables: [], charts: [], pivots: [], drawings: [] }] }));
+} else if (command === '@ui GET /screenshot?b64=1') {
+  answer('iVBORw0KGgoAAAANSUhEUg==');
+} else if (command === '@ui POST /window/key?combo=Shift%2BTab') {
+  answer({ fired: true });
+} else if (command === '@ui GET /widgets') {
+  answer([{ id: 1, type: 'vstack' }]);
+} else if (command.startsWith('@ui ')) {
+  refuse('@ui: ' + command.slice(4) + ' is not a path the control bus passes to the UI driver');
 } else if (command === 'SPREADSHEET_VERSION()') {
   answer('1.0');
 } else if (command === 'LISTCOMMANDS(1)') {

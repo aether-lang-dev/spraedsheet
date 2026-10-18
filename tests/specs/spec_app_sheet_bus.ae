@@ -60,6 +60,32 @@ main() {
             spec.assert_contains(bus, "bold", "the look read too")
             spec.assert_str_eq(ui, bus, "the same cells: inputs, values, looks")
         }
+        spec.it("the window over the bus's ui channel (7.5): a cell clicked and a key pressed from outside move the cursor, and a screenshot comes back") callback {
+            _u, key = courier_()
+            _a1, _p1 = command_(key, "ADDSHEET(\"Driven\")")
+            _a2, _p2 = command_(key, "SETACTIVESHEET(\"Driven\")")
+            spec.assert_true(g.wait_cell("A", 1, ""), "the new sheet shown")
+            id = g.cell_id("A", 6)
+            spec.assert_gt(id, 0, "A6 shown")
+            _s1, widgets = command_(key, "@ui GET /widgets")
+            spec.assert_contains(widgets, "\"success\":true", "the widgets, read from outside")
+            _s2, clicked = command_(key, "@ui POST /widget/${id}/click")
+            spec.assert_contains(clicked, "\"success\":true", "A6 clicked from outside")
+            _s3, at = command_(key, "GETSELECTION()")
+            spec.assert_contains(at, "A6", "the cursor on A6")
+            _s4, k = command_(key, "@ui POST /window/key?combo=Down")
+            spec.assert_contains(k, "\"success\":true", "Down pressed from outside")
+            i = 0
+            _s5, at2 = command_(key, "GETSELECTION()")
+            while string.contains(at2, "A7") == 0 && i < 20 {
+                sleep(100)
+                _s6, at2 = command_(key, "GETSELECTION()")
+                i = i + 1
+            }
+            spec.assert_contains(at2, "A7", "the cursor moved to A7")
+            _s7, shot = command_(key, "@ui GET /screenshot?b64=1")
+            spec.assert_contains(shot, "iVBORw0KGgo", "the window as a PNG")
+        }
     }
     return spec.run_summary(fw)
 }

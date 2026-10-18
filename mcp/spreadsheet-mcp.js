@@ -213,10 +213,49 @@ const listCommands = (via) => ({
   },
 });
 
+// The window itself (7.5): what a person at it has, over the bus's ui channel
+// (app.json capabilities.controlBus.ui, a sae-driver build with its driver
+// on): look, press keys, click a widget.
+const UI_NEEDS = 'Needs the app\'s ui channel (app.json capabilities.controlBus.ui, a sae-driver build run with AETHER_UI_TEST_PORT); refused without. ';
+const SCREENSHOT = {
+  name: 'spreadsheet_screenshot',
+  title: 'Look at the window',
+  description: 'A picture of the spreadsheet\'s window as it is: the grid, the panels, the drawings and charts floating over it. ' + UI_NEEDS + LIMITS,
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+};
+const KEY = {
+  name: 'spreadsheet_key',
+  title: 'Press a key',
+  description: 'A key pressed in the window, as a person at the keyboard presses it, to whatever has the focus (the grid: arrows, Tab, Return, Escape, Ctrl+Z, a letter opens the editor). ' +
+    'combo: e.g. "Down", "Shift+Tab", "Ctrl+C", "F2", "7". ' + UI_NEEDS + LIMITS,
+  inputSchema: {
+    type: 'object',
+    properties: { combo: { type: 'string', description: 'The key, with modifiers joined by +' } },
+    required: ['combo'],
+    additionalProperties: false,
+  },
+};
+const UI = {
+  name: 'spreadsheet_ui',
+  title: 'Ask the window\'s driver',
+  description: 'One request to the window\'s UI driver: GET /widgets (every widget with its text, geometry and state), GET /widget/<id>, GET /focus, ' +
+    'GET /window/pick?x=&y= (what a press at a point reaches), POST /widget/<id>/click (or set_text?v=, focus, hover, toggle, set_value?v=), ' +
+    'POST /window/key?combo=, POST /window/resize?w=&h=. Nothing else is passed. ' + UI_NEEDS + LIMITS,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      method: { type: 'string', enum: ['GET', 'POST'] },
+      path: { type: 'string', description: 'e.g. "/widgets", "/widget/12/click", "/window/key?combo=Down"' },
+    },
+    required: ['method', 'path'],
+    additionalProperties: false,
+  },
+};
+
 function toolsFor(surface) {
-  if (surface === 'rexx') return [RUN, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_run or a program')];
-  if (surface === 'all') return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call, a program, or spreadsheet_run'), RUN];
-  return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call or a program')];
+  if (surface === 'rexx') return [RUN, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_run or a program'), SCREENSHOT, KEY, UI];
+  if (surface === 'all') return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call, a program, or spreadsheet_run'), RUN, SCREENSHOT, KEY, UI];
+  return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call or a program'), SCREENSHOT, KEY, UI];
 }
 
 // --tools=X, or SPREADSHEET_MCP_TOOLS; json when neither.
@@ -481,6 +520,23 @@ function failed(message) {
 async function callTool(name, args, surface = 'all') {
   args = args || {};
   if (!toolsFor(surface).some((t) => t.name === name)) return null;
+  if (name === 'spreadsheet_screenshot') {
+    const a = await bus('@ui GET /screenshot?b64=1');
+    if (!a.ok) return failed(a.error);
+    return { content: [{ type: 'image', data: String(a.result), mimeType: 'image/png' }], isError: false };
+  }
+  if (name === 'spreadsheet_key') {
+    if (typeof args.combo !== 'string' || args.combo.trim() === '') return failed('spreadsheet_key needs a combo, e.g. "Down" or "Ctrl+C"');
+    const a = await bus('@ui POST /window/key?combo=' + encodeURIComponent(args.combo.trim()));
+    if (!a.ok) return failed(a.error);
+    return ok(a.result === null ? '(done)' : a.result, { result: a.result });
+  }
+  if (name === 'spreadsheet_ui') {
+    if (!['GET', 'POST'].includes(args.method) || typeof args.path !== 'string' || !args.path.startsWith('/')) return failed('spreadsheet_ui needs a method (GET or POST) and a path starting with /');
+    const a = await bus('@ui ' + args.method + ' ' + args.path);
+    if (!a.ok) return failed(a.error);
+    return ok(a.result === null ? '(done)' : a.result, { result: a.result });
+  }
   if (name === 'spreadsheet_inspect') {
     const a = await bus('INSPECTWORKBOOK()');
     if (!a.ok) return failed(a.error);
