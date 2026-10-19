@@ -26,9 +26,9 @@ the yardstick: [docs/gridcraft_feature_reference.md](docs/gridcraft_feature_refe
 its source never read) and a toolbar and menus over the grid, each step
 reachable from REXX.
 
-Comparative direction notes for the current Aether/AetherUI/sae app:
+Action lists drawn from other spreadsheets for the current Aether/AetherUI/sae app:
 [LibreOffice, Grist, HyperFormula, Univer, IronCalc, Gnumeric, VisiData, and
-Airtable](OPEN_SOURCE_COMPARISONS.md).
+Airtable](docs/comparisons/README.md).
 
 ```
 app/

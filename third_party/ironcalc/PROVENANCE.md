@@ -9,7 +9,7 @@ here, unmodified, and applies to everything listed below.
 
 Why it is here: Paul approved copying and porting selected IronCalc material
 into Spraedsheet under that licence (an exception to the usual not-ours rule,
-for IronCalc only). The plan is `docs/comparisons/IRONCALC.md`.
+for IronCalc only). The remaining candidates are `docs/comparisons/IRONCALC.md`.
 
 Rules this file keeps:
 
