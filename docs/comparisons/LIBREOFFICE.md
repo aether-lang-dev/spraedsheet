@@ -1,0 +1,35 @@
+# LibreOffice Calc: actions
+
+**Licence and reuse:** MPL-2.0. Ideas only: no source, fixtures, assets or
+numerical routines copied. Native Aether/AetherUI/sae stays; no DOM, Tauri or
+Pyodide work.
+
+Done, so dropped: cross-sheet settlement, names, tables, pivots, grouped undo and
+script rollback (TODO 1-4, 7.1); the full-size sheet (1.4); large-file limits
+(7.8); malformed-command and seeded-sequence fuzz (7.6); headless vs interactive
+(7.7); Excel-style tracing, watches, evaluate steps and error checking (2.16);
+XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
+(7.9, 7.10).
+
+1. **Cross-feature structural-edit workbook.** Insert a row into a table read by
+   another sheet, rename that sheet, undo and redo, save, reopen; compare
+   formulas, values, names, metadata. Include validation, conditional formats,
+   merges, chart sources. Copy (`$` anchors) tested separately from move. Same
+   workload by commands, REXX/bus and UI. Shared with Univer 3.
+2. **Calculation measurement** (dirty formulas, range visits, settlement rounds,
+   history memory; chains, diamonds, running totals, dynamic refs, spills,
+   volatiles). See HyperFormula 1. No parallelism or GPU work without evidence.
+3. **Validation policy per entry path:** manual edit, paste, import, script,
+   record form; make any bypass explicit. Unique keys validate the whole proposed
+   batch, including conflicts among new rows. Fold into Grist 2.
+4. **Inspection beyond Excel's:** calculation timings, query row lineage,
+   grouping explanations; stepwise RexxJS evaluation belongs in canonical RexxJS
+   first, then vendored. Lineage: see VisiData 3.
+5. **Interchange honesty:** publish supported semantics and known losses; an
+   exported RexxJS workbook needs a formula/results policy for apps that cannot
+   run RexxJS. ODS stays cached-value import.
+6. **Native usability gaps:** improve datagrid and sae services in aether-ui/sae
+   (tested there), then consume: keyboard-only and screen-reader passes over every
+   panel, print/layout integration, larger-grid interaction.
+7. **Stable record identity, relations, saved views** (the object/table
+   contract): see Grist.md and Airtable.md.
