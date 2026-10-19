@@ -516,6 +516,21 @@ h_scrollbar() -> int {
     return id
 }
 
+// The grid's vertical scrollbar: the scrollbar taller than it is wide.
+v_scrollbar() -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 }
+    id = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        if string.equals(uidriver.field_str(w, "type"), "scrollbar") == 1 && uidriver.field_int(w, "h") > uidriver.field_int(w, "w") { id = uidriver.field_int(w, "id") }
+        i = i + 1
+    }
+    json.json_free(v)
+    return id
+}
+
 // The status bar's zoom slider: the slider named "Zoom".
 zoom_slider() -> int {
     v, _jerr = json.parse(uidriver.get_body("/widgets"))
@@ -2873,6 +2888,68 @@ main() {
             g.command("drawing.delete name=\"Rectangle 1\"")
             g.command("chart.delete index=1")
             spec.assert_true(wait_gone_canvas(97, 65) == 1, "deleted, the shape's scene is gone")
+            g.command("sheet.activate name=Sheet1")
+        }
+        spec.it("a shape over frozen panes is clipped at the freeze line: scrolled under the frozen column and the frozen row, none of it drawn over them") callback {
+            g.command("sheet.add name=Frozen")
+            g.command("view.panel name=view")
+            b.click("Freeze top row")
+            spec.assert_true(b.wait_for_console("sheet: froze 1 row"), "the top row frozen")
+            b.click("Freeze first column")
+            spec.assert_true(b.wait_for_console("sheet: froze 1 column"), "and the first column")
+            g.command("view.panel name=none")
+            g.command("insert.shape shape=rectangle at=B2 w=97 h=65 fill=#d82626 line=#d82626")
+            sh = canvas_sized(97, 65)
+            i = 0
+            while sh == 0 && i < 40 {
+                sleep(100)
+                sh = canvas_sized(97, 65)
+                i = i + 1
+            }
+            spec.assert_gt(sh, 0, "the shape's scene over the grid")
+            bx = uidriver.widget_int_field_by_id(g.cell_id("B", 2), "x")
+            by = uidriver.widget_int_field_by_id(g.cell_id("B", 2), "y")
+            bw = uidriver.widget_int_field_by_id(g.cell_id("C", 2), "x") - bx
+            rh = uidriver.widget_int_field_by_id(g.cell_id("B", 3), "y") - by
+            spec.assert_true(field_is(sh, "x", bx) == 1 && field_is(sh, "y", by) == 1, "at B2, the first cell that scrolls")
+            // A column on: B is under the frozen A, the shape with it, its
+            // left (all but 97 less B's width) under A and not drawn there.
+            hs = h_scrollbar()
+            uidriver.post_ok("/widget/${hs}/scroll?by=step", "a column right")
+            i = 0
+            while i < 40 && g.header_id("B") != 0 { sleep(50); i = i + 1 }
+            fx = uidriver.widget_int_field_by_id(g.cell_id("C", 2), "x")
+            spec.assert_true(field_is(sh, "x", fx - bw) == 1, "the shape a column left of C, where its cell puts it (${uidriver.widget_int_field_by_id(sh, "x")} for ${fx - bw})")
+            sy = uidriver.widget_int_field_by_id(sh, "y")
+            sleep(300)
+            over = red_in("float-frozen-col", "${fx - 30}:${sy + 10}:30:40")
+            past = red_in("float-frozen-col-past", "${fx + 1}:${sy + 10}:${97 - bw - 4}:40")
+            if over >= 0 {
+                spec.assert_eq(over, 0, "no red over the frozen column (${over})")
+                spec.assert_gt(past, 100, "the part past the line drawn (${past})")
+            }
+            uidriver.post_ok("/widget/${hs}/set_value?v=0", "back to the left")
+            // A row on: the shape's row is under the frozen row, its top part
+            // not drawn over it.
+            vs = v_scrollbar()
+            uidriver.post_ok("/widget/${vs}/scroll?by=step", "a row down")
+            i = 0
+            while i < 40 && g.cell_id("B", 2) != 0 { sleep(50); i = i + 1 }
+            fy = uidriver.widget_int_field_by_id(g.cell_id("B", 3), "y")
+            spec.assert_true(field_is(sh, "y", fy - rh) == 1, "the shape a row above B3 (${uidriver.widget_int_field_by_id(sh, "y")} for ${fy - rh})")
+            sx = uidriver.widget_int_field_by_id(sh, "x")
+            sleep(300)
+            over = red_in("float-frozen-row", "${sx + 10}:${fy - 18}:40:15")
+            past = red_in("float-frozen-row-past", "${sx + 10}:${fy + 3}:40:20")
+            if over >= 0 {
+                spec.assert_eq(over, 0, "no red over the frozen row (${over})")
+                spec.assert_gt(past, 500, "the part below the line drawn (${past})")
+            }
+            uidriver.post_ok("/widget/${vs}/set_value?v=0", "back to the top")
+            g.command("drawing.delete name=\"Rectangle 1\"")
+            g.command("view.panel name=view")
+            b.click("Unfreeze")
+            g.command("view.panel name=none")
             g.command("sheet.activate name=Sheet1")
         }
         spec.it("Forecast sheet from the Data panel: a line forecast on a new sheet, with its chart") callback {
