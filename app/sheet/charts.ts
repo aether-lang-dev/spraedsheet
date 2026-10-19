@@ -72,11 +72,20 @@ const isNumber = (v: Value) => typeof v === "number" || (typeof v === "string" &
 const numberOf = (v: Value): number => (isNumber(v) ? Number(v) : 0);
 const isText = (v: Value) => v !== null && !isNumber(v);
 
-// A range as Excel reads one for a chart: when its first column is text
-// below its first row, those are the categories; when its first row is text
-// (or empty) beside them, those name the series; each other column is a
-// series, anything not a number in it 0.
-export function chartData([a, b]: [Addr, Addr], value: (key: string) => Value, byRows = false): ChartData {
+// How a range reads as a chart (Excel's way): when its first column is text
+// below its first row, those are the categories (two text columns: a group
+// and its label); when its first row is text (or empty) beside them, those
+// name the series; each other column is a series. `grid` is the range's
+// values by row (by column when the series are the rows: Switch Row/Column).
+export interface ChartShape {
+  readonly grid: readonly (readonly Value[])[];
+  readonly labelled: boolean;
+  readonly twoLevel: boolean;
+  // The grid column the first series is in, and whether its first row names them.
+  readonly first: number;
+  readonly headed: boolean;
+}
+export function chartShape([a, b]: [Addr, Addr], value: (key: string) => Value, byRows = false): ChartShape {
   const keys = [...range(a, b)], cols = Math.abs(a.col - b.col) + 1;
   const byCol = Array.from({ length: keys.length / cols }, (_, r) => keys.slice(r * cols, (r + 1) * cols).map(value));
   // Switch Row/Column: the series are the rows, the categories the columns.
@@ -85,6 +94,13 @@ export function chartData([a, b]: [Addr, Addr], value: (key: string) => Value, b
   const twoLevel = labelled && cols > 2 && grid.slice(1).some((row) => isText(row[1])) && !grid.slice(1).some((row) => isNumber(row[1]));
   const first = twoLevel ? 2 : labelled ? 1 : 0;
   const headed = grid.length > 1 && grid[0].slice(first).some(isText);
+  return { grid, labelled, twoLevel, first, headed };
+}
+
+// A range as Excel reads one for a chart (chartShape): the categories, and
+// each other column a series, anything not a number in it 0.
+export function chartData(corners: [Addr, Addr], value: (key: string) => Value, byRows = false): ChartData {
+  const { grid, twoLevel, labelled, first, headed } = chartShape(corners, value, byRows);
   const rows = headed ? grid.slice(1) : grid;
   let group = "";
   return {

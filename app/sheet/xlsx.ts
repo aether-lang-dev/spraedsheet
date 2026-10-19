@@ -17,6 +17,7 @@ import type { Look } from "./formats.ts";
 import { ALLOWS } from "./protection.ts";
 import { PASS_THROUGH, cfRulesOf, readThreads, tableOf, unmodelled } from "./xlsxparts.ts";
 import { readDrawings } from "./xlsxdrawings.ts";
+import { readCharts } from "./xlsxcharts.ts";
 
 // The built-in number formats by number (ECMA-376 18.8.30).
 export const BUILTIN_FORMATS: Readonly<Record<number, string>> = {
@@ -318,6 +319,9 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
     const drawings = [...sheetRels.values()].filter((t) => /drawings\/drawing\d+\.xml$/i.test(t) && parts.has(t))
       .flatMap((t) => readDrawings(parseXml(utf8Text(parts.get(t)!)), rels(parts, t), (m) => parts.get(m), name, report, usedMedia))
       .map((d) => ({ ...d, at: keyOf(d.at) }));
+    // Its charts: DrawingML chart parts, by the drawing's relationships.
+    const charts = [...sheetRels.values()].filter((t) => /drawings\/drawing\d+\.xml$/i.test(t) && parts.has(t))
+      .flatMap((t) => readCharts(parseXml(utf8Text(parts.get(t)!)), rels(parts, t), parts, (b) => parseXml(utf8Text(b)), name, report, usedMedia));
     // Its data validation, as the app's rules where they are one.
     for (const dv of all(ws, "dataValidation")) {
       const rule = ruleOf(dv);
@@ -349,7 +353,7 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
     } : null;
     if (sp && attr(sp, "algorithmName")) report.push(`${name}: its protection's password is a hashed one (${attr(sp, "algorithmName")}) this app does not check: protected with none`);
     const editRanges = all(ws, "protectedRange").map((r) => ({ title: attr(r, "name") ?? "Range", range: (attr(r, "sqref") ?? "").split(/\s+/)[0], ...(attr(r, "password") ? { hash: attr(r, "password")!.toUpperCase() } : {}) })).filter((r) => r.range);
-    sheets.push({ name, cells, view, merges, names: {}, rules, tables, ...(drawings.length ? { drawings } : {}), ...(protection ? { protection } : {}), ...(editRanges.length ? { editRanges } : {}) });
+    sheets.push({ name, cells, view, merges, names: {}, rules, tables, ...(drawings.length ? { drawings } : {}), ...(charts.length ? { charts } : {}), ...(protection ? { protection } : {}), ...(editRanges.length ? { editRanges } : {}) });
   });
   if (off) report.push(`${off} cell${off === 1 ? "" : "s"} past ${colName(COLS - 1)}${ROWS}, the sheet's edge, left out`);
   // The defined names: a sheet's own (localSheetId), the workbook's.

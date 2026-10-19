@@ -8,7 +8,7 @@
 // written, and said in the report.
 import { zip, utf8Bytes } from "./zip.ts";
 import { escapeXml } from "./xml.ts";
-import { addrOf, keyOf, order } from "./address.ts";
+import { COLS, addrOf, keyOf, order } from "./address.ts";
 import { CellError } from "./values.ts";
 import type { Value } from "./values.ts";
 import type { Page, Workbook } from "./workbook.ts";
@@ -19,6 +19,9 @@ import { cfXml, personId, personsXml, styleDxf, tableXml, threadsXml } from "./x
 import { threadLine } from "./notes.ts";
 import type { CommentThread } from "./notes.ts";
 import { drawingXml } from "./xlsxdrawings.ts";
+import type { ChartFrame } from "./xlsxdrawings.ts";
+import { chartExXml, chartXml, isEx } from "./xlsxcharts.ts";
+import type { ChartIn } from "./xlsxcharts.ts";
 import { ROLES } from "./themes.ts";
 import { rangeName } from "./rules.ts";
 
@@ -87,8 +90,8 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
   };
   const excel = wb.sheet.language.name === "Excel";
   if (!excel) report.push("RexxJS formulas are not Excel's: their values written, not the formulas");
-  const charts = wb.pages().reduce((k, p) => k + p.charts.length, 0), pivots = wb.pages().reduce((k, p) => k + p.pivots.size, 0), slicers = wb.pages().reduce((k, p) => k + p.slicers.length, 0);
-  if (charts) report.push(`${charts} chart${charts === 1 ? "" : "s"} not written (the app draws its own, not DrawingML)`);
+  const pivotCharts = wb.pages().reduce((k, p) => k + p.charts.filter((c) => c.pivot).length, 0), pivots = wb.pages().reduce((k, p) => k + p.pivots.size, 0), slicers = wb.pages().reduce((k, p) => k + p.slicers.length, 0);
+  if (pivotCharts) report.push(`${pivotCharts} PivotChart${pivotCharts === 1 ? "" : "s"} written as plain charts of their cells`);
   if (pivots) report.push(`${pivots} pivot table${pivots === 1 ? "" : "s"} written as their cells, not as pivots`);
   if (slicers) report.push(`${slicers} slicer${slicers === 1 ? "" : "s"} not written`);
   const pages = wb.pages();
@@ -101,9 +104,24 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
   // The people who wrote the threads, the workbook's one list of them.
   const people = [...new Set(sheetParts.flatMap((x) => x.threads.flatMap(([, t]) => [t.author, ...t.replies.map((r) => r.author)])))];
   let threadIds = 1;
+  // Each sheet's charts: a chart part apiece (a classic one, or for the
+  // histogram, waterfall, funnel, treemap, sunburst and box an extended one),
+  // hung on the sheet's drawing part by a relationship after its pictures'.
+  let chartN = 0, chartExN = 0;
+  const chartParts = pages.map((page) => page.charts.map((c) => {
+    const at = c.at ?? { col: Math.min(COLS - 1, Math.max(c.range[0].col, c.range[1].col) + 2), row: Math.min(c.range[0].row, c.range[1].row) };
+    const input: ChartIn = { kind: c.kind, range: c.range, title: c.title, ...(c.options ? { options: c.options } : {}), at, ...(c.pivot ? { pivot: true, written: page.pivots.get(c.pivot)?.written ?? null } : {}) };
+    const ex = isEx(c.kind), value = (k: string) => page.sheet.value(k);
+    return ex ? { ex, name: `xl/charts/chartEx${++chartExN}.xml`, at, xml: chartExXml(input, page.name, value) } : { ex, name: `xl/charts/chart${++chartN}.xml`, at, xml: chartXml(input, page.name, value) };
+  }));
   // Each sheet's drawings, a drawing part apiece, their pictures as media.
   let mediaN = 0;
-  const drawingParts = pages.map((page) => (page.drawings.length ? drawingXml(page.drawings, () => ++mediaN) : null));
+  const drawingParts = pages.map((page, i) => {
+    if (!page.drawings.length && !chartParts[i].length) return null;
+    const pictures = page.drawings.filter((d) => d.kind === "picture").length;
+    const frames: ChartFrame[] = chartParts[i].map((c, j) => ({ rId: `rId${pictures + j + 1}`, name: `Chart ${j + 1}`, at: c.at, ex: c.ex }));
+    return drawingXml(page.drawings, () => ++mediaN, frames);
+  });
   const exts = [...new Set(drawingParts.flatMap((d) => d?.media ?? []).map((m) => m.name.split(".").pop()!))];
   const sparks = sheetParts.reduce((k, x) => k + x.sparks, 0);
   if (sparks) report.push(`${sparks} sparkline${sparks === 1 ? "" : "s"} written as their text (Excel has no SPARKLINE function)`);
@@ -148,6 +166,7 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
     people.length ? '<Override PartName="/xl/persons/person.xml" ContentType="application/vnd.ms-excel.person+xml"/>' : ""}${
     sheetParts.map((x, i) => (x.threads.length ? `<Override PartName="/xl/threadedComments/threadedComment${i + 1}.xml" ContentType="application/vnd.ms-excel.threadedcomments+xml"/>` : "")).join("")}${
     drawingParts.map((d, i) => (d ? `<Override PartName="/xl/drawings/drawing${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` : "")).join("")}${
+    chartParts.flat().map((c) => `<Override PartName="/${c.name}" ContentType="${c.ex ? "application/vnd.ms-office.chartex+xml" : "application/vnd.openxmlformats-officedocument.drawingml.chart+xml"}"/>`).join("")}${
     sheetParts.flatMap((x) => x.tables).map((t) => `<Override PartName="/xl/tables/table${t.id}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>`).join("")}${
     wb.carried.map(([n]) => `<Override PartName="/${n}" ContentType="${CARRIED_TYPES[n] ?? "application/xml"}"/>`).join("")}<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
   const carried = new Set(wb.carried.map(([n]) => n));
@@ -166,7 +185,13 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
     const dp = drawingParts[i];
     if (dp) {
       entries.push([`xl/drawings/drawing${i + 1}.xml`, utf8Bytes(dp.xml)], ...dp.media.map((m): [string, Uint8Array] => [m.name, m.bytes]));
-      if (dp.media.length) entries.push([`xl/drawings/_rels/drawing${i + 1}.xml.rels`, utf8Bytes(`${HEAD}<Relationships xmlns="${PKG}">${dp.media.map((m) => `<Relationship Id="${m.rId}" Type="${REL}/image" Target="../media/${m.name.split("/").pop()}"/>`).join("")}</Relationships>`)]);
+      const cps = chartParts[i];
+      for (const c of cps) entries.push([c.name, utf8Bytes(c.xml)]);
+      if (dp.media.length || cps.length) {
+        const rels = [...dp.media.map((m) => `<Relationship Id="${m.rId}" Type="${REL}/image" Target="../media/${m.name.split("/").pop()}"/>`),
+          ...cps.map((c, j) => `<Relationship Id="rId${dp.media.length + j + 1}" Type="${c.ex ? "http://schemas.microsoft.com/office/2014/relationships/chartEx" : `${REL}/chart`}" Target="../charts/${c.name.split("/").pop()}"/>`)];
+        entries.push([`xl/drawings/_rels/drawing${i + 1}.xml.rels`, utf8Bytes(`${HEAD}<Relationships xmlns="${PKG}">${rels.join("")}</Relationships>`)]);
+      }
     }
     if (!comments.length && !tables.length && !urls.length && !drawingRid && !threadRid) return;
     const relsXml = [...(comments.length ? [`<Relationship Id="rId1" Type="${REL}/comments" Target="../comments${i + 1}.xml"/>`, `<Relationship Id="rId2" Type="${REL}/vmlDrawing" Target="../drawings/vmlDrawing${i + 1}.vml"/>`] : []),
@@ -264,7 +289,7 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
     if (/^[a-z][a-z0-9+.-]*:/i.test(h.target)) { urls.push(h.target); return `<hyperlink ref="${k}" r:id="rId${relBase + tables.length + urls.length - 1}"${tip}/>`; }
     return `<hyperlink ref="${k}" location="${escapeXml(h.target.replace(/^#/, ""))}"${tip}/>`;
   });
-  const drawingRid = page.drawings.length ? relBase + tables.length + urls.length : 0;
+  const drawingRid = page.drawings.length || page.charts.length ? relBase + tables.length + urls.length : 0;
   const threadRid = threads.length ? relBase + tables.length + urls.length + (drawingRid ? 1 : 0) : 0;
   const xml = `${HEAD}<worksheet xmlns="${MAIN}" xmlns:r="${REL}"><sheetViews><sheetView${page.gridlines ? "" : ' showGridLines="0"'}${page.headings ? "" : ' showRowColHeaders="0"'} workbookViewId="0">${pane}</sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rowXml}</sheetData>${protectionXml(page)}${
     merges ? `<mergeCells count="${page.merges.length}">${merges}</mergeCells>` : ""}${cf}${dvs.length ? `<dataValidations count="${dvs.length}">${dvs.join("")}</dataValidations>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}${breaksXml(page)}${drawingRid ? `<drawing r:id="rId${drawingRid}"/>` : ""}${comments.length ? '<legacyDrawing r:id="rId2"/>' : ""}${

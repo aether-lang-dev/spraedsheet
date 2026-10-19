@@ -41,8 +41,8 @@ const cmds3 = new Commands(new Workbook());
 await cmds3.run("cell.set cell=A1 input=1");
 await cmds3.run("insert.sparkline range=A1:A1 at=B1");
 await cmds3.run("chart.insert kind=bar range=A1:A1");
-eq("what it cannot write, said", (await cmds3.run("file.exportXlsx")).message.replace(/^[^;]*; /, ""),
-  "1 chart not written (the app draws its own, not DrawingML); 1 sparkline written as their text (Excel has no SPARKLINE function)");
+eq("what it cannot write, said (a chart it can)", (await cmds3.run("file.exportXlsx")).message.replace(/^[^;]*; /, ""),
+  "1 sparkline written as their text (Excel has no SPARKLINE function)");
 
 // expect: ok a dxf as a style and back
 // expect: ok the report
@@ -52,4 +52,4 @@ eq("what it cannot write, said", (await cmds3.run("file.exportXlsx")).message.re
 // expect: ok the totals row's formula works
 // expect: ok carried over unchanged: the theme, the document properties
 // expect: ok written and read again: the rules, the table
-// expect: ok what it cannot write, said
+// expect: ok what it cannot write, said (a chart it can)

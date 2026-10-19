@@ -23,7 +23,24 @@ const colourXml = (c: string) => (SCHEME[c] ? `<a:schemeClr val="${SCHEME[c]}"/>
 
 // The drawing part for some drawings, and its pictures: each picture's
 // media (its bytes, its part's name) and the relationship naming it.
-export function drawingXml(ds: readonly Drawing[], nextMedia: () => number): { xml: string; media: { rId: string; name: string; bytes: Uint8Array }[] } {
+// A chart in the drawing: its relationship, its name, its cell, and whether
+// its part is an extended one (Office 2016's chartex).
+export interface ChartFrame { readonly rId: string; readonly name: string; readonly at: Addr; readonly ex: boolean }
+const CHART_URI = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+const CHARTEX_URI = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+const CHART_W = 400, CHART_H = 240;
+
+function chartAnchor(f: ChartFrame, id: number): string {
+  const cx = CHART_W * EMU, cy = CHART_H * EMU;
+  const frame = (inner: string) => `<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${id}" name="${escapeXml(f.name)}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic>${inner}</a:graphic></xdr:graphicFrame>`;
+  const body = f.ex
+    ? `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:cx1="http://schemas.microsoft.com/office/drawing/2015/9/8/chartex" Requires="cx1">${
+      frame(`<a:graphicData uri="${CHARTEX_URI}"><cx:chart xmlns:cx="${CHARTEX_URI}" xmlns:r="${R}" r:id="${f.rId}"/></a:graphicData>`)}</mc:Choice><mc:Fallback><xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${id}" name="${escapeXml(f.name)}"/><xdr:cNvSpPr><a:spLocks noTextEdit="1"/></xdr:cNvSpPr></xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:prstClr val="white"/></a:solidFill><a:ln w="1"><a:solidFill><a:prstClr val="green"/></a:solidFill></a:ln></xdr:spPr><xdr:txBody><a:bodyPr vertOverflow="clip" horzOverflow="clip"/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="1100"/><a:t>This chart isn't available in your version of Excel.</a:t></a:r></a:p></xdr:txBody></xdr:sp></mc:Fallback></mc:AlternateContent>`
+    : frame(`<a:graphicData uri="${CHART_URI}"><c:chart xmlns:c="${CHART_URI}" xmlns:r="${R}" r:id="${f.rId}"/></a:graphicData>`);
+  return `<xdr:oneCellAnchor><xdr:from><xdr:col>${f.at.col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${f.at.row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${cx}" cy="${cy}"/>${body}<xdr:clientData/></xdr:oneCellAnchor>`;
+}
+
+export function drawingXml(ds: readonly Drawing[], nextMedia: () => number, charts: readonly ChartFrame[] = []): { xml: string; media: { rId: string; name: string; bytes: Uint8Array }[] } {
   const media: { rId: string; name: string; bytes: Uint8Array }[] = [];
   const anchors = ds.map((d, i) => {
     const id = i + 2, cx = d.w * EMU, cy = d.h * EMU;
@@ -42,7 +59,8 @@ export function drawingXml(ds: readonly Drawing[], nextMedia: () => number): { x
     }
     return `<xdr:oneCellAnchor><xdr:from><xdr:col>${d.at.col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${d.at.row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${cx}" cy="${cy}"/>${body}<xdr:clientData/></xdr:oneCellAnchor>`;
   });
-  return { xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="${XDR}" xmlns:a="${A}" xmlns:r="${R}">${anchors.join("")}</xdr:wsDr>`, media };
+  const frames = charts.map((f, i) => chartAnchor(f, ds.length + i + 2));
+  return { xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="${XDR}" xmlns:a="${A}" xmlns:r="${R}">${anchors.join("")}${frames.join("")}</xdr:wsDr>`, media };
 }
 
 // A drawing part read: its pictures (their bytes by `media`, from the

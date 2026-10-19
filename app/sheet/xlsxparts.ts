@@ -182,7 +182,7 @@ export function unmodelled(names: readonly string[], sheetXml: readonly string[]
   const out: string[] = [];
   const count = (re: RegExp) => names.filter((n) => re.test(n)).length;
   const said = (n: number, what: string) => { if (n) out.push(`${n} ${what}${n === 1 ? "" : "s"} left out`); };
-  said(count(/^xl\/charts\/chart\d+\.xml$/), "chart");
+  said(count(/^xl\/charts\/chart(Ex)?\d+\.xml$/), "chart");
   said(count(/^xl\/media\//), "picture");
   said(count(/^xl\/pivotTables\/pivotTable\d+\.xml$/), "pivot table");
   said(count(/^xl\/externalLinks\/externalLink\d+\.xml$/), "external link");
