@@ -2,7 +2,7 @@
 
 Each file here is a short action list, with the project's licence and what we
 may take. Earlier prose is in git history. GridCraft is summary-only
-(`docs/gridcraft_feature_reference.md`); its repository is never read.
+(`docs/comparisons/gridcraft_feature_reference.md`); its repository is never read.
 
 TODO.md is fully struck. Most remaining actions have no step yet; the recurring
 ones are the record model, measurement, numerical tests and command hardening.

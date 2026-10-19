@@ -14,7 +14,7 @@ It proposed:
 
 This file is the plan that follows from it, kept apart from `TODO.md`,
 whose steps are GridCraft parity. Each step here follows the same
-rules (`docs/gridcraft_parity.md`): one commit with its tests and the
+rules (`docs/comparisons/gridcraft_parity.md`): one commit with its tests and the
 control function it gains, described, so scripts, the bus and the MCP
 server reach it. A step done is struck through, with its date.
 

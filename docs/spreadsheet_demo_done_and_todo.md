@@ -1227,8 +1227,8 @@ Limits to say in the tools' descriptions, not to fix for this:
 Started 2026-10-15 (Paul: "track spraedsheet toward goals of gridcraft in
 many baby steps with tests: REXX of as much as possible too cos we do
 that and gridcraft does not"). The yardstick is
-`docs/gridcraft_feature_reference.md`, a summary taken on trust (never
-GridCraft's repository: a different licence; `AGENTS.md`). `docs/gridcraft_parity.md` says where this app stands against each
+`docs/comparisons/gridcraft_feature_reference.md`, a summary taken on trust (never
+GridCraft's repository: a different licence; `AGENTS.md`). `docs/comparisons/gridcraft_parity.md` says where this app stands against each
 section of the reference; `TODO.md` at the root lists the steps, about
 ninety in the reference's own kickoff order plus the look above the grid
 (a menu bar, a toolbar, panels on demand), each one commit with its

@@ -21,8 +21,8 @@ history up to then is in sae's git log (to sae commit `61e4adb`). What it
 does and what is still to do: [docs/spreadsheet_demo_done_and_todo.md](docs/spreadsheet_demo_done_and_todo.md).
 The bugs it found in the Tauri app: [docs/tauri-spreadsheet-upstream-notes.md](docs/tauri-spreadsheet-upstream-notes.md).
 Where it is going: [TODO.md](TODO.md), small tested steps toward the
-feature set of GridCraft (where it stands: [docs/gridcraft_parity.md](docs/gridcraft_parity.md);
-the yardstick: [docs/gridcraft_feature_reference.md](docs/gridcraft_feature_reference.md),
+feature set of GridCraft (where it stands: [docs/comparisons/gridcraft_parity.md](docs/comparisons/gridcraft_parity.md);
+the yardstick: [docs/comparisons/gridcraft_feature_reference.md](docs/comparisons/gridcraft_feature_reference.md),
 its source never read) and a toolbar and menus over the grid, each step
 reachable from REXX.
 

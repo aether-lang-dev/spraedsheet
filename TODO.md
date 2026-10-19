@@ -1,8 +1,8 @@
 # To do
 
 The things to do, one list: the steps toward GridCraft's feature set
-(`docs/gridcraft_parity.md` says where the spreadsheet stands and the
-rules each step follows; `docs/gridcraft_feature_reference.md` is the
+(`docs/comparisons/gridcraft_parity.md` says where the spreadsheet stands and the
+rules each step follows; `docs/comparisons/gridcraft_feature_reference.md` is the
 yardstick, taken on trust, GridCraft's source never read) and the look
 above the grid. In the reference's own kickoff order (its section 14);
 each step is one commit with its headless test and spec `it`, and each
@@ -168,7 +168,7 @@ Paul's, from running the app (2026-10-18). Each step its own commit with a
 spec, checking what is on the screen through AetherUIDriver's snapshots
 (`/screenshot`, widget geometry, the scrollbars' readback), not the model
 alone. The status bar stays, its "Control bus" marker included; when they
-are done, `docs/gridcraft_parity.md`'s look-and-feel row says so.
+are done, `docs/comparisons/gridcraft_parity.md`'s look-and-feel row says so.
 
 | # | Step | Tests prove | REXX |
 |---|---|---|---|
