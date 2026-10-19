@@ -26,13 +26,12 @@ import { eq } from "./lib/check.ts";
 // From xlsx/tests/optional_xf_id_import.rs, test_cell_xfs_without_xf_id_loads:
 // xfId is optional on a cellXfs <xf> (many exports omit it); the file must
 // load, and A2's style (vertical="top" wrapText="1") must still be read.
-// Ours differs on the vertical alignment: the app has no vertical-alignment
-// look, so only the wrap is asserted (see PROVENANCE.md, deliberate differences).
 {
   const wb = new Workbook(), cmds = new Commands(wb);
   const o = await cmds.run(`file.importXlsx name=Xf.xlsx base64=${OPTIONAL_XF_ID}`);
   eq("ironcalc optional xfId: loads", o.ok, true);
   eq("ironcalc optional xfId: A2's wrap survives", wb.notes.get("A2")?.look?.wrap, true);
+  eq("ironcalc optional xfId: A2's vertical top survives", wb.notes.get("A2")?.look?.valign, "top");
   eq("ironcalc optional xfId: the title row's merge, the frozen pane", [wb.page(wb.pages()[0].name)!.merges.length, wb.page(wb.pages()[0].name)!.frozen], [1, 2]);
 }
 
@@ -41,4 +40,5 @@ import { eq } from "./lib/check.ts";
 // expect: ok ironcalc volatile shared formula: the daughter's value
 // expect: ok ironcalc optional xfId: loads
 // expect: ok ironcalc optional xfId: A2's wrap survives
+// expect: ok ironcalc optional xfId: A2's vertical top survives
 // expect: ok ironcalc optional xfId: the title row's merge, the frozen pane

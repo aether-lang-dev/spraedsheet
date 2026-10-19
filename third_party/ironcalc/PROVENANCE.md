@@ -32,7 +32,7 @@ Rules this file keeps:
 | `xlsx/tests/shared_formula_volatile.xlsx` | `third_party/ironcalc/fixtures/xlsx/shared_formula_volatile.xlsx` | nothing (byte for byte) |
 | `xlsx/tests/optional_xf_id.xlsx` | `third_party/ironcalc/fixtures/xlsx/optional_xf_id.xlsx` | nothing (byte for byte) |
 | `xlsx/tests/test_import_shared_formula_volatile.rs` | `tests/headless/sheet_ironcalc_xlsx.ts` | assertions translated to our headless harness: the master's and daughter's formulas and the daughter's value, plus that nothing is reported left out |
-| `xlsx/tests/optional_xf_id_import.rs` | `tests/headless/sheet_ironcalc_xlsx.ts` | assertions translated: the file loads and A2's wrap survives; the vertical alignment is not asserted (see below); we added the merge and frozen-pane checks |
+| `xlsx/tests/optional_xf_id_import.rs` | `tests/headless/sheet_ironcalc_xlsx.ts` | assertions translated: the file loads and A2's wrap survives; A2's vertical top is asserted too (TODO 4.2 added vertical alignment); we added the merge and frozen-pane checks |
 
 The two workbooks are read by the headless tests as base64 in
 `tests/headless/lib/ironcalc_fixtures.ts`, which `tests/headless/lib/mkironcalc.py`
@@ -101,12 +101,5 @@ expected value and a reason):
   `1 1/3`. A `?` holds its place with a space, so Excel pads the unused
   denominator place: `1 1/3 `, as ours does.
 
-XLSX:
-
-
-- **Vertical alignment (`optional_xf_id`).** IronCalc asserts A2 reads
-  `vertical="top"` as well as wrapped. Spraedsheet has no vertical-alignment
-  look (cells are drawn top-aligned by default and the model keeps no
-  alignment on that axis), so the importer drops `vertical=`; the test
-  asserts the wrap only. This is a known unmodelled feature, not a bug in the
-  `xfId` handling the fixture exists for (which already passed).
+XLSX: none. The former vertical-alignment difference (`optional_xf_id`) is gone: TODO 4.2
+added vertical alignment, and the test now asserts A2 reads vertical top.
