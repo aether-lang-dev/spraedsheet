@@ -13,6 +13,47 @@ What came before (demo 18's To do 1 to 15) is in
 `docs/spreadsheet_demo_done_and_todo.md`.
 
 
+## Paused here (2026-10-19)
+
+Every step below is done and struck through (100 of 100; spraedsheet main
+cfeb546). Work stopped here so the family's GPU and `quote` work (ae3d,
+aephysics) could have the machine; doing both at once fought over the M6's
+display, GPU and test lock. Pick up from this section.
+
+**Where it stands:** 257 commands, 448 worksheet functions, 311 described REXX
+functions, 299 menu items, 15 panels (`docs/comparisons/gridcraft_parity.md`).
+Upstream at the pause: sae 8297a5d (run_all 61/61 on macOS, aether-linux GTK
+4.6, aether-linux-2604 GTK 4.22, ae-x64), aether-ui ebee1c96, Aether 0.829.0,
+RexxJS b3d5e4e or later (CI green), aeb v0.327.
+
+**Next candidates, none started:**
+- `blog-entry-todo.md` B.1-B.7 (a diffable text form, the workbook as a REXX
+  program, a cell's non-defaults, git-backed saves, one MCP request as one
+  reviewable diff, checks in the sheet, a read view).
+- The actions left in `docs/comparisons/` (mostly records and relations, from
+  Grist and Airtable; IronCalc's remaining reuse candidates).
+- Charts on aether-ui's `vg/chart` (the Chartist port) through a sae
+  `ui.chart` binding, replacing `app/sheet/charts.ts`'s own layout.
+- RexxJS: `LET r = CALL f ...` gives `[object Object]` (plain CALL + RESULT
+  works); its bash-4 tests fail on macOS's bash 3.2.
+
+**Known limits:** XLSX chart parts were checked against the schema but never
+opened in Excel or LibreOffice; on GTK a row drawn taller than its nominal
+height shifts the floats below it; the toolbar's screenshot baseline exists
+for macOS only; `tests/real_keys_x11.sh` runs on Linux only (xdotool).
+
+**Working notes:**
+- Run the specs through the family test lock (one sae driver on ports
+  8091/9222 at a time); never queue several locked runs at once.
+- Rebuilding sae for this app means `./build.sh`, `AETHER_UI_WITH_DRIVER=1
+  ./build.sh`, and the tools (`saejs`, `saelower`, `sae-bus`, the page
+  server: AGENTS.md's build list); a stale `target/saejs` once made
+  `sheet_large` look like an Aether regression. A clean rebuild
+  (`rm -rf target/build`) is needed when only the aether-ui sibling changed.
+- Scratch worktrees lived on /Volumes/Mini2/claude-scratch (sp-614, f824);
+  they are disposable, everything is on main.
+
+
 ### Stage 1: core workbook
 
 | # | Step | Tests prove | REXX |
