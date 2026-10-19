@@ -21,7 +21,7 @@
 # spec_app_sheet_mcp drives the app through that server, with node. cli:
 # tests/cli/test_*.sh, a shell test per subcommand of cli/sheet.js, each
 # starting the app headless itself (target/build/bin/sae), with node.
-# On Linux with no display it reruns itself under xvfb-run.
+# On Linux with no display it reruns itself under xvfb-run (a 1920 x 1200 screen).
 ROOT=$(cd "$(dirname "$0")" && pwd)
 cd "$ROOT" || exit 1
 SAE=$(cd "${SAE_DIR:-$ROOT/sae}" 2>/dev/null && pwd -P) || {
@@ -31,7 +31,10 @@ SAE=$(cd "${SAE_DIR:-$ROOT/sae}" 2>/dev/null && pwd -P) || {
 FILTER=${1:-}
 if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] \
    && [ -z "${SHEET_RUN_XVFB:-}" ] && command -v xvfb-run >/dev/null 2>&1; then
-    SHEET_RUN_XVFB=1 exec xvfb-run -a sh "$0" "$@"
+    # A screen wide enough for the specs' windows (up to 1600): GTK keeps a
+    # window to its screen, and xvfb-run's default (1280 wide) gave "a window
+    # 1600 wide" 1280, so a formula bar that grows with the window could not.
+    SHEET_RUN_XVFB=1 exec xvfb-run -a -s "-screen 0 1920x1200x24" sh "$0" "$@"
 fi
 # A sae built before its sources were last changed (a pull, ./build.sh not
 # run since) runs this checkout's app on an older API: refused, rather than

@@ -1301,8 +1301,12 @@ fields for CSV and RexxJS scripts.
 
 **Platform and tests:**
 
-- `spec_sheet` is green on macOS (50, 2026-10-13) and has run on GTK4
-  (Linux, Xvfb). `spec_grid` is green on macOS and on both GTK lanes.
+- `spec_sheet` is green on macOS (50, 2026-10-13) and on GTK4 (aether-linux,
+  Ubuntu 22.04 / GTK 4.6, under Xvfb, 2026-10-19; `run-tests.sh` gives Xvfb a
+  1920 x 1200 screen, since GTK keeps a window to its screen and the specs
+  resize to 1600). On ae-x64, the one slow lane, its dark-mode case waits
+  3 s for the re-theme, which takes 1.3 to 3.8 s there (0.5 to 0.7 s on
+  aether-linux): green with a longer wait, red as it is. `spec_grid` is green on macOS and on both GTK lanes.
 - On Linux, `spec_aevg`, `spec_camera`, `spec_raster`'s Home click and
   `spec_nav`'s scoped-seeks case fail on GTK4 (aether-ui bugs, open).
   `spec_app_httplist` needs `api.localhost` in a container's `/etc/hosts`
