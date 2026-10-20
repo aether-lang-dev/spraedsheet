@@ -13,45 +13,75 @@ What came before (demo 18's To do 1 to 15) is in
 `docs/spreadsheet_demo_done_and_todo.md`.
 
 
-## Paused here (2026-10-19)
+## Paused here (2026-10-20)
 
-Every step below is done and struck through (100 of 100; spraedsheet main
-cfeb546). Work stopped here so the family's GPU and `quote` work (ae3d,
-aephysics) could have the machine; doing both at once fought over the M6's
-display, GPU and test lock. Pick up from this section.
+Resumed 2026-10-19's pause on 2026-10-20 and paused again the same day for the
+family's GPU work. Stage 9 (the end of this file) is the record of what was
+done since; the steps of Stages 1 to 8 are all struck (100 of 100).
 
-**Where it stands:** 257 commands, 448 worksheet functions, 311 described REXX
-functions, 299 menu items, 15 panels (`docs/comparisons/gridcraft_parity.md`).
-Upstream at the pause: sae 8297a5d (run_all 61/61 on macOS, aether-linux GTK
-4.6, aether-linux-2604 GTK 4.22, ae-x64), aether-ui ebee1c96, Aether 0.829.0,
-RexxJS b3d5e4e or later (CI green), aeb v0.327.
+**Done since 2026-10-19** (spraedsheet main 24f95b8's parent, i.e. b2bb8ba):
+- 9.1 RexxJS: `LET r = CALL f ...` gives f's RETURN value, and its four bash-4
+  tests are skipped under bash 3.2 (RexxJS 5d96050, 30fce5c; re-vendored,
+  spraedsheet b6bc641).
+- 9.2 B.1, a canonical text form (98ee7dd); 9.3 B.2, a workbook as a REXX
+  program (f428291); 9.4 B.3, everything non-default about a cell (b2bb8ba).
+  Each passed the whole `./run-tests.sh` on macOS before its push (9.4: the
+  spec_sheet run, then the rest, on the same code).
+- sae 2f85be6 (pushed): `fs.read_base64` / `fs.write_base64`, spec_app_caps
+  green on macOS and the aether-linux lane. Needed by B.4.
 
-**Next candidates** (resumed 2026-10-20; Stage 9 below is the record):
-- ~~RexxJS: `LET r = CALL f ...` gives `[object Object]`; its bash-4 tests fail
-  on macOS's bash 3.2~~ (done 2026-10-20, 9.1)
-- `blog-entry-todo.md` B.1-B.7 (a diffable text form, the workbook as a REXX
-  program, a cell's non-defaults, git-backed saves, one MCP request as one
-  reviewable diff, checks in the sheet, a read view). Done: B.1 (9.2), B.2 (9.3), B.3 (9.4).
-- Charts on aether-ui's `vg/chart` (the Chartist port) through a sae
-  `ui.chart` binding, replacing `app/sheet/charts.ts`'s own layout.
-- The actions left in `docs/comparisons/` (mostly records and relations, from
-  Grist and Airtable; IronCalc's remaining reuse candidates).
+**Not pushed: B.4 (git-backed versions).** Written, committed locally as
+`24f95b8` on the local branch `b4-wip` of this checkout (also as a patch,
+`0001-B.4-versions-kept-in-a-git-repository-...patch`, in the 2026-10-20
+session scratchpad), and green on its own tests (headless `sheet_gitstore`,
+`tests/cli/test_versions.sh` with real `git fsck`/`log`/`diff`,
+spec_app_sheet_files), but the full `./run-tests.sh` was stopped by the pause
+before spec_sheet finished, and the change touches `view/view.ts` (the page's
+store now carries the repository), so it is not on main. Pick up by
+`git cherry-pick 24f95b8` (or `git am` the patch), pull sae (af70e67 changed
+its pins), rebuild sae per the notes below, run the whole suite, and push.
+B.4's `blog-entry-todo.md` row and TODO row 9.5 are in that commit.
+
+**Next, in order:** B.4 (above); B.5 one MCP request as one reviewable diff
+(builds on B.4's `version.diff`); B.6 checks in the sheet; B.7 a read view;
+then charts on aether-ui's `vg/chart` through a sae `ui.chart` binding (vg/chart
+is Chartist's line, bar and pie only: `app/sheet/charts.ts` has some twenty
+kinds, so only those three families can move, the rest keeping the
+current layout; backends need nothing new because vg draws on the existing
+canvas primitives of all four); then the actions left in `docs/comparisons/`
+(Grist, Univer, GridCraft ideas only; IronCalc may be reused, with
+`third_party/ironcalc/PROVENANCE.md`'s attribution).
+
+**Upstream at this pause:** sae af70e67 (pins aeb v0.328, Aether 0.830.0),
+aether-ui a895cea0, Aether 0.831.0 dev tree (`/Users/paul/scm/aether`),
+RexxJS 30fce5c, aeb v0.327 (sae now v0.328).
 
 **Known limits:** XLSX chart parts were checked against the schema but never
 opened in Excel or LibreOffice; on GTK a row drawn taller than its nominal
 height shifts the floats below it; the toolbar's screenshot baseline exists
-for macOS only; `tests/real_keys_x11.sh` runs on Linux only (xdotool).
+for macOS only; `tests/real_keys_x11.sh` runs on Linux only (xdotool). The
+counts in `docs/comparisons/gridcraft_parity.md` and "Where it stands"
+(257 commands, 448 functions, 311 described REXX functions, 299 menu items,
+15 panels) are as of 2026-10-19 and are not yet recounted.
 
 **Working notes:**
 - Run the specs through the family test lock (one sae driver on ports
-  8091/9222 at a time); never queue several locked runs at once.
+  8091/9222 at a time), including any interactive driver; never queue
+  several locked runs at once, and stop a driver when its spec is done.
 - Rebuilding sae for this app means `./build.sh`, `AETHER_UI_WITH_DRIVER=1
   ./build.sh`, and the tools (`saejs`, `saelower`, `sae-bus`, the page
   server: AGENTS.md's build list); a stale `target/saejs` once made
   `sheet_large` look like an Aether regression. A clean rebuild
   (`rm -rf target/build`) is needed when only the aether-ui sibling changed.
-- Scratch worktrees lived on /Volumes/Mini2/claude-scratch (sp-614, f824);
-  they are disposable, everything is on main.
+  `run-tests.sh` refuses a sae built before its sources were last changed.
+- On the aether-linux lane, `/work/aether` is 0.831.0 with the QuickJS
+  amalgamation; use it (`AETHER_HOME=/work/aether`, PATH `/work/aeb` and
+  `/work/aether/build` first, `rm -rf /work/sae/target/toolchain`), not
+  `$HOME/.local/bin`'s release install (no amalgamation).
+- Text and REXX: a double-quoted RexxJS literal in a CALL argument has
+  escapes (`\n`, `\t`, `\\`), an ADDRESS command line has none.
+- Scratch worktrees lived on /Volumes/Mini2/claude-scratch; they are
+  disposable, everything pushed is on main.
 
 
 ### Stage 1: core workbook
