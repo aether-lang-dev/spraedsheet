@@ -138,7 +138,7 @@ function ruleIn(v: Record<string, unknown>): Note["validation"] {
   }
 }
 
-function noteOf(c: string | FileCell): Note {
+export function noteOf(c: string | FileCell): Note {
   if (typeof c === "string") return {};
   const note: Record<string, unknown> = {};
   for (const k of ["comment", "format", "style", "styleExpression", "cellStyle"] as const) if (c[k]) note[k] = c[k];

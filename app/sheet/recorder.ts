@@ -22,14 +22,24 @@ export function parseLine(line: string): { id: string; params: Record<string, st
   return { id: m ? m[1] : "", params };
 }
 
-// A REXX string literal: in double quotes, a quote doubled.
+// A REXX string literal for a CALL's argument or an assignment, in double
+// quotes as RexxJS reads one: a quote doubled, and the escapes a
+// double-quoted literal has (\\, \n, \t, \r, \uXXXX) for a backslash and the
+// control characters, which it cannot hold. (An ADDRESS command line has
+// none: it is passed on as it is.)
+export function literal(s: string): string {
+  const body = s.replace(/\\/g, "\\\\").replace(/"/g, '""').replace(/[\u0000-\u001f]/g, (c) =>
+    c === "\n" ? "\\n" : c === "\t" ? "\\t" : c === "\r" ? "\\r" : `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  return `"${body}"`;
+}
+// An ADDRESS command line: in double quotes, a quote doubled.
 const quoted = (s: string): string => `"${s.replace(/"/g, '""')}"`;
 
 // The recorded command lines as a program, headed by its name.
 export function toRexx(name: string, lines: readonly string[]): string {
   const body = lines.map((line) => {
     const { id, params } = parseLine(line);
-    if (id === "cell.set" && Object.keys(params).length === 2) return `CALL SETCELL ${quoted(params.cell)}, ${quoted(params.input)}`;
+    if (id === "cell.set" && Object.keys(params).length === 2) return `CALL SETCELL ${literal(params.cell)}, ${literal(params.input)}`;
     return `ADDRESS SHEET ${quoted(line)}`;
   });
   return [`/* ${name}: recorded by the spreadsheet, ${lines.length} command${lines.length === 1 ? "" : "s"} */`, ...body].join("\n");
@@ -41,7 +51,7 @@ export function parameters(args: string): string {
   return args.split(";").map((a) => a.trim()).filter((a) => a).map((a) => {
     const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(a);
     if (!m) throw new RangeError(`${a} is not a parameter (NAME=value)`);
-    return `${m[1].toUpperCase()} = ${quoted(m[2])}\n`;
+    return `${m[1].toUpperCase()} = ${literal(m[2])}\n`;
   }).join("");
 }
 

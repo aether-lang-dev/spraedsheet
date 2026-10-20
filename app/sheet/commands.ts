@@ -23,9 +23,10 @@ import type { PdfSheet } from "./pdf.ts";
 import { writeXlsx } from "./xlsxwrite.ts";
 import type { XlsxRead } from "./xlsx.ts";
 import { DELIMITERS as CSV_DELIMITERS, decode, detectDelimiter, fromBase64, fromCsv, toBase64, toCsv } from "./csv.ts";
-import { readSheetFile, writeSheetFile } from "./file.ts";
+import { noteOf, readSheetFile, writeSheetFile } from "./file.ts";
 import type { SheetFile } from "./file.ts";
 import { fileOfText, textOfFile } from "./textform.ts";
+import { bookScript } from "./bookscript.ts";
 import { show } from "./format.ts";
 import { EXAMPLE, FORMATTED, SAMPLE_BUDGET, TEST_SHEET } from "./samples.ts";
 import { runScript, runSpreadsheet } from "./script.ts";
@@ -134,6 +135,17 @@ const OWN_AREAS = new Set(["range.stats", "view.select"]);
 // A command that cannot run as asked: its message is the Outcome's.
 class Refused extends Error {}
 const refuse = (message: string): never => { throw new Refused(message); };
+
+// A json= parameter: an object, or a refusal that says why not.
+function jsonOf(text: string): Record<string, any> {
+  try {
+    const v = JSON.parse(text);
+    if (v && typeof v === "object" && !Array.isArray(v)) return v;
+  } catch (e) {
+    return refuse(`json= is not JSON: ${(e as Error).message}`);
+  }
+  return refuse("json= is not an object");
+}
 
 // ---- The command line: an id, then name=value pairs; a value with spaces,
 // quotes or '=' is quoted, "" being a quote inside.
@@ -363,9 +375,29 @@ const SAMPLES: Record<string, unknown> = { budget: SAMPLE_BUDGET, test: TEST_SHE
 
 // A sheet file: the workbook emptied, its language, its setup script run,
 // each sheet's cells set, its notes and names kept; where undo stops
-// (reset()).
+// (reset()). In phases, which WORKBOOKSCRIPT's program (bookscript.ts) runs
+// one command apiece: the head, then for each sheet its names, cells (and
+// their notes) and parts, then the end.
 async function open(wb: Workbook, file: SheetFile): Promise<Outcome> {
   const before = wb.sheet.keys();
+  const failed = await openHead(wb, file);
+  for (const [i, s] of file.sheets.entries()) {
+    if (i > 0) await wb.add(s.name);
+    await openNames(wb, s);
+    await wb.sheet.setMany(s.entries);
+    for (const [key, note] of s.notes) wb.notes.set(key, note);
+    await openParts(wb, s);
+  }
+  await openEnd(wb, file);
+  const cells = file.sheets.reduce((n, s) => n + s.entries.length, 0);
+  const message = `opened ${file.name}: ${cells} cells, ${file.language} formulas`;
+  return { ok: true, message: failed ? `${message}; its setup script failed: ${failed.split("\n").pop()}` : message, changed: [...new Set([...before, ...wb.sheet.keys()])] };
+}
+
+// The head: the workbook emptied (its first sheet named), the date system,
+// styles, theme and calculation, the language and the setup script. The
+// setup script's failure, if it failed.
+async function openHead(wb: Workbook, file: SheetFile): Promise<string | null> {
   wb.reset(file.sheets[0].name);
   if (file.dateSystem === 1904) await wb.setDateSystem(1904);
   for (const [n, l] of file.cellStyles) wb.styles.set(n, l);
@@ -374,40 +406,51 @@ async function open(wb: Workbook, file: SheetFile): Promise<Outcome> {
   wb.calculation = { ...file.calculation, manual: false };
   const failed = file.language === "RexxJS" ? await wb.rexx.setup(file.setupScript) : null;
   await wb.setLanguage(wb.language(file.language));
-  for (const [i, s] of file.sheets.entries()) {
-    if (i > 0) await wb.add(s.name);
-    for (const [n, r] of s.names) {
-      const corners = parseRange(r);
-      if (corners || r.startsWith("=")) await wb.sheet.define(n, corners ?? r.slice(1));
-    }
-    await wb.sheet.setMany(s.entries);
-    for (const [key, note] of s.notes) wb.notes.set(key, note);
-    wb.page(s.name)!.rules = [...s.rules];
-    const page = wb.page(s.name)!;
-    page.charts = [...s.charts];
-    page.hiddenRows = new Set(s.view.hiddenRows);
-    page.hiddenCols = new Set(s.view.hiddenCols);
-    page.frozen = s.view.frozenRows;
-    page.frozenCols = s.view.frozenCols;
-    page.tabColor = s.view.tabColor;
-    page.hiddenSheet = s.view.hidden;
-    page.gridlines = s.view.gridlines;
-    page.breaks = s.view.breaks;
-    page.headings = s.view.headings;
-    page.heights = new Map(s.view.rowHeights);
-    page.widths = new Map(s.view.colWidths);
-    page.rowLevels = new Map(s.view.rowLevels);
-    page.colLevels = new Map(s.view.colLevels);
-    page.slicers = [...s.slicers];
-    page.scenarios = [...s.scenarios];
-    page.drawings = [...s.drawings];
-    page.protection = s.protection;
-    page.editRanges = [...s.editRanges];
-    page.autoId = s.autoId;
-    page.pivots = new Map(s.pivots);
-    page.merges = s.merges.map((m) => parseRange(m)!);
-    for (const t of s.tables) await wb.sheet.defineTable(t.name, t);
+  return failed;
+}
+
+// A sheet's names, defined before its cells are set.
+async function openNames(wb: Workbook, s: FileSheet): Promise<void> {
+  for (const [n, r] of s.names) {
+    const corners = parseRange(r);
+    if (corners || r.startsWith("=")) await wb.sheet.define(n, corners ?? r.slice(1));
   }
+}
+
+// A sheet's parts but its filter (worked out at the end, once every sheet's
+// cells are): rules, charts, view, merges, tables and the rest.
+async function openParts(wb: Workbook, s: FileSheet): Promise<void> {
+  wb.page(s.name)!.rules = [...s.rules];
+  const page = wb.page(s.name)!;
+  page.charts = [...s.charts];
+  page.hiddenRows = new Set(s.view.hiddenRows);
+  page.hiddenCols = new Set(s.view.hiddenCols);
+  page.frozen = s.view.frozenRows;
+  page.frozenCols = s.view.frozenCols;
+  page.tabColor = s.view.tabColor;
+  page.hiddenSheet = s.view.hidden;
+  page.gridlines = s.view.gridlines;
+  page.breaks = s.view.breaks;
+  page.headings = s.view.headings;
+  page.heights = new Map(s.view.rowHeights);
+  page.widths = new Map(s.view.colWidths);
+  page.rowLevels = new Map(s.view.rowLevels);
+  page.colLevels = new Map(s.view.colLevels);
+  page.slicers = [...s.slicers];
+  page.scenarios = [...s.scenarios];
+  page.drawings = [...s.drawings];
+  page.protection = s.protection;
+  page.editRanges = [...s.editRanges];
+  page.autoId = s.autoId;
+  page.pivots = new Map(s.pivots);
+  page.merges = s.merges.map((m) => parseRange(m)!);
+  for (const t of s.tables) await wb.sheet.defineTable(t.name, t);
+}
+
+// The end: the workbook's names, once its sheets are there; protection,
+// macros and triggers; the name and setup script it keeps; the filters and
+// slicers' picks, worked out once every sheet's cells are.
+async function openEnd(wb: Workbook, file: SheetFile): Promise<void> {
   // The workbook's names, once its sheets are there: "Costs!B1:B3" or
   // "=LAMBDA(...)"; one naming no sheet of it is left out.
   for (const [n, r] of file.bookNames) {
@@ -430,14 +473,8 @@ async function open(wb: Workbook, file: SheetFile): Promise<Outcome> {
   // A filter is worked out once every sheet's cells are.
   for (const s of file.sheets) if (s.view.filter) filtering(wb.page(s.name)!, s.view.filter);
   // And a slicer's picks.
-  for (const s of file.sheets) {
-    const page = wb.page(s.name)!;
-    if (page.slicers.some((x) => x.picked.length)) page.filtered = slicedRows(page);
-  }
-  if (file.sheets.some((s) => s.slicers.length)) await wb.hiddenChanged();
-  const cells = file.sheets.reduce((n, s) => n + s.entries.length, 0);
-  const message = `opened ${file.name}: ${cells} cells, ${file.language} formulas`;
-  return { ok: true, message: failed ? `${message}; its setup script failed: ${failed.split("\n").pop()}` : message, changed: [...new Set([...before, ...wb.sheet.keys()])] };
+  for (const page of wb.pages()) if (page.slicers.some((x) => x.picked.length)) page.filtered = slicedRows(page);
+  if (wb.pages().some((page) => page.slicers.length)) await wb.hiddenChanged();
 }
 
 // Saved files: each under "sheet.file.<name>" (any character of the name
@@ -3940,6 +3977,66 @@ const SPECS: readonly Spec[] = [
         return refuse(`not a sheet file: ${(e as Error).message}`);
       }
       return open(wb, readSheetFile(data as SheetFile));
+    },
+  },
+  {
+    // The workbook as a REXX program that makes it again (bookscript.ts):
+    // WORKBOOKSCRIPT(). Run in a new workbook, it gives the same one. Its
+    // lines are file.begin, sheet.begin, SETCELL and cell.note, sheet.parts
+    // and file.end: open() in phases.
+    id: "file.script", label: "The file as a REXX program", params: [], journaled: false,
+    run: async (wb) => {
+      const text = bookScript(writeSheetFile(wb));
+      return { ok: true, message: `${text.split("\n").length - 1} lines`, changed: [], output: text };
+    },
+  },
+  {
+    id: "file.begin", label: "Begin a workbook", params: ["json"], journaled: true, unstepped: true,
+    run: async (wb, p) => {
+      const failed = await openHead(wb, readSheetFile(jsonOf(p.json)));
+      await wb.settle();
+      return { ok: true, message: failed ? `begun; its setup script failed: ${failed.split("\n").pop()}` : "begun", changed: [] };
+    },
+  },
+  {
+    // A sheet of the workbook begun: added if it is not there (the first
+    // is), made the active one, its names defined.
+    id: "sheet.begin", label: "Begin a sheet", params: ["name", "json"], journaled: true, unstepped: true,
+    run: async (wb, p) => {
+      if (!wb.page(p.name)) await wb.add(p.name);
+      wb.activate(p.name);
+      await openNames(wb, readSheetFile({ sheetName: p.name, ...jsonOf(p.json) }).sheets[0]);
+      await wb.settle();
+      return { ok: true, message: `began ${p.name}`, changed: [] };
+    },
+  },
+  {
+    // What a cell has beside its input, as the file has it: comment, format,
+    // look, validation and so on (json=).
+    id: "cell.note", label: "Cell Notes", params: ["cell", "json"], journaled: true,
+    run: async (wb, p) => {
+      const key = cellOf(p.cell);
+      wb.notes.set(key, noteOf({ ...jsonOf(p.json) }));
+      return changedBy(wb, [key], `${key}: ${Object.keys(jsonOf(p.json)).join(", ")}`);
+    },
+  },
+  {
+    // A sheet's parts but its names and cells: rules, charts, view, merges,
+    // tables, drawings and the rest (json= in the file's shapes).
+    id: "sheet.parts", label: "Sheet Parts", params: ["name", "json"], journaled: true, unstepped: true,
+    run: async (wb, p) => {
+      const page = wb.page(p.name) ?? refuse(`no sheet ${p.name}`);
+      await openParts(wb, readSheetFile({ sheetName: page.name, ...jsonOf(p.json) }).sheets[0]);
+      await wb.settle();
+      return { ok: true, message: `${page.name}'s parts`, changed: [] };
+    },
+  },
+  {
+    id: "file.end", label: "End a workbook", params: ["json"], journaled: true, unstepped: true,
+    run: async (wb, p) => {
+      const file = readSheetFile(jsonOf(p.json));
+      await openEnd(wb, file);
+      return { ok: true, message: `ended ${file.name}`, changed: wb.sheet.keys() };
     },
   },
   {

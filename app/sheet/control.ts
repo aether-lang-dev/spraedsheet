@@ -152,6 +152,8 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   GETFORMULALANGUAGE: async (exec) => (await state(exec)).language,
   EXPORT: async (exec) => (await must(exec, "file.export")).output,
   IMPORT: async (exec, json) => (await must(exec, "file.import", { text: text(json) }), "OK"),
+  // The workbook as a REXX program that makes it again (bookscript.ts).
+  WORKBOOKSCRIPT: async (exec) => (await must(exec, "file.script")).output,
   // The canonical text form (textform.ts): EXPORTTEXT(), IMPORTTEXT(text).
   EXPORTTEXT: async (exec) => (await must(exec, "file.exportText")).output,
   IMPORTTEXT: async (exec, t) => (await must(exec, "file.importText", { text: text(t) }), "OK"),

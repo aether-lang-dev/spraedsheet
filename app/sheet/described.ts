@@ -387,6 +387,7 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   GETITERATION: fn([], "Iterative calculation's settings", "\"max change\", e.g. \"100 0.001\", or 0 for off"),
   EXPORT: fn([], "The whole workbook as its file", "the file's JSON"),
   IMPORT: fn([p("file", "json", "a workbook file, as EXPORT gives one")], "Opens a workbook from its file's JSON (not undoable)", "\"OK\""),
+  WORKBOOKSCRIPT: fn([], "The whole workbook as a REXX program that makes it again when run in a new workbook: SETCELL for each cell, and commands for the rest", "the program's text"),
   EXPORTTEXT: fn([], "The whole workbook as its canonical text: a cell a line, in a stable order, so a diff names what changed", "the text"),
   IMPORTTEXT: fn([p("text", "text", "a workbook text, as EXPORTTEXT gives one")], "Opens a workbook from its text form (not undoable)", "\"OK\""),
   GETSETUPSCRIPT: fn([], "The setup script (REXX every formula reads)", "the script"),

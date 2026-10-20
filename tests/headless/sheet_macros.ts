@@ -76,6 +76,13 @@ const said2: string[] = [];
 await cmds.script('SAY RUNMACRO("Put", "CELL=H2;N=5")\nSAY GETCELL("H2")\nSAY ONCHANGE("I1:I5", "Twice")\nSAY ONCHANGE("I1:I5", "Twice", 1)\nSAY ONOPEN("Hello")', (l) => said2.push(l));
 eq("7.2 from REXX", said2, ["Put ran", "10", "Twice runs after a change to Sheet1!I1:I5", "Twice no longer runs on a change to I1:I5", "Hello runs when the workbook opens"]);
 
+// A backslash or a tab in a recorded cell: a double-quoted REXX literal has escapes, so it is doubled / escaped
+await cmds.run("macro.record name=Slashes");
+await cmds.execute("cell.set", { cell: "M1", input: "C:\\new\ttable" });
+const slashes = (await cmds.run("macro.stop")).output as string;
+await cmds.execute("cell.set", { cell: "M1", input: "" });
+await cmds.run("macro.run name=Slashes");
+eq("a recorded cell with a backslash and a tab runs back as it was", [slashes.split("\n")[1], wb.sheet.input("M1")], ['CALL SETCELL "M1", "C:\\\\new\\ttable"', "C:\\new\ttable"]);
 const said3: string[] = [];
 await cmds.script('LET r = CALL twice 21\nSAY r\nCALL twice 4\nSAY RESULT\nEXIT\ntwice:\nPARSE ARG n\nRETURN n * 2', (l) => said3.push(l));
 eq("LET r = CALL f gives f's RETURN value, as RESULT does (RexxJS 5d96050)", said3, ["42", "8"]);
@@ -95,4 +102,5 @@ eq("LET r = CALL f gives f's RETURN value, as RESULT does (RexxJS 5d96050)", sai
 // expect: ok taken away
 // expect: ok from REXX
 // expect: ok 7.2 from REXX
+// expect: ok a recorded cell with a backslash and a tab runs back as it was
 // expect: ok LET r = CALL f gives f's RETURN value, as RESULT does (RexxJS 5d96050)
