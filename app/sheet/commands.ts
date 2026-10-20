@@ -25,6 +25,7 @@ import type { XlsxRead } from "./xlsx.ts";
 import { DELIMITERS as CSV_DELIMITERS, decode, detectDelimiter, fromBase64, fromCsv, toBase64, toCsv } from "./csv.ts";
 import { readSheetFile, writeSheetFile } from "./file.ts";
 import type { SheetFile } from "./file.ts";
+import { fileOfText, textOfFile } from "./textform.ts";
 import { show } from "./format.ts";
 import { EXAMPLE, FORMATTED, SAMPLE_BUDGET, TEST_SHEET } from "./samples.ts";
 import { runScript, runSpreadsheet } from "./script.ts";
@@ -3939,6 +3940,29 @@ const SPECS: readonly Spec[] = [
         return refuse(`not a sheet file: ${(e as Error).message}`);
       }
       return open(wb, readSheetFile(data as SheetFile));
+    },
+  },
+  {
+    // The workbook as its canonical text (textform.ts): a cell a line, in a
+    // stable order, so a diff of two saves names what changed; and a text
+    // opened: EXPORTTEXT() and IMPORTTEXT(text).
+    id: "file.exportText", label: "Export the file as text", params: [], journaled: false,
+    run: async (wb) => {
+      const text = textOfFile(writeSheetFile(wb));
+      return { ok: true, message: `${text.split("\n").length - 1} lines`, changed: [], output: text };
+    },
+  },
+  {
+    id: "file.importText", label: "Import a file as text", params: ["text"], journaled: true, unstepped: true,
+    run: (wb, p) => {
+      let data: Record<string, unknown>;
+      try {
+        data = fileOfText(p.text);
+      } catch (e) {
+        if (e instanceof RangeError) return refuse(e.message);
+        throw e;
+      }
+      return open(wb, readSheetFile(data));
     },
   },
   {

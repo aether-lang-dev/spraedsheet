@@ -10,6 +10,7 @@
 // the workbook saved, the selection exported as CSV; the page never sees
 // where they are.
 import type { SheetView } from "./view.ts";
+import { TEXT_HEADER } from "../textform.ts";
 
 export function fileBar(v: SheetView): void {
   const name = state(""), csv = state(""), saved = state(""), shown = state("");
@@ -94,7 +95,9 @@ function documentsRow(v: SheetView): void {
         return;
       }
       const text = await d.read_text();
-      if (/\.(csv|tsv|tab|txt)$/i.test(d.name)) await v.run("file.importCsv", { at: v.here(), text, ...(/\.(tsv|tab)$/i.test(d.name) ? { delimiter: "tab" } : {}) });
+      // The canonical text (textform.ts) by its first line, whatever its name (.sheet.txt).
+      if (text.startsWith(TEXT_HEADER)) await v.run("file.importText", { text });
+      else if (/\.(csv|tsv|tab|txt)$/i.test(d.name)) await v.run("file.importCsv", { at: v.here(), text, ...(/\.(tsv|tab)$/i.test(d.name) ? { delimiter: "tab" } : {}) });
       else if (/\.html?$/i.test(d.name)) await v.run("file.importHtml", { at: v.here(), text });
       // JSON rows (an array), or a workbook in the Tauri app's format.
       else if (/^\s*\[/.test(text)) await v.run("file.importJson", { at: v.here(), text });
@@ -104,6 +107,15 @@ function documentsRow(v: SheetView): void {
       const d = await documents.pick_save(`${v.wb.name}.json`);
       if (!d) return;
       const o = await v.cmds.execute("file.export");
+      await d.write_text(String(o.output));
+      print(`sheet: saved ${d.name}`);
+      v.status.set(`Saved ${d.name}`);
+    }));
+    // The canonical text (textform.ts): a cell a line, for a diff.
+    v.btn("Save text file", tried(async () => {
+      const d = await documents.pick_save(`${v.wb.name}.sheet.txt`);
+      if (!d) return;
+      const o = await v.cmds.execute("file.exportText");
       await d.write_text(String(o.output));
       print(`sheet: saved ${d.name}`);
       v.status.set(`Saved ${d.name}`);

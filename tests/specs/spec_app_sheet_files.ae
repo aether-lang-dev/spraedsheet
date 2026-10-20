@@ -61,6 +61,21 @@ main() {
             spec.assert_contains(body, "\"expression\":\"A1*21\"", "and its formula")
             spec.assert_contains(uidriver.prompts(), "\"default_name\":\"Spec book.json\"", "the name suggested")
         }
+        spec.it("Save text file writes the canonical text, a cell a line, and Open file reads it back") callback {
+            _dt = fs.delete("${dir}/saved.sheet.txt")
+            uidriver.answer_prompt("save", "${dir}/saved.sheet.txt")
+            b.click("Save text file")
+            spec.assert_true(b.wait_for_console("sheet: saved saved.sheet.txt"), "saved")
+            body, _e = fs.read("${dir}/saved.sheet.txt")
+            spec.assert_true(string.starts_with(body, "# rexxsheet text 1\n") == 1, "the header")
+            spec.assert_contains(body, "\nA1\t2\n", "a constant on a line of its own")
+            spec.assert_contains(body, "\nB1\t=A1*21\n", "a formula as typed, with no value")
+            spec.assert_contains(uidriver.prompts(), "\"default_name\":\"Spec book.sheet.txt\"", "the name suggested")
+            uidriver.answer_prompt("open", "${dir}/saved.sheet.txt")
+            b.click("Open file")
+            spec.assert_true(b.wait_for_console("sheet: opened Spec book: 2 cells, Excel formulas"), "opened")
+            spec.assert_true(g.wait_cell("B", 1, "42"), "its formula worked out")
+        }
         spec.it("Export CSV file writes what the sheet shows") callback {
             uidriver.answer_prompt("save", "${dir}/out.csv")
             b.click("Export CSV file")

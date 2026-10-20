@@ -152,6 +152,9 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   GETFORMULALANGUAGE: async (exec) => (await state(exec)).language,
   EXPORT: async (exec) => (await must(exec, "file.export")).output,
   IMPORT: async (exec, json) => (await must(exec, "file.import", { text: text(json) }), "OK"),
+  // The canonical text form (textform.ts): EXPORTTEXT(), IMPORTTEXT(text).
+  EXPORTTEXT: async (exec) => (await must(exec, "file.exportText")).output,
+  IMPORTTEXT: async (exec, t) => (await must(exec, "file.importText", { text: text(t) }), "OK"),
   EVALUATE: async (exec, formula) => (await must(exec, "formulas.calculate", { formula: text(formula) })).output,
   RECALCULATE: async (exec) => (await must(exec, "formulas.recalculate")).output,
   // Calculation Options: "Automatic" or "Manual"; Calculate Now and
