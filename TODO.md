@@ -13,6 +13,21 @@ What came before (demo 18's To do 1 to 15) is in
 `docs/spreadsheet_demo_done_and_todo.md`.
 
 
+## Paused here (2026-10-20, again)
+
+Resumed the same day and stopped at once for the GPU work (ae3d MSL). Nothing
+was built, no driver or test ran, no test lock was taken, and nothing but this
+note changed. The resume point is unchanged from the section below, with one
+fact learned: `git cherry-pick 24f95b8` onto current main conflicts in
+TODO.md only (the Paused-here section and the Stage 9 table; every code file
+applies cleanly). Resolve it by keeping main's text and adding B.4's row 9.5,
+then pull sae (already at af70e67 locally, up to date), rebuild per the
+Working notes, run the whole `./run-tests.sh`, push, and delete `b4-wip`
+locally and on origin. After that: B.5, B.6, B.7, then the docs/comparisons/
+actions; charts on `vg/chart` stay awaiting Paul's decision (line, bar and pie
+only: a partial replacement). Put scratch and TMPDIR on
+/Volumes/Mini2/claude-scratch (the internal disk had 6.7 GB free).
+
 ## Paused here (2026-10-20)
 
 Resumed 2026-10-19's pause on 2026-10-20 and paused again the same day for the
