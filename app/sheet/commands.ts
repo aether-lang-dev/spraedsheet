@@ -1159,6 +1159,51 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // Everything non-default about a cell: what it holds (value, shown text,
+    // formula), its number format, look, style, comment, validation, editor,
+    // link, merge, the rules that apply to it, the names and table it is in,
+    // and what it reads and what reads it. A part it has not is left out, so
+    // a plain cell lists its value alone. CELLINFO("B3") is a stem of it.
+    id: "cell.info", label: "Cell Info", params: ["cell"], journaled: false,
+    run: async (wb, p) => {
+      const key = cellOf(p.cell), at = cellAddr(key)!, note = wb.notes.get(key), page = wb.page(wb.active)!;
+      const input = wb.sheet.input(key), value = wb.sheet.value(key), shown = wb.textOf(key);
+      const link = await linkOf(wb, key);
+      const merge = page.merges.find((m) => overlap(m, [at, at]));
+      const inside = (r: [Addr, Addr]) => overlap(r, [at, at]);
+      const rules = page.rules.filter((r) => inside(r.range)).map((r) => `${rangeName(r.range)} ${r.kind}`);
+      const names = [...wb.sheet.names().filter(([, r]) => { const c = parseRange(r); return c ? inside(c) : false; }).map(([n]) => n),
+        ...wb.names().filter(([, r]) => { const m = /^(?:'((?:[^']|'')+)'|([^!']+))!(.+)$/.exec(r), c = m ? parseRange(m[3]) : null; return m && c && (m[1] ?? m[2]).replace(/''/g, "'") === page.name && inside(c); }).map(([n]) => n)];
+      const table = wb.sheet.tables().find((t) => inside(t.range));
+      const reads = wb.sheet.reads(key), readBy = wb.sheet.readBy(key);
+      const info: Record<string, unknown> = {
+        cell: key,
+        ...(input !== "" ? { value: scripted(value) } : {}),
+        ...(input !== "" && shown !== show(value) ? { shown } : {}),
+        ...(input.startsWith("=") ? { formula: input } : input !== "" ? { input } : {}),
+        ...(note.format ? { format: note.format } : {}),
+        ...(note.look && Object.keys(note.look).length ? { look: note.look } : {}),
+        ...(note.style ? { style: note.style } : {}),
+        ...(note.styleExpression ? { styleExpression: note.styleExpression } : {}),
+        ...(note.cellStyle ? { cellStyle: note.cellStyle } : {}),
+        ...(note.comment ? { comment: note.comment } : {}),
+        ...(note.thread ? { thread: threadLine(note.thread) } : {}),
+        ...(note.validation ? { validation: note.validation } : {}),
+        ...(note.editor ? { editor: asApp(note.editor) } : {}),
+        ...(link !== null ? { hyperlink: link } : {}),
+        ...(merge ? { merged: rangeName(merge) } : {}),
+        ...(note.unlocked ? { unlocked: true } : {}),
+        ...(note.ignoreError ? { ignoreError: true } : {}),
+        ...(rules.length ? { rules } : {}),
+        ...(names.length ? { names } : {}),
+        ...(table ? { table: `${table.name} ${rangeName(table.range)}` } : {}),
+        ...(reads.length ? { reads } : {}),
+        ...(readBy.length ? { readBy } : {}),
+      };
+      return { ok: true, message: `${key}: ${Object.keys(info).filter((k) => k !== "cell").join(", ") || "nothing"}`, changed: [], output: info };
+    },
+  },
+  {
     // A cell's editor (editors.ts): a checkbox, a dropdown of options, a
     // date; kind=none takes it away.
     id: "cell.editor", label: "Cell Editor", params: ["cell", "kind"], optional: ["options", "format"], journaled: true,

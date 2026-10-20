@@ -1809,6 +1809,21 @@ main() {
             b.click("Unwatch Sheet1!J18")
             spec.assert_true(b.wait_for_text_gone("Watch Sheet1!J18: =SUM(H18:I18) = 66"), "unwatched")
         }
+        spec.it("Cell info lists what is not default about the selected cell, and nothing it has not") callback {
+            b.click("Excel formulas")
+            g.enter("H19", "5")
+            g.enter("I19", "=H19*2")
+            g.pick("I", 19)
+            b.click("Cell info")
+            spec.assert_true(b.wait_for_text("Cell info I19:"), "headed by the cell")
+            spec.assert_true(b.wait_for_text("formula: =H19*2"), "its formula")
+            spec.assert_true(b.wait_for_text("reads: [\"H19\"]"), "what it reads")
+            spec.assert_true(b.wait_for_text_gone("comment:"), "no comment line: it has none")
+            g.pick("H", 19)
+            b.click("Cell info")
+            spec.assert_true(b.wait_for_text("readBy: [\"I19\"]"), "and what reads H19")
+            spec.assert_true(b.wait_for_text_gone("formula: =H19*2"), "the other cell's lines gone")
+        }
         spec.it("conditional formatting rules over the selection; an Excel number format's colour") callback {
             g.pick("B", 14)
             g.key("Shift+Down")

@@ -11,7 +11,7 @@ import type { Watch } from "../workbook.ts";
 import type { SheetView } from "./view.ts";
 
 export function auditBar(v: SheetView): void {
-  const steps = state("");
+  const steps = state(""), info = state<string[]>([]);
   const findings = state<Finding[]>([]);
   const check = async () => {
     const o = await v.run("formulas.errorCheck");
@@ -25,6 +25,12 @@ export function auditBar(v: SheetView): void {
     v.btn("Evaluate formula", async () => {
       const o = await v.run("formulas.evaluate", { cell: v.here() });
       steps.set(o.ok ? o.message : "");
+    });
+    // Everything non-default about the selected cell, a part to a line.
+    v.btn("Cell info", async () => {
+      const o = await v.run("cell.info", { cell: v.here() });
+      const about = o.output as Record<string, unknown>;
+      info.set(o.ok ? [`Cell info ${about.cell}:`, ...Object.entries(about).filter(([k]) => k !== "cell").map(([k, x]) => `${k}: ${typeof x === "string" ? x : JSON.stringify(x)}`)] : []);
     });
     v.btn("Add watch", () => v.run("formulas.watch", { cell: v.here() }));
   });
@@ -45,6 +51,7 @@ export function auditBar(v: SheetView): void {
     });
   }));
   bind(ui.text_wrapped("", 720), steps);
+  each(info, (l: string) => l, (l: string) => ui.text(l));
   each(v.watches, (w: Watch) => `${w.sheet}!${w.cell}`, (w: Watch) => ui.wrap(() => {
     ui.text(`Watch ${w.sheet}!${w.cell}: ${w.input} = ${w.shown}`);
     ui.btn(`Unwatch ${w.sheet}!${w.cell}`, () => v.run("formulas.unwatch", { cell: `${w.sheet}!${w.cell}` }));

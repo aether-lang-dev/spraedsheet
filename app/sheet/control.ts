@@ -112,6 +112,8 @@ function cell(a: unknown, fn: string) {
 // "a=1;b=two" as { a: "1", b: "two" }.
 const pairs = (a: unknown): Record<string, string> => Object.fromEntries(text(a).split(";").map((x) => x.trim()).filter((x) => x.includes("=")).map((x) => [x.slice(0, x.indexOf("=")).trim(), x.slice(x.indexOf("=") + 1).trim()]));
 const stem = (xs: readonly unknown[]): Record<string, unknown> => Object.fromEntries([[0, xs.length], ...xs.map((x, i) => [i + 1, x])]);
+// A value as REXX tails: an object's names upper case, a list a stem.
+const tails = (v: unknown): unknown => (Array.isArray(v) ? stem(v.map(tails)) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k.toUpperCase(), tails(x)])) : v);
 const unstem = (v: unknown): unknown[] => {
   if (Array.isArray(v)) return v;
   if (typeof v === "string") return JSON.parse(v) as unknown[];
@@ -152,6 +154,10 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   GETFORMULALANGUAGE: async (exec) => (await state(exec)).language,
   EXPORT: async (exec) => (await must(exec, "file.export")).output,
   IMPORT: async (exec, json) => (await must(exec, "file.import", { text: text(json) }), "OK"),
+  // Everything non-default about a cell, as a stem: CELLINFO("B3") gives
+  // VALUE, FORMULA, FORMAT, COMMENT, LOOK.FILL, VALIDATION.KIND, RULES.0 and
+  // RULES.1, NAMES, TABLE, READS.1, READBY.1 ... for the parts it has.
+  CELLINFO: async (exec, c) => tails((await must(exec, "cell.info", { cell: text(c) })).output),
   // The workbook as a REXX program that makes it again (bookscript.ts).
   WORKBOOKSCRIPT: async (exec) => (await must(exec, "file.script")).output,
   // The canonical text form (textform.ts): EXPORTTEXT(), IMPORTTEXT(text).
