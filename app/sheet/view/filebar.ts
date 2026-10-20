@@ -11,6 +11,8 @@
 // where they are.
 import type { SheetView } from "./view.ts";
 import { TEXT_HEADER } from "../textform.ts";
+import { changeLine } from "../gitstore.ts";
+import type { Change } from "../gitstore.ts";
 
 export function fileBar(v: SheetView): void {
   const name = state(""), csv = state(""), saved = state(""), shown = state("");
@@ -163,4 +165,33 @@ export function booksBar(v: SheetView): void {
     v.btn("Open workbook", () => v.run("book.open", /^(budget|test|formatted)$/i.test(which.value.trim()) ? { sample: which.value.trim() } : { name: which.value }));
     v.btn("Close workbook", () => v.run("book.close"));
   });
+}
+
+// Versions kept in a git repository (gitstore.ts): a message, Save version
+// (a commit of the workbook's text), the versions newest first, each with
+// Diff (against the workbook as it is now, cell by cell, before a change is
+// kept) and Restore; Diff last compares the last version and the workbook.
+export function versionsBar(v: SheetView): void {
+  const message = state(""), versions = state<{ id: string; message: string }[]>([]), changes = state<string[]>([]);
+  const listed = async () => {
+    const o = await v.run("version.list");
+    versions.set(o.ok ? o.output as { id: string; message: string }[] : []);
+  };
+  const diff = async (a?: string) => {
+    const o = await v.run("version.diff", a ? { a } : {});
+    const found = o.ok ? o.output as Change[] : [];
+    changes.set(o.ok ? [found.length ? `${found.length} changed:` : "No changes", ...found.map(changeLine)] : []);
+  };
+  ui.wrap(() => {
+    ui.on_submit(bind(ui.textfield("version message", () => {}), message), async () => { await v.run("version.save", { message: message.value }); message.set(""); await listed(); });
+    v.btn("Save version", async () => { await v.run("version.save", { message: message.value }); message.set(""); await listed(); });
+    v.btn("Show versions", listed);
+    v.btn("Diff last", () => diff());
+  });
+  each(versions, (x: { id: string; message: string }) => x.id, (x: { id: string; message: string }) => ui.wrap(() => {
+    ui.text(`${x.id.slice(0, 7)} ${x.message.split("\n")[0]}`);
+    ui.btn(`Diff ${x.id.slice(0, 7)}`, () => diff(x.id));
+    ui.btn(`Restore ${x.id.slice(0, 7)}`, async () => { await v.run("version.restore", { id: x.id }); await listed(); });
+  }));
+  each(changes, (l: string) => l, (l: string) => ui.text(l));
 }

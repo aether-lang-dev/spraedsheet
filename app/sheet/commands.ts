@@ -27,6 +27,8 @@ import { noteOf, readSheetFile, writeSheetFile } from "./file.ts";
 import type { SheetFile } from "./file.ts";
 import { fileOfText, textOfFile } from "./textform.ts";
 import { bookScript } from "./bookscript.ts";
+import { changeLine, diffText, head as headOf, resolve as versionNamed, save as saveVersion, textAt, versions } from "./gitstore.ts";
+import type { Change, RepoFs } from "./gitstore.ts";
 import { show } from "./format.ts";
 import { EXAMPLE, FORMATTED, SAMPLE_BUDGET, TEST_SHEET } from "./samples.ts";
 import { runScript, runSpreadsheet } from "./script.ts";
@@ -98,6 +100,9 @@ export interface Store {
   get(key: string): string | null;
   set(key: string, value: string): void;
   remove(key: string): void;
+  // Where the workbook's versions are kept as a git repository (gitstore.ts):
+  // the page's `fs` within its grant; none on a page without one.
+  readonly repo?: RepoFs;
 }
 
 export function memoryStore(): Store {
@@ -135,6 +140,9 @@ const OWN_AREAS = new Set(["range.stats", "view.select"]);
 // A command that cannot run as asked: its message is the Outcome's.
 class Refused extends Error {}
 const refuse = (message: string): never => { throw new Refused(message); };
+
+// The version repository of the page, or a refusal that says why there is none.
+const repoOf = (store: Store): RepoFs => store.repo ?? refuse("no version repository: this page has no fs grant to keep one in");
 
 // A json= parameter: an object, or a refusal that says why not.
 function jsonOf(text: string): Record<string, any> {
@@ -4082,6 +4090,53 @@ const SPECS: readonly Spec[] = [
       const file = readSheetFile(jsonOf(p.json));
       await openEnd(wb, file);
       return { ok: true, message: `ended ${file.name}`, changed: wb.sheet.keys() };
+    },
+  },
+  {
+    // Versions kept in a git repository (gitstore.ts, in the page's fs):
+    // each save a commit of the workbook's text, with a message; a log; the
+    // difference of two versions, or of the last and the workbook now, cell
+    // by cell, before a change is kept; a version brought back.
+    id: "version.save", label: "Save a version", params: ["message"], journaled: false,
+    run: async (wb, p, store) => {
+      const repo = repoOf(store), text = textOfFile(writeSheetFile(wb)), last = headOf(repo);
+      if (last && textAt(repo, last) === text) return { ok: true, message: `nothing changed since ${last.slice(0, 7)}`, changed: [], output: last };
+      const message = p.message.trim() || refuse("a version needs a message");
+      const id = saveVersion(repo, text, message, wb.userName, Math.floor(Date.now() / 1000));
+      return { ok: true, message: `saved ${id.slice(0, 7)}: ${message.split("\n")[0]} (${text.split("\n").length - 1} lines)`, changed: [], output: id };
+    },
+  },
+  {
+    id: "version.list", label: "Versions", params: [], optional: ["limit"], journaled: false,
+    run: async (_wb, p, store) => {
+      const list = versions(repoOf(store), p.limit === undefined ? 1000 : countOf(p.limit));
+      return { ok: true, message: list.length ? list.map((v) => `${v.id.slice(0, 7)} ${v.message.split("\n")[0]}`).join("; ") : "no versions", changed: [], output: list };
+    },
+  },
+  {
+    // a= and b= are versions (an id's start, HEAD, HEAD~2) or "current", the
+    // workbook as it is now: a defaults to HEAD, b to current.
+    id: "version.diff", label: "Diff Versions", params: [], optional: ["a", "b"], journaled: false,
+    run: async (wb, p, store) => {
+      const repo = repoOf(store), side = (name: string | undefined, fallback: string) => {
+        const n = (name ?? fallback).trim();
+        if (/^current$/i.test(n)) return textOfFile(writeSheetFile(wb));
+        try { return textAt(repo, versionNamed(repo, n)); } catch (e) { if (e instanceof RangeError) return refuse(e.message); throw e; }
+      };
+      const changes = diffText(side(p.a, "HEAD"), side(p.b, "current"));
+      return { ok: true, message: changes.length ? `${changes.length} change${changes.length === 1 ? "" : "s"}: ${changes.map(changeLine).join("; ")}` : "no changes", changed: [], output: changes };
+    },
+  },
+  {
+    id: "version.restore", label: "Restore a Version", params: ["id"], journaled: true, unstepped: true,
+    run: async (wb, p, store) => {
+      const repo = repoOf(store);
+      try {
+        return await open(wb, readSheetFile(fileOfText(textAt(repo, versionNamed(repo, p.id)))));
+      } catch (e) {
+        if (e instanceof RangeError) return refuse(e.message);
+        throw e;
+      }
     },
   },
   {

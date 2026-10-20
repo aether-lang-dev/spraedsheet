@@ -15,6 +15,14 @@
       "name": "spreadsheet",
       "ui": true
     },
-    "print": {}
+    "print": {},
+    "fs": {
+      "read": [
+        "$APPDATA/"
+      ],
+      "write": [
+        "$APPDATA/"
+      ]
+    }
   }
 }

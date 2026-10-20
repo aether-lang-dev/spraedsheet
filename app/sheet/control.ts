@@ -5,6 +5,7 @@
 // has them all, so the app's REXX scripts run against demo 18 as they are.
 // The functions see the sheet only through `exec`, a
 // command and its parameters in and its outcome out, as a panel does.
+import { changeLine } from "./gitstore.ts";
 import { COLS, ROWS, addrOf, colName, keyOf, parseRange, range } from "./address.ts";
 import { check } from "./validation.ts";
 import type { Rule } from "./validation.ts";
@@ -154,6 +155,14 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   GETFORMULALANGUAGE: async (exec) => (await state(exec)).language,
   EXPORT: async (exec) => (await must(exec, "file.export")).output,
   IMPORT: async (exec, json) => (await must(exec, "file.import", { text: text(json) }), "OK"),
+  // Versions in a git repository (gitstore.ts): SAVEVERSION("message") gives
+  // the id's first seven characters; VERSIONS() a stem of "id message", newest
+  // first; DIFFVERSIONS("HEAD~1", "HEAD") a stem of the cells that differ
+  // (a defaults to HEAD, b to the workbook as it is); RESTOREVERSION(id).
+  SAVEVERSION: async (exec, m) => String((await must(exec, "version.save", { message: text(m) })).output).slice(0, 7),
+  VERSIONS: async (exec) => stem(((await must(exec, "version.list")).output as { id: string; message: string }[]).map((v) => `${v.id.slice(0, 7)} ${v.message.split("\n")[0]}`)),
+  DIFFVERSIONS: async (exec, a, b) => stem(((await must(exec, "version.diff", { ...(text(a).trim() ? { a: text(a) } : {}), ...(text(b).trim() ? { b: text(b) } : {}) })).output as { where: string; was: string; now: string }[]).map((c) => changeLine(c))),
+  RESTOREVERSION: async (exec, id) => (await must(exec, "version.restore", { id: text(id) })).message,
   // Everything non-default about a cell, as a stem: CELLINFO("B3") gives
   // VALUE, FORMULA, FORMAT, COMMENT, LOOK.FILL, VALIDATION.KIND, RULES.0 and
   // RULES.1, NAMES, TABLE, READS.1, READBY.1 ... for the parts it has.

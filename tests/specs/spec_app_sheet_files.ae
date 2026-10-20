@@ -76,6 +76,43 @@ main() {
             spec.assert_true(b.wait_for_console("sheet: opened Spec book: 2 cells, Excel formulas"), "opened")
             spec.assert_true(g.wait_cell("B", 1, "42"), "its formula worked out")
         }
+        spec.it("versions: Save version commits the workbook to a git repository, Diff names the cells changed since, Restore brings a version back") callback {
+            appdata = os_getenv("SAE_APPDATA_DIR")
+            uidriver.answer_prompt("open", "${dir}/book.json")
+            b.click("Open file")
+            spec.assert_true(g.wait_cell("B", 1, "42"), "the workbook to version")
+            b.set_field_by("version message", "First")
+            b.click("Save version")
+            spec.assert_true(b.wait_for_console("sheet: saved "), "saved")
+            first, _re = fs.read("${appdata}/versions.git/refs/heads/main")
+            id1 = string.substring(first, 0, 7)
+            b.click("Show versions")
+            spec.assert_true(b.wait_for_text("${id1} First"), "listed with its message")
+            g.enter("A1", "5")
+            spec.assert_true(g.wait_cell("B", 1, "105"), "changed")
+            b.click("Diff last")
+            spec.assert_true(b.wait_for_text("1 changed:"), "one cell differs")
+            spec.assert_true(b.wait_for_text("Sheet1!A1: 2 → 5"), "named, with what it was and is")
+            b.set_field_by("version message", "Second")
+            b.click("Save version")
+            spec.assert_true(b.wait_for_console("sheet: saved "), "saved again")
+            second, _r2 = fs.read("${appdata}/versions.git/refs/heads/main")
+            i = 0
+            while string.equals(string.substring(second, 0, 7), id1) == 1 && i < 30 {
+                sleep(100)
+                second, _r2 = fs.read("${appdata}/versions.git/refs/heads/main")
+                i = i + 1
+            }
+            id2 = string.substring(second, 0, 7)
+            spec.assert_true(string.equals(id1, id2) == 0, "a second commit")
+            b.click("Show versions")
+            spec.assert_true(b.wait_for_text("${id2} Second"), "both listed, the newest first")
+            b.click("Restore ${id1}")
+            spec.assert_true(g.wait_cell("B", 1, "42"), "the first version back: A1 is 2 and B1 42")
+            b.click("Diff last")
+            spec.assert_true(b.wait_for_text("1 changed:"), "against the second version, A1 differs again")
+            spec.assert_true(b.wait_for_text("Sheet1!A1: 5 → 2"), "5 to 2")
+        }
         spec.it("Export CSV file writes what the sheet shows") callback {
             uidriver.answer_prompt("save", "${dir}/out.csv")
             b.click("Export CSV file")

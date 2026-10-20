@@ -55,7 +55,8 @@ const unstem = (v) => (v && typeof v === 'object' && '0' in v ? Array.from({ len
 let child = null;
 async function start() {
   if (process.env.SHEET_ATTACH === '1') return;
-  appdata = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-cli-'));
+  // SHEET_APPDATA names the app's data folder (kept after the run: the version repository, versions.git, is in it); else one of its own.
+  appdata = process.env.SHEET_APPDATA ? (fs.mkdirSync(process.env.SHEET_APPDATA, { recursive: true }), process.env.SHEET_APPDATA) : fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-cli-'));
   child = spawn(SAE_BIN, ['--app', path.join(ROOT, 'app'), '--control-bus'], { env: { ...process.env, AETHER_UI_HEADLESS: '1', SAE_APPDATA_DIR: appdata }, stdio: 'ignore' });
   child.on('error', () => {});
   const courier = path.join(appdata, '.control-bus');
@@ -69,7 +70,7 @@ async function start() {
 }
 function stop() {
   if (child) child.kill();
-  if (appdata && process.env.SHEET_ATTACH !== '1') fs.rmSync(appdata, { recursive: true, force: true });
+  if (appdata && process.env.SHEET_ATTACH !== '1' && !process.env.SHEET_APPDATA) fs.rmSync(appdata, { recursive: true, force: true });
 }
 
 // A file into the workbook, by its kind.

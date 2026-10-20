@@ -3,6 +3,7 @@
 "seeks control-bus, reduced functionality without";
 "seeks open-urls, reduced functionality without";
 "seeks print, reduced functionality without";
+"seeks local-filesystem, reduced functionality without";
 // Spreadsheet (sae/docs/roadmap.md demo 18), declared as panels over a seam.
 //
 // app/sheet/ is the spreadsheet with no ui: two formula languages (Excel's,
@@ -34,7 +35,7 @@ import { chartPanel } from "./sheet/view/chartpanel.ts";
 import { dataBar } from "./sheet/view/databar.ts";
 import { insertBar } from "./sheet/view/insertbar.ts";
 import { commandBar, macroBar } from "./sheet/view/commandbar.ts";
-import { booksBar, fileBar } from "./sheet/view/filebar.ts";
+import { booksBar, fileBar, versionsBar } from "./sheet/view/filebar.ts";
 import { functionList, problemList, setupScript, statusBar, statusLine } from "./sheet/view/lists.ts";
 import { menuBar } from "./sheet/view/menubar.ts";
 import { toolBar } from "./sheet/view/toolbar.ts";
@@ -89,7 +90,7 @@ sheet.panel("find", () => findBar(sheet));
 sheet.panel("audit", () => auditBar(sheet));
 sheet.panel("insert", () => insertBar(sheet));
 sheet.panel("chart", () => chartPanel(sheet));
-sheet.panel("file", () => { fileBar(sheet); booksBar(sheet); });
+sheet.panel("file", () => { fileBar(sheet); booksBar(sheet); versionsBar(sheet); });
 sheet.panel("script", () => { languageBar(sheet); commandBar(sheet); macroBar(sheet); setupScript(sheet); });
 sheet.panel("lists", () => { functionList(sheet); problemList(sheet); });
 });

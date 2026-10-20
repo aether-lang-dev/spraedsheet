@@ -18,6 +18,7 @@ import { COLUMN_WIDTH, ROWS_WHEN_SPLIT, ROWS_WITH_PANEL, ROW_PX, buildPane } fro
 const ROW_HEIGHT = 24;
 import type { ChartView, DrawingView, SlicerView, Watch } from "../workbook.ts";
 import { Workbooks } from "../books.ts";
+import { pageRepo } from "../pagerepo.ts";
 import { statsLine } from "../workbook.ts";
 import { sliderToZoom, zoomToSlider } from "./zoom.ts";
 import { syncFloats } from "./floats.ts";
@@ -26,7 +27,7 @@ import type { CellEditor } from "../editors.ts";
 export class SheetView {
   // The workbooks open (books.ts), their files saved in the page's storage;
   // the page shows the active one, and its commands are the ones run.
-  readonly books = new Workbooks(storage);
+  readonly books = new Workbooks({ get: (k) => storage.get(k), set: (k, v) => storage.set(k, v), remove: (k) => storage.remove(k), repo: pageRepo() });
   get wb(): Workbook { return this.books.active.wb; }
   get cmds(): Commands { return this.books.active.cmds; }
   // A link's URL opened by the system: the installed app's shell.open
