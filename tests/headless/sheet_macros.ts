@@ -76,6 +76,9 @@ const said2: string[] = [];
 await cmds.script('SAY RUNMACRO("Put", "CELL=H2;N=5")\nSAY GETCELL("H2")\nSAY ONCHANGE("I1:I5", "Twice")\nSAY ONCHANGE("I1:I5", "Twice", 1)\nSAY ONOPEN("Hello")', (l) => said2.push(l));
 eq("7.2 from REXX", said2, ["Put ran", "10", "Twice runs after a change to Sheet1!I1:I5", "Twice no longer runs on a change to I1:I5", "Hello runs when the workbook opens"]);
 
+const said3: string[] = [];
+await cmds.script('LET r = CALL twice 21\nSAY r\nCALL twice 4\nSAY RESULT\nEXIT\ntwice:\nPARSE ARG n\nRETURN n * 2', (l) => said3.push(l));
+eq("LET r = CALL f gives f's RETURN value, as RESULT does (RexxJS 5d96050)", said3, ["42", "8"]);
 // expect: ok the program a journal renders to
 // expect: ok recorded: what changed the workbook, not a zoom or a read
 // expect: ok run on a new workbook, it makes the same one
@@ -92,3 +95,4 @@ eq("7.2 from REXX", said2, ["Put ran", "10", "Twice runs after a change to Sheet
 // expect: ok taken away
 // expect: ok from REXX
 // expect: ok 7.2 from REXX
+// expect: ok LET r = CALL f gives f's RETURN value, as RESULT does (RexxJS 5d96050)

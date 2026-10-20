@@ -26,16 +26,16 @@ Upstream at the pause: sae 8297a5d (run_all 61/61 on macOS, aether-linux GTK
 4.6, aether-linux-2604 GTK 4.22, ae-x64), aether-ui ebee1c96, Aether 0.829.0,
 RexxJS b3d5e4e or later (CI green), aeb v0.327.
 
-**Next candidates, none started:**
+**Next candidates** (resumed 2026-10-20; Stage 9 below is the record):
+- ~~RexxJS: `LET r = CALL f ...` gives `[object Object]`; its bash-4 tests fail
+  on macOS's bash 3.2~~ (done 2026-10-20, 9.1)
 - `blog-entry-todo.md` B.1-B.7 (a diffable text form, the workbook as a REXX
   program, a cell's non-defaults, git-backed saves, one MCP request as one
-  reviewable diff, checks in the sheet, a read view).
-- The actions left in `docs/comparisons/` (mostly records and relations, from
-  Grist and Airtable; IronCalc's remaining reuse candidates).
+  reviewable diff, checks in the sheet, a read view). Done: none yet.
 - Charts on aether-ui's `vg/chart` (the Chartist port) through a sae
   `ui.chart` binding, replacing `app/sheet/charts.ts`'s own layout.
-- RexxJS: `LET r = CALL f ...` gives `[object Object]` (plain CALL + RESULT
-  works); its bash-4 tests fail on macOS's bash 3.2.
+- The actions left in `docs/comparisons/` (mostly records and relations, from
+  Grist and Airtable; IronCalc's remaining reuse candidates).
 
 **Known limits:** XLSX chart parts were checked against the schema but never
 opened in Excel or LibreOffice; on GTK a row drawn taller than its nominal
@@ -218,3 +218,12 @@ are done, `docs/comparisons/gridcraft_parity.md`'s look-and-feel row says so.
 | 8.3 | ~~Programmable right-click menus for sae pages: `ui.context_menu(h, items)` (or a block) on a widget, a vg shape or the whole page, each item a label, an optional accelerator, enabled, a callback, and separators, the page's to change; below a divider sae's own section, which a page cannot remove, reorder, disable or add under (Back, Forward, Reload, View page source, Inspect), a page item copying one of its labels refused, a page with no menu still given it. aether-ui: right-click reaching vg canvases on every backend (UIKit and Android by a long press), so vg.on_right_click and canvas menus work; the driver opens a widget's menu, lists both sections and picks an item~~ (done 2026-10-18: sae ecc0d23 `ui.context_menu(target, items)` on a widget, a vg shape or the page, items { label, accel, enabled, action } and "-", read again each time; sae's own section below a divider (Back, Forward, Reload, View page source, Inspect), its labels refused to a page item, given to a page with none. aether-ui d8f6a013 `on_secondary_click` on every backend (a long press on UIKit and Android), right clicks reaching vg canvases, `menu_clear` and disabled items, the driver's secondary click recording the menu it pops, `/menus` with separators and disabled items. Specs: aether-ui secondary_demo on every lane, sae spec_ctxmenu) | aether-ui and sae specs: page items above the divider, sae's below, a spoof refused, a page with none | |
 | 8.4 | ~~Sheet tabs as tabs, the rows below behind one "Extra controls" toggle, collapsed as it starts: collapsed, the bottom is the sheet tabs (dragged to reorder, a "+" tab adding a sheet, a double click renaming one in place, a right-click menu with Rename, Move left and right, Copy, Hide, Unhide, Tab color, Delete, as the Sheet menu has them) and the status bar; expanded, the old rows of sheet buttons and panels as they are now; a view setting saved with the workbook; the View menu reaching every panel; every REXX function as it is~~ (done 2026-10-18: `view/sheettabs.ts`: the tabs, the active one marked, a + tab, a double click renaming in place, a right-click menu (Rename, Move left and right, Copy, Hide, Unhide, a tab colour, Delete); the Extra controls toggle at the row's end, collapsed as a workbook starts, showing the sheet buttons and the panels' tabs; an open panel shows either way; `view.extraControls`, saved with the workbook; the View menu's Extra controls and every panel. Headless `sheet_extracontrols`; spec with snapshots) | spec: the default bottom is the tabs and the status bar, expanding shows the rows, +, a rename in place, each menu item; snapshots | `SHOWEXTRACONTROLS(1)`, `GETEXTRACONTROLS()` |
 | 8.5 | ~~Menu accelerators as each platform's own (aether-ui's `menu_item_accel`: NSMenuItem's key equivalent and modifier mask on AppKit, GTK's accelerator labels, a tab-separated accelerator and an accelerator table on Win32; label and shortcut text where a platform has none; Primary is Command on macOS and iOS, Ctrl on Linux and Windows, never Super); sae binds `ui.menu_item_accel` and `ui.shortcut_chord`; the menu bar binds each item's key through its entry, the duplicate key wiring gone, the grid's own keys kept in the grid~~ (done 2026-10-18: aether-ui 7e72e497 `menu_item_accel` the platform's own on every backend, the driver's key reaching the item, AppKit keeping an attached menu bar; sae c7a300c `ui.menu_item_accel`, `ui.shortcut_chord`; `menus.ts` `menuAccel` (Ctrl in the key table is Primary) and `GRID_KEYED` (Undo, Redo, Cut, Copy, Paste, Clear contents stay the grid's, their keys in the label); the grid's on_key leaves the menu's keys to it. Spec: the menu item and its key reach the same command) | aether-ui: the menu, winmenu and shortcut demos on every lane; spec: the menu and the key reach the same command | |
+
+
+### Stage 9: after the pause (2026-10-20 on)
+
+The candidates the pause left (the Paused section above), in the order done.
+
+| # | Step | Tests prove | REXX |
+|---|---|---|---|
+| 9.1 | ~~RexxJS: `LET r = CALL f ...` is f's RETURN value, not the call's `{ terminated, returnValue }` (printed `[object Object]`), and its four bash-4 tests (`${X^^}`, `declare -A`) are skipped where `bash` on PATH is older than 4~~ (done 2026-10-20: RexxJS 5d96050 and 30fce5c, a jest spec first failing on the old code; `testNeedingBash4` in `extras/addresses/system/test-support/bash-version.js`. Re-vendored at 30fce5c; RexxJS `npm test` 148 suites and `./rexxt tests/dogfood/*` 41 sources green) | RexxJS: `core/tests/let-call-result.spec.js` (3 tests); here headless `sheet_macros`: a macro's `LET r = CALL twice 21` is 42 | `LET r = CALL f ...` in any script |
