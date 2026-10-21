@@ -155,7 +155,8 @@ export function totalsInput(aggregate: string, table: string, column: string, ce
 
 // The structured references in a formula written as the cells they come to
 // (Convert to Range): $B$2:$B$4, or a row's own $B2; strings left alone.
-export function unstructured(input: string, table: TableDef, header: (a: Addr) => string, row: number): string {
+// `sheet` ("Sheet1!") goes before each, for a formula on another sheet.
+export function unstructured(input: string, table: TableDef, header: (a: Addr) => string, row: number, sheet = ""): string {
   if (!input.startsWith("=")) return input;
   let out = "", i = 0;
   const name = table.name.toUpperCase();
@@ -169,22 +170,28 @@ export function unstructured(input: string, table: TableDef, header: (a: Addr) =
       continue;
     }
     const m = /^[A-Za-z_][A-Za-z0-9_.]*/.exec(input.slice(i));
-    if (m && input[i + m[0].length] === "[" && m[0].toUpperCase() === name && !/[A-Za-z0-9_.$!]/.test(input[i - 1] ?? "")) {
+    // Sales[...], or the table's name alone (its data rows).
+    const next = m ? input[i + m[0].length] : undefined;
+    if (m && m[0].toUpperCase() === name && (next === "[" || (next !== "(" && next !== "!")) && !/[A-Za-z0-9_.$!]/.test(input[i - 1] ?? "")) {
       // The brackets, balanced, ' making the next character plain.
-      let j = i + m[0].length, depth = 0;
-      for (; j < input.length; j++) {
-        if (input[j] === "'") { j++; continue; }
-        if (input[j] === "[") depth++;
-        else if (input[j] === "]" && --depth === 0) break;
+      let j = i + m[0].length - 1, inner = "";
+      if (next === "[") {
+        j = i + m[0].length;
+        let depth = 0;
+        for (; j < input.length; j++) {
+          if (input[j] === "'") { j++; continue; }
+          if (input[j] === "[") depth++;
+          else if (input[j] === "]" && --depth === 0) break;
+        }
+        inner = input.slice(i + m[0].length + 1, j);
       }
-      const inner = input.slice(i + m[0].length + 1, j);
       let written = "#REF!";
       try {
         const spec = parseSpec(inner, i);
         const r = resolve(table, spec, header, row);
         if (!(r instanceof CellError)) {
           const [a, b] = r, abs = (x: Addr) => (spec.thisRow ? `$${colName(x.col)}${x.row + 1}` : `$${colName(x.col)}$${x.row + 1}`);
-          written = a.col === b.col && a.row === b.row ? abs(a) : `${abs(a)}:${abs(b)}`;
+          written = sheet + (a.col === b.col && a.row === b.row ? abs(a) : `${abs(a)}:${abs(b)}`);
         }
       } catch (e) {
         if (!(e instanceof FormulaError)) throw e;

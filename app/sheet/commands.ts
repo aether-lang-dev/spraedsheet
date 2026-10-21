@@ -488,6 +488,8 @@ async function openEnd(wb: Workbook, file: SheetFile): Promise<void> {
   }
   wb.activate(file.sheets[0].name);
   wb.bookProtection = file.bookProtection;
+  // Every sheet's tables are there now: what names one of another sheet is compiled again.
+  for (const s of file.sheets) if (s.tables.length && file.sheets.length > 1) { await wb.recalculateAll(); break; }
   wb.extraControls = file.extraControls;
   wb.macros = new Map(file.macros);
   wb.triggers = file.triggers.filter((t) => wb.macros.has(t.macro) && (t.on === "open" || wb.page(t.sheet ?? "")));
@@ -2742,6 +2744,16 @@ const SPECS: readonly Spec[] = [
   {
     // Clear Filter: every tile picked again, the rows shown.
     id: "slicer.clear", label: "Clear Slicer", params: ["name"], journaled: true,
+      // The same on the other sheets, which name it with its sheet.
+      for (const pg of wb.pages()) {
+        if (pg === wb.page(wb.active)) continue;
+        const prefix = sheetPrefix(wb.page(wb.active)!.name);
+        const there = pg.sheet.keys().flatMap((k): [string, string][] => {
+          const input = pg.sheet.input(k), now = unstructured(input, t, header, -1, prefix);
+          return now === input ? [] : [[k, now]];
+        });
+        if (there.length) await pg.sheet.setMany(there);
+      }
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, sl = page.slicers.find((x) => x.name.toLowerCase() === p.name.trim().toLowerCase()) ?? refuse(`no slicer ${p.name}`);
       page.slicers = page.slicers.map((x) => (x === sl ? { ...x, picked: [] } : x));
@@ -4673,7 +4685,10 @@ export class Commands {
   #triggering = 0;
   async #onChange(changed: readonly string[]): Promise<void> {
     const page = this.#wb.active, hit = this.#wb.triggers.filter((t) => t.on === "change" && t.sheet === page && changed.some((k) => { const a = cellAddr(k); return a && inRect(a, t.range!); }));
+      const tablesBefore = this.#wb.tablesKey();
     if (!hit.length) return;
+      // A table defined, moved, renamed or deleted: a formula on another sheet may name it.
+      if (outcome.ok && this.#wb.tablesKey() !== tablesBefore) await this.#wb.tablesChanged();
     this.#triggering++;
     try {
       for (const t of hit) await this.#runMacro(t.macro);

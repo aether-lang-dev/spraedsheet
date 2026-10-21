@@ -24,7 +24,7 @@ import { COLS, ROWS, addrOf, cellAddr, keyOf, order, splitKey } from "./address.
 import { CellError, isArray } from "./values.ts";
 import type { ArrayValue, Result, Value } from "./values.ts";
 import { EXCEL } from "./excel.ts";
-import type { Formula, Formulas, Hidden, Language, Named, Names, TableDef, Tables } from "./language.ts";
+import type { FoundTable, Formula, Formulas, Hidden, Language, Named, Names, TableDef, Tables } from "./language.ts";
 import type { Addr } from "./address.ts";
 import { show } from "./format.ts";
 
@@ -120,6 +120,8 @@ export interface Context {
   // The workbook's names, for a name the sheet has none of its own for.
   named?(name: string): Named | null;
   formula?(name: string): string | null;
+  // A table of another sheet of the workbook, by name, with that sheet.
+  table?(name: string): FoundTable | null;
   // Another sheet's cell's input ("" for none), and the workbook's sheet
   // names as given, in tab order (a sheet alone is its own book).
   input?(key: string): string;
@@ -319,7 +321,7 @@ export class Sheet {
   // (a conditional style): its value, or the error it came to.
   evaluate(formula: string): Promise<Value> {
     return this.#inTurn(async () => {
-      const f = this.#language.compile(formula, this.#named, (n) => this.#tables.get(n.toUpperCase()) ?? null, this.#formula);
+      const f = this.#language.compile(formula, this.#named, (n) => this.#tableNamed(n), this.#formula);
       const r = f.kind === "broken" ? f.error : (await f.run(this.#env())) ?? null;
       return isArray(r) ? r.values[0] ?? null : r;
     });
@@ -377,6 +379,12 @@ export class Sheet {
     return this.#tables.get(n.toUpperCase()) ?? null;
   }
 
+  // A table a formula names: this sheet's own, else the workbook's other
+  // sheets' (the context's), which carries the sheet it is on.
+  #tableNamed(n: string): FoundTable | null {
+    return this.#tables.get(n.toUpperCase()) ?? this.#context.table?.(n) ?? null;
+  }
+
   // A table defined (or redefined), or deleted (null): every formula
   // compiled again, as any may read it.
   defineTable(n: string, t: TableDef | null): Promise<string[]> {
@@ -432,7 +440,7 @@ export class Sheet {
   }
 
   #compile(key: string): void {
-    const c = compile(this.input(key), this.#language, this.#named, (n) => this.#tables.get(n.toUpperCase()) ?? null, this.#formula, key);
+    const c = compile(this.input(key), this.#language, this.#named, (n) => this.#tableNamed(n), this.#formula, key);
     this.#compiled.set(key, c);
     if (c.kind === "formula" && c.volatile) this.#volatile.add(key); else this.#volatile.delete(key);
     this.#link(key, new Set(c.kind === "formula" ? c.reads.map((k) => this.#local(k) ?? k) : []));

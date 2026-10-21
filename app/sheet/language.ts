@@ -55,8 +55,12 @@ export interface TableSort {
   readonly origin: readonly number[];
 }
 
-// The sheet's tables, by name (upper case), or null.
-export type Tables = (name: string) => TableDef | null;
+// The tables a formula may name, by name (upper case), or null: the sheet's
+// own, then the workbook's other sheets' (Excel's tables belong to the
+// workbook), those with the sheet they are on (upper case); a table of the
+// formula's own sheet has none.
+export type FoundTable = TableDef & { readonly sheet?: string };
+export type Tables = (name: string) => FoundTable | null;
 
 export interface Env {
   get(key: string): Value;

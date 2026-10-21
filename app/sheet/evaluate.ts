@@ -258,9 +258,11 @@ class Evaluator {
       // A table reference: its cells as the table is now (its header row
       // read for a column's name); one cell is its value.
       case "table": {
-        const r = resolve(e.table, e.spec, (a) => toText(this.#env.get(keyOf(a))), e.row);
+        // (A table on another sheet: its cells qualified with the sheet.)
+        const at = e.table.sheet ? (k: string) => `${e.table.sheet}!${k}` : (k: string) => k;
+        const r = resolve(e.table, e.spec, (a) => toText(this.#env.get(at(keyOf(a)))), e.row);
         if (r instanceof CellError) throw r;
-        const keys = [...range(r[0], r[1])];
+        const keys = [...range(r[0], r[1])].map(at);
         return keys.length === 1 ? this.#env.get(keys[0]) : array(r[1].row - r[0].row + 1, r[1].col - r[0].col + 1, keys.map((k) => this.#env.get(k)));
       }
       case "missing":

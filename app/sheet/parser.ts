@@ -11,7 +11,7 @@ import type { Op, Token } from "./lexer.ts";
 import type { ErrorCode } from "./values.ts";
 import { keyOf, splitKey } from "./address.ts";
 import type { Addr } from "./address.ts";
-import type { Formulas, Names, TableDef, Tables } from "./language.ts";
+import type { FoundTable, Formulas, Names, Tables } from "./language.ts";
 import { parseSpec } from "./structured.ts";
 import { names as functionNames } from "./functions.ts";
 import type { TableSpec } from "./structured.ts";
@@ -32,7 +32,7 @@ export type Expr =
   // A table reference (structured.ts): the table as it was when the formula
   // was compiled (a table defined, moved or deleted compiles every formula
   // again), what it asks for, and the formula's own row for [@...].
-  | { readonly kind: "table"; readonly table: TableDef; readonly spec: TableSpec; readonly row: number | null; readonly text: string }
+  | { readonly kind: "table"; readonly table: FoundTable; readonly spec: TableSpec; readonly row: number | null; readonly text: string }
   // An array constant, {1,2;3,4}: rows split by ';', each a row's values.
   | { readonly kind: "array"; readonly rows: number; readonly cols: number; readonly values: readonly ArrayItem[] }
   | { readonly kind: "error"; readonly code: ErrorCode; readonly why?: string }
@@ -318,7 +318,7 @@ class Parser {
       case "table": {
         const spec = parseSpec(t.spec, t.at);
         const table = this.#tables(t.name);
-        return table ? { kind: "table", table, spec, row: this.#row, text: t.text } : { kind: "error", code: "#REF!", why: `no table ${t.text.slice(0, t.text.indexOf("["))}` };
+        return table ? { kind: "table", table, spec, row: table.sheet ? null : this.#row, text: t.text } : { kind: "error", code: "#REF!", why: `no table ${t.text.slice(0, t.text.indexOf("["))}` };
       }
       case "ref": {
         const sheets = splitKey(t.name).sheet;
@@ -360,7 +360,7 @@ class Parser {
           const r = this.#names(t.name);
           // A table's name alone is its data rows (Sales is Sales[]).
           const table = r ? null : this.#tables(t.name);
-          if (table) return { kind: "table", table, spec: parseSpec("", t.at), row: this.#row, text: t.text };
+          if (table) return { kind: "table", table, spec: parseSpec("", t.at), row: table.sheet ? null : this.#row, text: t.text };
           if (!r) return this.#named(t.name) ?? (this.#etaHere(t.name) ? eta(t.name) : { kind: "error", code: "#NAME?", why: `no name ${t.name}` });
           const on = (a: Addr) => (r.sheet ? `${r.sheet}!${keyOf(a)}` : keyOf(a));
           const [a, b] = [on(r.range[0]), on(r.range[1])];

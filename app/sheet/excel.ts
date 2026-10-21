@@ -35,7 +35,9 @@ export function* refsOf(e: Expr, seen: Set<string> = new Set()): Generator<strin
     case "table": {
       const t = e.table, [a, b] = t.range, left = Math.min(a.col, b.col), right = Math.max(a.col, b.col);
       const top = Math.min(a.row, b.row), bottom = Math.max(a.row, b.row), [d1, d2] = dataRows(t);
-      const rows = (r1: number, r2: number) => range({ col: left, row: r1 }, { col: right, row: r2 });
+      // On another sheet its cells are qualified with that sheet.
+      const q = (k: string) => (t.sheet ? `${t.sheet}!${k}` : k);
+      const rows = function* (r1: number, r2: number) { for (const k of range({ col: left, row: r1 }, { col: right, row: r2 })) yield q(k); };
       if (t.headers) yield* rows(top, top);
       if (e.spec.thisRow) {
         // Marked, so the formula's own cell is left out (compile below):

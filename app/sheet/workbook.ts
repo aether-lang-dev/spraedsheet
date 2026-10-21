@@ -512,6 +512,14 @@ export class Workbook {
       },
       input: (key) => {
         const { sheet, cell } = splitKey(key);
+      // Excel's tables belong to the workbook: another sheet's, in tab order.
+      table: (n) => {
+        for (const p of this.#pages) {
+          const t = p === page ? null : p.sheet.table(n);
+          if (t) return { ...t, sheet: p.name.toUpperCase() };
+        }
+        return null;
+      },
         return this.page(sheet ?? "")?.sheet.input(cell) ?? "";
       },
       sheets: () => this.sheetNames(),
@@ -614,6 +622,26 @@ export class Workbook {
 
   async defineName(n: string, b: BookName | null): Promise<void> {
     if (b) this.#names.set(n.toUpperCase(), b); else this.#names.delete(n.toUpperCase());
+  // Every sheet's tables, as text: what changes when one is defined, moved,
+  // renamed or deleted, and so what a formula on another sheet that names a
+  // table (Sales[Amount]) has to be compiled against again.
+  tablesKey(): string {
+    return this.#pages.length < 2 ? "" : this.#pages.map((p) => JSON.stringify(p.sheet.tables())).join("|");
+  }
+
+  // The tables changed on the active sheet (or every sheet's put back):
+  // the other sheets compiled again, as one may name a table of it.
+  async tablesChanged(): Promise<void> {
+    for (const p of this.#pages) if (p !== this.#active) await p.sheet.recalculate();
+    await this.settle();
+  }
+
+  // Every sheet compiled and worked out again.
+  async recalculateAll(): Promise<void> {
+    await this.#recalculate();
+    await this.settle();
+  }
+
     await this.#recalculate();
   }
 
@@ -755,7 +783,7 @@ export class Workbook {
 
   async #apply(step: Saved): Promise<string[]> {
     const was = this.#active, before = this.sheet.keys();
-    const ownNames = () => this.#pages.map((p) => JSON.stringify(p.sheet.names())).join("|");
+    const ownNames = () => this.#pages.map((p) => JSON.stringify(p.sheet.names()) + JSON.stringify(p.sheet.tables())).join("|");
     const namesBefore = ownNames();
     // Sheets added, deleted, moved or renamed: every sheet worked out again,
     // as what reads one by name may read another now.
