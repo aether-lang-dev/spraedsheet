@@ -13,10 +13,15 @@ saved, reopened, drawn, all asserted); fuzz and headless-vs-interactive parity
    totals, diamonds, dynamic references (`OFFSET`/`INDIRECT`) and volatile
    functions to the `sheet_large` workload. Check an unaffected branch is not
    evaluated. Extends 7.8; no step yet.
-2. **Say what a script reads mid-batch.** Fresh staged results or the committed
+2. ~~**Say what a script reads mid-batch.** Fresh staged results or the committed
    snapshot, when recalculation runs, what a failure restores. Keep today's
    read-after-write on purpose; do not copy HyperFormula's suspended-read rule.
-   Document it where scripts are described (`described.ts`).
+   Document it where scripts are described (`described.ts`).~~ Done 2026-10-21:
+   said at the top of `described.ts` and held by headless `sheet_scriptreads`:
+   a read after a write sees the written state with formulas worked out; under
+   manual calculation a dependent formula keeps its old value until `CALCULATE()`;
+   a failing script from the panel keeps what it did (one undo step), a failing
+   bus request is taken back whole.
 3. **Range-aware aggregates, only if 1 shows a cost.** Floating-point regrouping
    changes results, so give it its own tolerance.
 4. **One function metadata contract.** Arity, coercion, array lifting,

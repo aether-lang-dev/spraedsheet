@@ -5,6 +5,17 @@
 // tests/headless/sheet_described.ts holds this to the functions themselves:
 // every name listed, and each one's parameters as many as it takes.
 
+// What a script reads mid-batch (tests/headless/sheet_scriptreads.ts holds it).
+// Every command takes effect at once, and a read after a write sees what was
+// written, formulas worked out: GETCELL after SETCELL reads the new state, not a
+// snapshot from before the script (read-after-write, on purpose). Under manual
+// calculation a formula that reads a changed cell keeps its old value until
+// CALCULATE(), as a person at the sheet sees; the changed cell itself reads new.
+// A script run from the Script panel is one step of undo and keeps what it did
+// before a failure; a request from the control bus (the MCP tools, sae-bus) is
+// all or nothing: one that fails part way is taken back whole, so what it read on
+// the way was never kept.
+
 // What an argument is, as the functions read it (control.ts's text, yes,
 // row, col and cell):
 //   cell     a cell reference, "A1"
