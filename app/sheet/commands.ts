@@ -52,7 +52,8 @@ import { SHAPES, SHAPE_TITLES, pictureOf } from "./drawings.ts";
 import type { Drawing } from "./drawings.ts";
 import type { ChartKind } from "./charts.ts";
 import type { ChartSpec, Clip } from "./workbook.ts";
-import type { TableDef } from "./language.ts";
+import type { Language, TableDef } from "./language.ts";
+import type { Note } from "./notes.ts";
 import { blockMoved, deleted, inserted, movedBy, restructured, swapped } from "./shift.ts";
 import { TOTALS, dataRows, totalsInput, unstructured } from "./structured.ts";
 import { TABLE_STYLE_NAMES, styleNamed } from "./styles.ts";
@@ -487,9 +488,9 @@ async function openEnd(wb: Workbook, file: SheetFile): Promise<void> {
     if (page && range) await wb.defineName(n, { page, range });
   }
   wb.activate(file.sheets[0].name);
-  wb.bookProtection = file.bookProtection;
   // Every sheet's tables are there now: what names one of another sheet is compiled again.
   for (const s of file.sheets) if (s.tables.length && file.sheets.length > 1) { await wb.recalculateAll(); break; }
+  wb.bookProtection = file.bookProtection;
   wb.extraControls = file.extraControls;
   wb.macros = new Map(file.macros);
   wb.triggers = file.triggers.filter((t) => wb.macros.has(t.macro) && (t.on === "open" || wb.page(t.sheet ?? "")));
@@ -668,29 +669,86 @@ function clipOf(wb: Workbook, r: [Addr, Addr]): Clip {
   return {
     tsv: copied(inputs(wb), r[0], r[1]), from, language: wb.sheet.language,
     inputs: grid((k) => wb.sheet.input(k)), shown: grid((k) => show(wb.sheet.value(k))), notes: grid((k) => wb.notes.get(k)),
+    merges: wb.page(wb.active)!.merges.filter((m) => inRect(m[0], r) && inRect(m[1], r)),
   };
 }
 
+// What a pasted cell takes from the copied one besides its input: look,
+// number format, cell style, validation, hyperlink, editor, picture, whether
+// it is locked, and the note's comment (a threaded comment is not copied, as
+// Excel does not copy one); every one it lacks is taken off the target.
+function carriedNote(n: Note, language: Language, by: { readonly cols: number; readonly rows: number }): Note {
+  return {
+    format: n.format ?? "", style: n.style ?? "", look: n.look, cellStyle: n.cellStyle, validation: n.validation, hyperlink: n.hyperlink, editor: n.editor,
+    picture: n.picture, unlocked: n.unlocked, comment: n.comment ?? "",
+    styleExpression: n.styleExpression ? movedBy(language, `=${n.styleExpression}`, by).slice(1) : "",
+  };
+}
+
+// Every cell of `from` (target key -> source key) given its source's notes.
+function carryNotes(wb: Workbook, from: ReadonlyMap<string, string>): string[] {
+  for (const [to, src] of from) {
+    const a = cellAddr(to)!, b = cellAddr(src)!;
+    wb.notes.set(to, carriedNote(wb.notes.get(src), wb.sheet.language, { cols: a.col - b.col, rows: a.row - b.row }));
+  }
+  return [...from.keys()];
+}
+
+// Merged cells and what is pasted over them, as Excel has it: a merge the
+// paste does not match (a merge of the same size in the same place in what was
+// copied) is refused; one cell pasted into a merge goes to its anchor.
+const MERGE_SIZE = "To do this, all the merged cells need to be the same size.";
+const sameRect = (a: readonly [Addr, Addr], b: readonly [Addr, Addr]): boolean => keyOf(a[0]) === keyOf(b[0]) && keyOf(a[1]) === keyOf(b[1]);
+const mergeAt = (page: Page, a: Addr): [Addr, Addr] | undefined => page.merges.find((m) => overlap(m, [a, a]));
+const shiftRect = (m: readonly [Addr, Addr], by: { readonly cols: number; readonly rows: number }): [Addr, Addr] =>
+  [{ col: m[0].col + by.cols, row: m[0].row + by.rows }, { col: m[1].col + by.cols, row: m[1].row + by.rows }];
+// Refused unless every merge that meets `places` is one of `carried` (the
+// merges the paste brings), or is `except` (what is being moved away).
+function mergesFit(page: Page, places: readonly [Addr, Addr][], carried: readonly [Addr, Addr][], except: (m: [Addr, Addr]) => boolean = () => false): void {
+  for (const m of page.merges) {
+    if (except(m) || !places.some((t) => overlap(m, t))) continue;
+    if (!carried.some((c) => sameRect(c, m))) refuse(MERGE_SIZE);
+  }
+}
+// The merges with `add` among them, none twice.
+const withMerges = (merges: readonly [Addr, Addr][], add: readonly [Addr, Addr][]): [Addr, Addr][] => {
+  const out: [Addr, Addr][] = [];
+  for (const m of [...merges, ...add]) if (!out.some((x) => sameRect(x, m))) out.push(m);
+  return out;
+};
+
 // Cut cells moved to `at` (their top-left), on the sheet they were cut
 // from: one structural edit (shift.ts's blockMoved), so one undo.
-async function moving(wb: Workbook, cut: NonNullable<Clip["cut"]>, at: Addr): Promise<Outcome> {
+async function moving(wb: Workbook, cut: NonNullable<Clip["cut"]>, to: Addr): Promise<Outcome> {
+  let at = to;
   if (!wb.pages().includes(cut.page)) refuse("the sheet the cells were cut from is gone");
   if (cut.page !== wb.page(wb.active)) refuse(`cut cells are pasted on the sheet they were cut from, ${cut.page.name}`);
-  const from = topLeft(cut.range), by = { cols: at.col - from.col, rows: at.row - from.row };
+  const from = topLeft(cut.range);
+  // One cell cut into a merge goes to its anchor.
+  if (keyOf(cut.range[0]) === keyOf(cut.range[1])) at = mergeAt(cut.page, at)?.[0] ?? at;
+  const by = { cols: at.col - from.col, rows: at.row - from.row };
   const rows = Math.abs(cut.range[0].row - cut.range[1].row), cols = Math.abs(cut.range[0].col - cut.range[1].col);
   if (at.col + cols >= COLS || at.row + rows >= ROWS) refuse(`${named(cut.range)} moved to ${keyOf(at)} does not fit on the sheet`);
   wb.clip = null;
   if (by.cols === 0 && by.rows === 0) return { ok: true, message: `moved ${named(cut.range)} to where it was`, changed: [] };
+  // Merged cells: what is cut moves its merges; a merge in the way that is not
+  // one of those moving there is refused.
+  const page = cut.page, moving = page.merges.filter((m) => inRect(m[0], cut.range) && inRect(m[1], cut.range));
+  if (keyOf(cut.range[0]) !== keyOf(cut.range[1])) mergesFit(page, [shiftRect(cut.range as [Addr, Addr], by)], moving.map((m) => shiftRect(m, by)), (m) => moving.some((x) => sameRect(x, m)));
   const entries = await reshaped(wb, null, (moves) => blockMoved(cut.range, by, moves));
+  page.merges = withMerges([], page.merges);
   return setting(wb, entries, `moved ${named(cut.range)} to ${keyOf(at)}`);
 }
 
 // Fill down, right, up or left over a range (copy.ts), from its first
 // `source` lines (1: Ctrl+D's first row).
 function fill(way: FillWay) {
-  return (wb: Workbook, p: Params): Promise<Outcome> => {
+  return async (wb: Workbook, p: Params): Promise<Outcome> => {
     const r = rangeOf(p.range), lines = countOf(p.source);
-    return setting(wb, filled(inputs(wb), r[0], r[1], way, wb.sheet.language, lines), `filled ${named(r)} ${way}`);
+    // Each filled cell takes its source's look, comment and validation too.
+    const from = new Map<string, string>();
+    const out = await setting(wb, filled(inputs(wb), r[0], r[1], way, wb.sheet.language, lines, from), `filled ${named(r)} ${way}`);
+    return { ...out, changed: [...new Set([...out.changed, ...carryNotes(wb, from)])] };
   };
 }
 
@@ -1612,16 +1670,45 @@ const SPECS: readonly Spec[] = [
     // cells, notes and what reads them (here or on another sheet) go to
     // `at`'s first cell, what was under them is gone, and the cut is used up.
     id: "edit.paste", label: "Paste", params: ["at"], journaled: true,
-    run: (wb, p) => {
+    run: async (wb, p) => {
       const r = rangeOf(p.at), at = topLeft(r);
       const clip = wb.clip ?? refuse("nothing copied");
       if (clip.cut) return moving(wb, clip.cut, at);
+      const page = wb.page(wb.active)!;
       const h = clip.inputs.length, w = clip.inputs[0]?.length ?? 1;
       const rows = Math.abs(r[0].row - r[1].row) + 1, cols = Math.abs(r[0].col - r[1].col) + 1;
       const tiled = rows % h === 0 && cols % w === 0 && rows * cols > h * w;
-      const origins = tiled ? Array.from({ length: (rows / h) * (cols / w) }, (_, i) => ({ col: at.col + (i % (cols / w)) * w, row: at.row + Math.floor(i / (cols / w)) * h })) : [at];
+      let origins = tiled ? Array.from({ length: (rows / h) * (cols / w) }, (_, i) => ({ col: at.col + (i % (cols / w)) * w, row: at.row + Math.floor(i / (cols / w)) * h })) : [at];
+      // One cell into a merge goes to its anchor (into each merge of a selection
+      // once, not under it).
+      if (h === 1 && w === 1) {
+        origins = origins.flatMap((o) => {
+          const m = mergeAt(page, o);
+          return !m ? [o] : tiled ? (keyOf(m[0]) === keyOf(o) ? [o] : []) : [m[0]];
+        });
+      }
+      const single = h === 1 && w === 1;
+      const carried = single ? [] : origins.flatMap((o) => clip.merges.map((m) => shiftRect(m, { cols: o.col - clip.from.col, rows: o.row - clip.from.row })));
+      const places = origins.map((o): [Addr, Addr] => [o, { col: o.col + w - 1, row: o.row + h - 1 }]);
+      if (!single) mergesFit(page, places, carried);
       const entries = origins.flatMap((o) => pasted(clip.tsv, o, { from: clip.from, language: clip.language }));
-      return setting(wb, entries, tiled ? `pasted into ${named(r)}` : `pasted at ${keyOf(at)}`);
+      const out = await setting(wb, entries, tiled ? `pasted into ${named(r)}` : `pasted at ${keyOf(origins[0] ?? at)}`);
+      // The cells' look, number format, validation and comment come with them
+      // (an empty cell replaces them with nothing), and the merges.
+      const touched: string[] = [];
+      for (const o of origins) {
+        for (let i = 0; i < h; i++) {
+          for (let j = 0; j < w; j++) {
+            const to = { col: o.col + j, row: o.row + i };
+            if (to.col >= COLS || to.row >= ROWS) continue;
+            const by = { cols: to.col - (clip.from.col + j), rows: to.row - (clip.from.row + i) };
+            wb.notes.set(keyOf(to), carriedNote(clip.notes[i][j], clip.language, by));
+            touched.push(keyOf(to));
+          }
+        }
+      }
+      if (carried.length) page.merges = withMerges(page.merges, carried);
+      return { ...out, changed: [...new Set([...out.changed, ...touched])] };
     },
   },
   {
@@ -1708,14 +1795,14 @@ const SPECS: readonly Spec[] = [
   },
   {
     id: "edit.fillSeries", label: "Series", params: ["range"], journaled: true,
-    run: (wb, p) => {
+    run: async (wb, p) => {
       const r = rangeOf(p.range), tl = topLeft(r);
       const rows = Math.abs(r[0].row - r[1].row) + 1, cols = Math.abs(r[0].col - r[1].col) + 1;
       // Down each column, or across each row when the selection is one row tall.
       const down = rows > 1;
       const lines = down ? cols : rows, length = down ? rows : cols;
       const at = (line: number, i: number) => keyOf(down ? { col: tl.col + line, row: tl.row + i } : { col: tl.col + i, row: tl.row + line });
-      const entries: [string, string][] = [];
+      const entries: [string, string][] = [], from = new Map<string, string>();
       for (let line = 0; line < lines; line++) {
         const first = [wb.sheet.input(at(line, 0))];
         if (!first[0]) continue;
@@ -1725,9 +1812,11 @@ const SPECS: readonly Spec[] = [
           const n = first.length + i, src = n % first.length;
           const off = n - src;
           entries.push([at(line, n), movedBy(wb.sheet.language, input, down ? { cols: 0, rows: off } : { cols: off, rows: 0 })]);
+          from.set(at(line, n), at(line, src));
         });
       }
-      return setting(wb, entries, `filled ${named(r)} as a series`);
+      const out = await setting(wb, entries, `filled ${named(r)} as a series`);
+      return { ...out, changed: [...new Set([...out.changed, ...carryNotes(wb, from)])] };
     },
   },
   {
@@ -2655,6 +2744,16 @@ const SPECS: readonly Spec[] = [
         const input = wb.sheet.input(k), now = unstructured(input, t, header, cellAddr(k)!.row);
         return now === input ? [] : [[k, now]];
       });
+      // The same on the other sheets, which name it with its sheet.
+      for (const pg of wb.pages()) {
+        if (pg === wb.page(wb.active)) continue;
+        const prefix = sheetPrefix(wb.page(wb.active)!.name);
+        const there = pg.sheet.keys().flatMap((k): [string, string][] => {
+          const input = pg.sheet.input(k), now = unstructured(input, t, header, -1, prefix);
+          return now === input ? [] : [[k, now]];
+        });
+        if (there.length) await pg.sheet.setMany(there);
+      }
       if (t.banded) for (const k of bandedKeys(t)) wb.notes.set(k, { look: { ...wb.notes.get(k).look, fill: BAND } });
       await wb.sheet.defineTable(t.name, null);
       return { ...await setting(wb, entries, `${t.name} is a range again`), changed: [...range(t.range[0], t.range[1]), ...entries.map(([k]) => k)] };
@@ -2744,16 +2843,6 @@ const SPECS: readonly Spec[] = [
   {
     // Clear Filter: every tile picked again, the rows shown.
     id: "slicer.clear", label: "Clear Slicer", params: ["name"], journaled: true,
-      // The same on the other sheets, which name it with its sheet.
-      for (const pg of wb.pages()) {
-        if (pg === wb.page(wb.active)) continue;
-        const prefix = sheetPrefix(wb.page(wb.active)!.name);
-        const there = pg.sheet.keys().flatMap((k): [string, string][] => {
-          const input = pg.sheet.input(k), now = unstructured(input, t, header, -1, prefix);
-          return now === input ? [] : [[k, now]];
-        });
-        if (there.length) await pg.sheet.setMany(there);
-      }
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, sl = page.slicers.find((x) => x.name.toLowerCase() === p.name.trim().toLowerCase()) ?? refuse(`no slicer ${p.name}`);
       page.slicers = page.slicers.map((x) => (x === sl ? { ...x, picked: [] } : x));
@@ -4596,7 +4685,10 @@ export class Commands {
       // A macro runs as a script does, one step of undo; what it does is not
       // recorded again (its own run is, while recording).
       if (id === "macro.run") return await this.#runMacro(params.name, params.args ?? "");
+      const tablesBefore = this.#wb.tablesKey();
       const outcome = areas ? await this.#overAreas(spec!, params, areas) : await spec!.run(this.#wb, params, this.#store);
+      // A table defined, moved, renamed or deleted: a formula on another sheet may name it.
+      if (outcome.ok && this.#wb.tablesKey() !== tablesBefore) await this.#wb.tablesChanged();
       if (outcome.ok && guarded && tried) {
         const why = this.#breach(tried, guarded);
         if (why) {
@@ -4685,10 +4777,7 @@ export class Commands {
   #triggering = 0;
   async #onChange(changed: readonly string[]): Promise<void> {
     const page = this.#wb.active, hit = this.#wb.triggers.filter((t) => t.on === "change" && t.sheet === page && changed.some((k) => { const a = cellAddr(k); return a && inRect(a, t.range!); }));
-      const tablesBefore = this.#wb.tablesKey();
     if (!hit.length) return;
-      // A table defined, moved, renamed or deleted: a formula on another sheet may name it.
-      if (outcome.ok && this.#wb.tablesKey() !== tablesBefore) await this.#wb.tablesChanged();
     this.#triggering++;
     try {
       for (const t of hit) await this.#runMacro(t.macro);

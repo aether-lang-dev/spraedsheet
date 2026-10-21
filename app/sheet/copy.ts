@@ -44,7 +44,7 @@ export function pasted(tsv: string, at: Addr, source?: { readonly from: Addr; re
 // (Ctrl+R) does. With `lines` > 1 the source is that many lines, repeated
 // (the Tauri app's FILLDOWN of "A1:A2" into "A3:A10").
 export type FillWay = "down" | "right" | "up" | "left";
-export function filled(input: (key: string) => string, a: Addr, b: Addr, way: FillWay, language: Language, lines = 1): [string, string][] {
+export function filled(input: (key: string) => string, a: Addr, b: Addr, way: FillWay, language: Language, lines = 1, sources?: Map<string, string>): [string, string][] {
   const { top, bottom, left, right } = corners(a, b);
   const rows = way === "down" || way === "up", back = way === "up" || way === "left";
   const [lo, hi, limit] = rows ? [top, bottom, ROWS] : [left, right, COLS];
@@ -59,6 +59,7 @@ export function filled(input: (key: string) => string, a: Addr, b: Addr, way: Fi
       if (from === line) continue;
       const src = rows ? { col, row: from } : { col: from, row };
       out.push([keyOf({ col, row }), movedBy(language, input(keyOf(src)), { cols: col - src.col, rows: row - src.row })]);
+      if (sources) sources.set(keyOf({ col, row }), keyOf(src));
     }
   }
   return out;

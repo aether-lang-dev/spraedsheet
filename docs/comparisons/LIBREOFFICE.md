@@ -24,10 +24,12 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    name that is a range (the workbook's or a sheet's own) did not move when rows
    or columns were inserted or deleted on its sheet, so `=TOTAL` read the wrong
    cell (a name whose cells are deleted is removed; Excel keeps it as `#REF!`).
-   Left: copy against move with `$` anchors, the same workload by REXX/bus and
-   UI, and a gap it showed: a structured reference to a table on another sheet
-   (`=SUM(Sales[Amount])` on a sheet other than the table's) gives `#REF!` here,
-   Excel's tables being the workbook's.
+   Left: copy against move with `$` anchors, and the same workload by REXX/bus
+   and UI. The gap it showed is closed (2026-10-21): a structured reference to a
+   table on another sheet (`=SUM(Sales[Amount])` away from the table's sheet) was
+   `#REF!`; tables are the workbook's, as in Excel, and the reference follows the
+   table through inserted rows, a renamed column, a deleted table, undo and a
+   reopened file (headless `sheet_crosstable`).
 2. **Calculation measurement** (dirty formulas, range visits, settlement rounds,
    history memory; chains, diamonds, running totals, dynamic refs, spills,
    volatiles). See HyperFormula 1. No parallelism or GPU work without evidence.

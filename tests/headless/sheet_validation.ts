@@ -36,7 +36,7 @@ eq("warn: kept, and said", [await message("cell.set cell=C2 input=Maybe"), wb.sh
 await cmds.run("edit.copy range=B2");
 await cmds.run("cell.set cell=D9 input=99");
 await cmds.run("edit.copy range=D9");
-await cmds.run("edit.paste at=B3");
+await cmds.run("edit.pasteSpecial at=B3 what=values");
 eq("a paste is not checked (as in Excel), but Circle Invalid finds it", [wb.sheet.input("B3"), (await cmds.run("validation.circle")).output],
   ["99", ["C2", "B3"]]);
 eq("a circled cell is marked", wb.styleOf("B3").includes("background: #ffd6d6"), true);

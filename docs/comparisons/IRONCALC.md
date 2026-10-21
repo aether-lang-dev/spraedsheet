@@ -10,9 +10,21 @@ the number-format cases, the series-detection cases.
 
 ## Remaining reuse candidates
 
-1. **Editing regressions:** selected scenarios from `base/src/test/user_model/`
+1. ~~**Editing regressions:** selected scenarios from `base/src/test/user_model/`
    (autofill, cut/paste, merged cells, arrays, undo), translated to the headless
-   harness. Tests feature interactions.
+   harness. Tests feature interactions.~~ Done 2026-10-21 for cut and paste,
+   merged cells and fill (headless `sheet_ironcalc_editing`, recorded in
+   PROVENANCE.md). It found three gaps, fixed: **Paste** carried only the
+   cells' inputs, not their look, number format, validation, hyperlink or
+   comment (Excel's Ctrl+V carries them; a blank cell pasted clears them); a
+   paste, cut or fill into **merged cells** wrote values under the merge, or
+   made a second identical merge; and **Fill Down/Right/Up/Left and Series**
+   did not carry the source cell's look. Merged cells follow Excel: a paste or
+   cut that meets a merge it does not match is refused ("all the merged cells
+   need to be the same size"); one cell pasted into a merge goes to its anchor;
+   a merged block pasted makes its merge. Left, not yet scenarios here: a fill
+   that replicates merges, CSE and dynamic-array cut/paste (spill cells), the
+   column-width and row-height undo cases of `test_delete_row_column_formatting`.
 2. **Formula compatibility workbooks:** a curated subset of
    `xlsx/tests/calc_tests/`, copied byte for byte, assertions ours.
 3. **Small ports, only where a test shows a gap:** a routine from

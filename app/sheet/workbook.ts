@@ -64,6 +64,8 @@ export interface Clip {
   readonly inputs: readonly (readonly string[])[];
   readonly shown: readonly (readonly string[])[];
   readonly notes: readonly (readonly Note[])[];
+  // The merges wholly inside what was copied (corners, on the sheet it came from).
+  readonly merges: readonly (readonly [Addr, Addr])[];
 }
 
 // A chart on a sheet: what kind, of which range, under what title.
@@ -510,8 +512,6 @@ export class Workbook {
         const b = this.#names.get(n);
         return b && "formula" in b ? b.formula : null;
       },
-      input: (key) => {
-        const { sheet, cell } = splitKey(key);
       // Excel's tables belong to the workbook: another sheet's, in tab order.
       table: (n) => {
         for (const p of this.#pages) {
@@ -520,6 +520,8 @@ export class Workbook {
         }
         return null;
       },
+      input: (key) => {
+        const { sheet, cell } = splitKey(key);
         return this.page(sheet ?? "")?.sheet.input(cell) ?? "";
       },
       sheets: () => this.sheetNames(),
@@ -620,8 +622,6 @@ export class Workbook {
     await this.settle();
   }
 
-  async defineName(n: string, b: BookName | null): Promise<void> {
-    if (b) this.#names.set(n.toUpperCase(), b); else this.#names.delete(n.toUpperCase());
   // Every sheet's tables, as text: what changes when one is defined, moved,
   // renamed or deleted, and so what a formula on another sheet that names a
   // table (Sales[Amount]) has to be compiled against again.
@@ -642,6 +642,8 @@ export class Workbook {
     await this.settle();
   }
 
+  async defineName(n: string, b: BookName | null): Promise<void> {
+    if (b) this.#names.set(n.toUpperCase(), b); else this.#names.delete(n.toUpperCase());
     await this.#recalculate();
   }
 

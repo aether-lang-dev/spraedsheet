@@ -83,7 +83,21 @@ when a later one breaks the step (and for `A1, B2`); `edit.fillSeries` reads the
 first one or two cells only and copies when those two are not a series, so the
 rows are cut to two cells and the no-series rows expect a copy.
 
+Editing scenarios (no code ported; the scenarios and what they expect, translated):
+
+| Upstream path | Local destination | What was adapted |
+|---|---|---|
+| `base/src/test/user_model/test_cut_n_paste.rs` | `tests/headless/sheet_ironcalc_editing.ts` | cut moves a cell's style and takes the target's on undo; absolute references and defined names (a cell's, a range's, a partly-overlapped range's) follow a cut; the dynamic-array cases left out (no spill cells here) |
+| `base/src/test/user_model/test_paste_merged_cells.rs` | same | a merged block onto an identical merge, onto itself, a single cell into a merge, a paste overlapping its own source, cut onto a merge; undo and redo throughout; the CSV, external-replay and containment-replacement cases not translated (see below) |
+| `base/src/test/user_model/test_autofill_rows.rs` (`styles`) | same | fill carries each source cell's look, undo and redo |
+
 ## Deliberate differences
+
+Merged cells under paste and cut (`sheet_ironcalc_editing.ts`): IronCalc removes
+a merge that lies wholly inside the paste target and replaces it with what is
+pasted, and refuses only a merge that sticks out. Excel refuses a paste that
+meets any merge it does not match ("To do this, all the merged cells need to be
+the same size"); so do we, with nothing changed.
 
 Number formats (the rows in `sheet_ironcalc_numfmt.ts` that carry a second
 expected value and a reason):
