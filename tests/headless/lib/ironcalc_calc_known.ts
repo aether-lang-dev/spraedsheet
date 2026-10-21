@@ -471,7 +471,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   },
   "STATISTICAL/POISSON.xlsx": {
     "POISSON.DIST!D26": "excel-error",
-    "POISSON.DIST!D31": "value",
     "POISSON.DIST!D60": "legacy",
     "POISSON.DIST!D61": "value",
   },
