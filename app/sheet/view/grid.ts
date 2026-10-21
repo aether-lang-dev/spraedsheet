@@ -198,6 +198,14 @@ export function sheetGrid(v: SheetView): void {
     pointing = pointable(text, caret);
     typed(text);
   });
+  // An editor closed with nothing stored (Escape, a view-only switch): the
+  // pointing ends and the reference outlines go. Told by the grid on every
+  // backend: on GTK a window key handler never hears the Escape the editor
+  // takes, so the outlines stayed on a cell pointed at.
+  if (typeof ui.datagrid_on_edit_cancel === "function") ui.datagrid_on_edit_cancel(v.grid, () => {
+    pointing = false;
+    setTimeout(() => typed(null), 0);
+  });
   // Pictures in cells (Place in Cell, IMAGE): drawn over their cells.
   if (typeof ui.datagrid_cell_picture === "function") ui.datagrid_cell_picture(v.grid, (r: number, c: number) => {
     const key = keyAt(r, c);

@@ -13,63 +13,61 @@ What came before (demo 18's To do 1 to 15) is in
 `docs/spreadsheet_demo_done_and_todo.md`.
 
 
-## Paused here (2026-10-20, again)
+## Paused here (2026-10-21)
 
-Resumed the same day and stopped at once for the GPU work (ae3d MSL). Nothing
-was built, no driver or test ran, no test lock was taken, and nothing but this
-note changed. The resume point is unchanged from the section below, with one
-fact learned: `git cherry-pick 24f95b8` onto current main conflicts in
-TODO.md only (the Paused-here section and the Stage 9 table; every code file
-applies cleanly). Resolve it by keeping main's text and adding B.4's row 9.5,
-then pull sae (already at af70e67 locally, up to date), rebuild per the
-Working notes, run the whole `./run-tests.sh`, push, and delete `b4-wip`
-locally and on origin. After that: B.5, B.6, B.7, then the docs/comparisons/
-actions; charts on `vg/chart` stay awaiting Paul's decision (line, bar and pie
-only: a partial replacement). Put scratch and TMPDIR on
-/Volumes/Mini2/claude-scratch (the internal disk had 6.7 GB free).
+Resumed 2026-10-20's pause and worked B.4 to B.7 and some of the
+`docs/comparisons/` actions in one session (the GPU work was idle). Stage 9 (the
+end of this file) is the record; Stages 1 to 8 are all struck (100 of 100).
 
-## Paused here (2026-10-20)
+**Done 2026-10-21** (spraedsheet main, each step test first, baby commits, the
+whole `./run-tests.sh` green on macOS before its push):
+- B.4 git-backed versions landed: 36642b5 (cherry-picked from `b4-wip`, which
+  is deleted locally and on origin).
+- B.5 one MCP request, one reviewable diff: 74f49d0, a64a608 (`review.*`
+  commands, `HOLDREVIEW`/`REVIEWDIFF`/`KEEPREVIEW`/`TAKEBACKREVIEW`, the
+  server's `--review` and `spreadsheet_review`).
+- B.6 checks in the sheet: fb7ba80, 22c66a6 (`check.*`, `ADDCHECK`/`CHECKS`/
+  `REMOVECHECK`, status bar and Audit panel).
+- B.7 a read view: db53fa6 (`view.editMode`, `SETEDITMODE`/`GETEDITMODE`, F2,
+  View > Edit mode, every changing command refused in the read view).
+- docs/comparisons/ actions: IronCalc 6, an injectable clock (fcb1245);
+  Univer 4, a leaked date epoch between workbooks fixed (49a8f49); Univer 2,
+  a recording keeps its sheet and a drawing's cell (db370b4); LibreOffice 1 and
+  Univer 3, a cross-feature structural-edit test that found names not moving
+  with inserted rows, fixed (dfb4922); HyperFormula 2, what a script reads
+  mid-batch said and held (abcc4cc).
+- Fixed a failure that predated B.4 on the aether-linux lane: the two
+  spec_sheet cases "no cursor box left behind" and "no editor left over the
+  grid" (a pointed-at cell's reference outline stayed after Escape): on GTK the
+  editor's Escape shortcut means a window key handler never hears it. The grid
+  now tells the page (`datagrid_on_edit_cancel`), this commit (the head).
+- aether-ui 6deb9490 `datagrid_set_view_only` / `datagrid_view_only` and f065b112
+  `datagrid_on_edit_cancel`; sae faee4ff and 250ae12 (the `ui.*` bindings, spec_grid,
+  README): ci.sh, the datagrid spec and spec_grid green on macOS and the
+  aether-linux lane (87 and 24 passing).
 
-Resumed 2026-10-19's pause on 2026-10-20 and paused again the same day for the
-family's GPU work. Stage 9 (the end of this file) is the record of what was
-done since; the steps of Stages 1 to 8 are all struck (100 of 100).
+**Not done, in order:**
+- Charts on aether-ui's `vg/chart` through a sae `ui.chart` binding: **waits for
+  Paul's decision** (vg/chart is Chartist's line, bar and pie only; `app/sheet/
+  charts.ts` has some twenty kinds, so a partial replacement). Not started.
+- The rest of `docs/comparisons/`: Grist and Airtable (record identity,
+  reference fields, saved views, a trigger run log) are ideas only and have no
+  step yet; Univer 1 (classify commands by effect: edit, view, external, query;
+  the read view's guard in `commands.ts` is a prefix test today), 5; IronCalc 1, 2
+  (editing regressions and `calc_tests` workbooks, reusable with attribution),
+  4, 5; HyperFormula 1, 3, 4, 5; Gnumeric; VisiData; LibreOffice 2 to 7 (and
+  copy-versus-move `$` anchors, and the same structural workload by REXX/bus/UI).
+- A gap found: a structured reference to a table on another sheet
+  (`=SUM(Sales[Amount])` away from the table's sheet) gives `#REF!`; Excel's
+  tables are the workbook's. Noted in `docs/comparisons/LIBREOFFICE.md`.
+- B.7's spec_sheet case was not run against the old code to show it failing (its
+  headless `sheet_editmode` was); sheet_scriptreads documents behaviour that
+  already held.
 
-**Done since 2026-10-19** (spraedsheet main 24f95b8's parent, i.e. b2bb8ba):
-- 9.1 RexxJS: `LET r = CALL f ...` gives f's RETURN value, and its four bash-4
-  tests are skipped under bash 3.2 (RexxJS 5d96050, 30fce5c; re-vendored,
-  spraedsheet b6bc641).
-- 9.2 B.1, a canonical text form (98ee7dd); 9.3 B.2, a workbook as a REXX
-  program (f428291); 9.4 B.3, everything non-default about a cell (b2bb8ba).
-  Each passed the whole `./run-tests.sh` on macOS before its push (9.4: the
-  spec_sheet run, then the rest, on the same code).
-- sae 2f85be6 (pushed): `fs.read_base64` / `fs.write_base64`, spec_app_caps
-  green on macOS and the aether-linux lane. Needed by B.4.
-
-**Not pushed: B.4 (git-backed versions).** Written, committed locally as
-`24f95b8` on the local branch `b4-wip` of this checkout (also as a patch,
-`0001-B.4-versions-kept-in-a-git-repository-...patch`, in the 2026-10-20
-session scratchpad), and green on its own tests (headless `sheet_gitstore`,
-`tests/cli/test_versions.sh` with real `git fsck`/`log`/`diff`,
-spec_app_sheet_files), but the full `./run-tests.sh` was stopped by the pause
-before spec_sheet finished, and the change touches `view/view.ts` (the page's
-store now carries the repository), so it is not on main. Pick up by
-`git cherry-pick 24f95b8` (or `git am` the patch), pull sae (af70e67 changed
-its pins), rebuild sae per the notes below, run the whole suite, and push.
-B.4's `blog-entry-todo.md` row and TODO row 9.5 are in that commit.
-
-**Next, in order:** B.4 (above); B.5 one MCP request as one reviewable diff
-(builds on B.4's `version.diff`); B.6 checks in the sheet; B.7 a read view;
-then charts on aether-ui's `vg/chart` through a sae `ui.chart` binding (vg/chart
-is Chartist's line, bar and pie only: `app/sheet/charts.ts` has some twenty
-kinds, so only those three families can move, the rest keeping the
-current layout; backends need nothing new because vg draws on the existing
-canvas primitives of all four); then the actions left in `docs/comparisons/`
-(Grist, Univer, GridCraft ideas only; IronCalc may be reused, with
-`third_party/ironcalc/PROVENANCE.md`'s attribution).
-
-**Upstream at this pause:** sae af70e67 (pins aeb v0.328, Aether 0.830.0),
-aether-ui a895cea0, Aether 0.831.0 dev tree (`/Users/paul/scm/aether`),
-RexxJS 30fce5c, aeb v0.327 (sae now v0.328).
+**Upstream at this pause:** sae (pins aeb v0.328, Aether 0.830.0) with the two
+commits above, aether-ui with its two, Aether 0.835.0 dev tree
+(`/Users/paul/scm/aether`, rebuilt 2026-10-21 with `make compiler ae stdlib
+contrib`: the 0.831.0 binary no longer matched the tree's std), RexxJS 30fce5c.
 
 **Known limits:** XLSX chart parts were checked against the schema but never
 opened in Excel or LibreOffice; on GTK a row drawn taller than its nominal
@@ -80,6 +78,14 @@ counts in `docs/comparisons/gridcraft_parity.md` and "Where it stands"
 15 panels) are as of 2026-10-19 and are not yet recounted.
 
 **Working notes:**
+- Building sae against the dev tree needs aeb v0.328 under `target/toolchain`
+  (an older private aeb fails with E0202) and a dev `ae` that matches
+  `../aether`'s std; 2026-10-21 `target/toolchain` is a symlink to a v0.328
+  prefix on /Volumes/Mini2/claude-scratch (`SAE_AETHER_HOME=none` against a
+  release does not link `libaether_sqlite`).
+- On the aether-linux lane a clone of each repo goes under `/work/b7` (the
+  older /work/sae and /work/aether-ui are not git clones; `aether-linux sync`
+  refuses them); sae builds there through `lane.sh`-style steps (AGENTS.md).
 - Run the specs through the family test lock (one sae driver on ports
   8091/9222 at a time), including any interactive driver; never queue
   several locked runs at once, and stop a driver when its spec is done.
@@ -284,3 +290,4 @@ The candidates the pause left (the Paused section above), in the order done.
 | 9.11 | ~~`docs/comparisons/UNIVER.md` action 2: record resolved context~~ (done 2026-10-21: a macro recorded with several sheets starts on its sheet; `Outcome.resolved` keeps `at=` for drawings, which took the selection at replay) | headless `sheet_recordcontext`: recorded on Sheet1 with C3 selected, run from Costs with F9 selected, it acts on Sheet1 at C3 (failed before); `sheet_macros` updated | |
 | 9.12 | ~~`docs/comparisons/LIBREOFFICE.md` action 1, `UNIVER.md` 3: a cross-feature structural-edit workbook~~ (done 2026-10-21: names that are ranges now move with an inserted or deleted row or column; one more gap noted: a table's structured reference from another sheet) | headless `sheet_structural`: table, names, validation, conditional format, merge, chart, comment and a second sheet's formulas through a row insert, a rename, undo, redo, three reopens and a column insert | |
 | 9.13 | ~~`docs/comparisons/HYPERFORMULA.md` action 2: what a script reads mid-batch~~ (done 2026-10-21: said in `described.ts`, held by a test; no behaviour changed) | headless `sheet_scriptreads`: automatic and manual calculation, a failing panel script, a failing bus request | |
+| 9.14 | ~~Two spec_sheet cases failing on the aether-linux lane since before B.4~~ (done 2026-10-21: a pointed-at cell's reference outline stayed after Escape because GTK's editor shortcut takes Escape before a window key handler; aether-ui `datagrid_on_edit_cancel`, sae `ui.datagrid_on_edit_cancel`, `grid.ts` clears the pointing and outlines on it; the same release adds `datagrid_set_view_only` for B.7) | spec_sheet on macOS and the aether-linux lane; aether-ui spec_datagrid_demo and sae spec_grid on both | |
