@@ -61,7 +61,16 @@ export function toText(v: Value): string {
   return typeof s === "number" ? String(Number(s.toPrecision(12))) : s;
 }
 
-export const finite = (n: number): number => (Number.isFinite(n) ? n : fail("#VALUE!", "the result is not a finite number"));
+// A result that overflowed is #NUM!, as in Excel.
+export const finite = (n: number): number => (Number.isFinite(n) ? n : fail("#NUM!", "the result is too big or not a number"));
+
+// a raised to b, as Excel has it: 0^0 is #NUM!, 0 to a negative power #DIV/0!, a negative to a fraction #NUM!.
+export function power(a: number, b: number): number {
+  if (a === 0 && b === 0) return fail("#NUM!", "0 to the power 0");
+  if (a === 0 && b < 0) return fail("#DIV/0!", "0 to a negative power");
+  if (a < 0 && !Number.isInteger(b)) return fail("#NUM!", `${a} to the power ${b}`);
+  return finite(a ** b);
+}
 
 export type Comparison = "=" | "<>" | "<" | ">" | "<=" | ">=";
 

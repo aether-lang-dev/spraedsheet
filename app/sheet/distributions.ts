@@ -169,7 +169,13 @@ export function binomialMass(k: number, n: number, p: number): number {
   if (p === 1) return k === n ? 1 : 0;
   return Math.exp(lnChoose(n, k) + k * Math.log(p) + (n - k) * Math.log(1 - p));
 }
+// P(X <= k): summed term by term for small k, else through the incomplete
+// beta function, so a huge k (a million trials, 1E+300) is quick.
 export function binomialCdf(k: number, n: number, p: number): number {
+  if (k >= n) return 1;
+  if (p === 0) return 1;
+  if (p === 1) return 0;
+  if (k > 2000) return incompleteBeta(1 - p, n - k, k + 1);
   let total = 0;
   for (let i = 0; i <= k; i++) total += binomialMass(i, n, p);
   return Math.min(1, total);
@@ -177,6 +183,18 @@ export function binomialCdf(k: number, n: number, p: number): number {
 
 export const poissonMass = (k: number, mean: number): number => (mean === 0 ? (k === 0 ? 1 : 0) : Math.exp(k * Math.log(mean) - mean - lnGamma(k + 1)));
 export function poissonCdf(k: number, mean: number): number {
+  if (k > 2000 && mean > 0) {
+    // Summed from k outward (down below the mean, up above it) until the terms are nothing.
+    const term = (i: number) => Math.exp(i * Math.log(mean) - mean - lnGamma(i + 1));
+    if (k < mean) {
+      let t = term(k), total = 0;
+      for (let i = k; i >= 0 && t > total * 1e-17 + 1e-300; i--) { total += t; t = (t * i) / mean; }
+      return Math.min(1, total);
+    }
+    let t = term(k + 1), tail = 0;
+    for (let i = k + 1; t > tail * 1e-17 + 1e-300 && i < k + 1e7; i++) { tail += t; t = (t * mean) / (i + 1); }
+    return Math.max(0, 1 - tail);
+  }
   let total = 0;
   for (let i = 0; i <= k; i++) total += poissonMass(i, mean);
   return Math.min(1, total);

@@ -31,17 +31,23 @@ export function cachedValues(bytes: Uint8Array): Map<string, [string, string][]>
   return out;
 }
 
+// How a cell differs: legacy (this app spills where Excel, reading a formula with no
+// array flag, intersects implicitly), excel-error (Excel gives an error, this app a
+// value), we-error (the other way round), or value (two values).
+export type Kind = "legacy" | "excel-error" | "we-error" | "value";
+export interface Disagreement { readonly cell: string; readonly kind: Kind; readonly said: string }
+
 // The cells of a workbook (opened here from its base64) whose value is not what
-// Excel cached, as "Sheet!A1: want n:3 got 4", and how many cells were compared.
-export async function disagreements(name: string, b64: string): Promise<{ diffs: string[]; checked: number }> {
+// Excel cached, and how many cells were compared.
+export async function disagreements(name: string, b64: string): Promise<{ diffs: Disagreement[]; checked: number }> {
   const wb = new Workbook(), cmds = new Commands(wb);
   const o = await cmds.run(`file.importXlsx name=${name.replace(/[^A-Za-z0-9_.]/g, "_")} base64=${b64}`);
-  if (!o.ok) return { diffs: [`import: ${o.message}`], checked: 0 };
-  const diffs: string[] = [];
+  if (!o.ok) return { diffs: [{ cell: "import", kind: "we-error", said: o.message }], checked: 0 };
+  const diffs: Disagreement[] = [];
   let checked = 0;
   for (const [sheet, cells] of cachedValues(fromBase64(b64))) {
     const page = wb.page(sheet);
-    if (!page) { diffs.push(`${sheet}: no such sheet`); continue; }
+    if (!page) { diffs.push({ cell: sheet, kind: "we-error", said: "no such sheet" }); continue; }
     for (const [ref, tv] of cells) {
       checked++;
       const i = tv.indexOf(":"), t = tv.slice(0, i), v = tv.slice(i + 1);
@@ -52,7 +58,10 @@ export async function disagreements(name: string, b64: string): Promise<{ diffs:
       else if (t === "b") { ok = got === (v === "1"); shown = show(got); }
       else if (t === "str" || t === "s") { ok = typeof got === "string" && got === v; shown = show(got); }
       else { const n = Number(v); ok = typeof got === "number" && Math.abs(got - n) <= 1e-9 * Math.max(1, Math.abs(n)); shown = show(got); }
-      if (!ok) diffs.push(`${sheet}!${key}: want ${t}:${v} got ${shown}`);
+      if (!ok) {
+        const kind: Kind = shown === "#SPILL!" ? "legacy" : t === "e" ? "excel-error" : shown.startsWith("#") ? "we-error" : "value";
+        diffs.push({ cell: `${sheet}!${key}`, kind, said: `want ${t}:${v} got ${shown}` });
+      }
     }
   }
   return { diffs, checked };

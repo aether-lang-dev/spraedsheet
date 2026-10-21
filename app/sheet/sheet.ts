@@ -48,6 +48,8 @@ export function compile(input: string, language: Language = EXCEL, names?: Names
   if (input === "") return { kind: "constant", value: null };
   // An apostrophe in front keeps what follows text, as typed: '42.
   if (input.startsWith("'")) return { kind: "constant", value: input.slice(1) };
+  // TRUE and FALSE typed in a cell are the logical values, in any case.
+  if (/^(?:true|false)$/i.test(input)) return { kind: "constant", value: input.toLowerCase() === "true" };
   return { kind: "constant", value: NUMERIC.test(input) ? Number(input) : input };
 }
 

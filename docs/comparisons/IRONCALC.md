@@ -26,23 +26,20 @@ the number-format cases, the series-detection cases.
    that replicates merges, CSE and dynamic-array cut/paste (spill cells), the
    column-width and row-height undo cases of `test_delete_row_column_formatting`.
 2. **Formula compatibility workbooks:** a curated subset of
-   `xlsx/tests/calc_tests/`, copied byte for byte, assertions ours. Started
-   2026-10-21 (headless `sheet_ironcalc_calc`): Excel stored its own value beside
-   every formula in those workbooks, so they are an oracle; of 221 workbooks
-   (71,000 formula cells) 59 agreed with this app once the first two gaps below
-   were fixed, and those are in. The rest differ (about 150 workbooks) and come
-   in as the cause of each is fixed, with the ledger of cells still different.
-   Found so far: file interchange read `_xlfn.`/`_xlpm.`/ANCHORARRAY as
-   `#NAME?` and read spilled values as cells (fixed, headless `sheet_xlfn`, and
-   the prefixes are now written); whole-column and whole-row references
-   (`SUM(A:A)`, `$1:$1`) did not parse (fixed 2026-10-21, headless
-   `sheet_wholecols`: read as far as the sheet is used, worked out again when a
-   cell in them changes, moved by columns and rows along their own axis only); a run of functions is missing (ROMAN,
-   ARABIC, the reciprocal trig functions, MMULT, MINVERSE, MDETERM, MUNIT,
-   COMBINA, PERMUTATIONA, FACTDOUBLE, SQRTPI, MULTINOMIAL, SERIESSUM,
-   SUMX2MY2/PY2, SUMXMY2, STDEVA ...); and Excel gives `#NUM!`/`#VALUE!` for
-   edge cases (dates out of range, negative arguments) where this app returns a
-   number.
+   `xlsx/tests/calc_tests/`, copied byte for byte, assertions ours. Done in
+   part 2026-10-21 (headless `sheet_ironcalc_calc_*`): Excel stored its own
+   value beside every formula in those workbooks, so they are an oracle. Of 221
+   workbooks (71,000 formula cells), 173 are in, with a ledger of the 389 cells
+   that still differ (`lib/ironcalc_calc_known.ts`); at the start 48,000 of the
+   71,000 cells differed, now 4,033, in 100 workbooks. What they found is in
+   PROVENANCE.md: file interchange (`_xlfn.`), whole columns and rows, typed
+   TRUE/FALSE, overflow and `0^0`, and twenty-five missing functions. Left:
+   the 48 workbooks with more differences (date edge cases where Excel gives
+   `#NUM!`, financial and statistical corners, TEXT and SUBSTITUTE options,
+   WEEKDAY's return types 11 to 17), and one cause the ledger calls *legacy*:
+   a formula Excel stored with no array flag is intersected implicitly
+   (`=H34:H37` in row 36 is H36), where this app spills it; an importer that
+   writes `@` where Excel's loader would is not done.
 3. **Small ports, only where a test shows a gap:** a routine from
    `base/src/formatter/` for `numfmt.ts` (the cases are in; no code ported yet).
    Port the smallest unit with its cases.

@@ -3,7 +3,7 @@
 // range's width (VLOOKUP and INDEX need its shape), or one value. An
 // argument that is an error arrives as that error, so IFERROR and ISERROR
 // can look at it; everything else rethrows it as soon as it reads it.
-import { CellError, array, compare, fail, finite, isArray, scalar, toNumber, toText, trimmed } from "./values.ts";
+import { CellError, array, compare, fail, finite, isArray, power, scalar, toNumber, toText, trimmed } from "./values.ts";
 import { numberFormat } from "./numfmt.ts";
 import type { ArrayValue, Comparison, Result, Value } from "./values.ts";
 import { sortOrder } from "./sortfind.ts";
@@ -48,9 +48,17 @@ const takes = (min: number, max: number): string =>
 export function call(name: string, args: readonly Arg[]): Result {
   const spec = library.get(name);
   if (!spec) return fail("#NAME?", `no function ${name}`);
+  if (NO_LOGICALS.has(name) && args.some((a) => a.values.some((v) => typeof scalar(v) === "boolean"))) return fail("#VALUE!", `${name} takes numbers: TRUE and FALSE are not`);
   if (args.length < spec.min || args.length > spec.max) return fail("#VALUE!", `${name} takes ${takes(spec.min, spec.max)}`);
   return lifted(spec.fn, args, new Set());
 }
+
+// Functions whose numbers must be numbers: Excel gives #VALUE! for TRUE or
+// FALSE (the maths functions read them as 1 and 0).
+const NO_LOGICALS = new Set(["ERF", "ERFC", "ERF.PRECISE", "ERFC.PRECISE", "GESTEP", "DELTA", "NOMINAL", "EFFECT", "DOLLAR", "DOLLARDE", "DOLLARFR",
+  "ISODD", "ISEVEN", "EOMONTH", "EDATE", "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "YEARFRAC", "DATEDIF", "DAYS", "NETWORKDAYS", "NETWORKDAYS.INTL",
+  "WORKDAY", "WORKDAY.INTL", "DATEVALUE", "TIMEVALUE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX",
+  "XNPV", "XIRR", "CUMIPMT", "CUMPRINC"]);
 
 // An argument that is a range where the function takes one value (val()).
 class ScalarWanted extends CellError {
@@ -136,6 +144,7 @@ function rounder(how: (x: number) => number): Fn {
 
 // A COUNTIF criterion: 5, "apples", ">5", "<>apples", "" (blank).
 export function criterion(c: Value): (v: Value) => boolean {
+  if (typeof c === "boolean") return (v) => v === c;
   if (typeof c !== "string") {
     const want = scalar(c);
     return (v) => typeof v === "number" && compare("=", v, want);
@@ -179,7 +188,7 @@ function position(x: Value, list: readonly Value[], type: number): number {
 
 // --- maths and statistics ---
 
-def("SUM", 1, Infinity, (args) => sum(numbers(args)));
+def("SUM", 1, Infinity, (args) => finite(sum(numbers(args))));
 def("PRODUCT", 1, Infinity, (args) => {
   const ns = numbers(args);
   return ns.length ? finite(ns.reduce((p, n) => p * n, 1)) : 0;
@@ -223,7 +232,7 @@ def("MOD", 2, 2, (args) => {
   const a = num(args, 0), b = num(args, 1);
   return b === 0 ? fail("#DIV/0!", "MOD by zero") : a - b * Math.floor(a / b);
 });
-def("POWER", 2, 2, (args) => finite(num(args, 0) ** num(args, 1)));
+def("POWER", 2, 2, (args) => power(num(args, 0), num(args, 1)));
 def("SQRT", 1, 1, (args) => {
   const x = num(args, 0);
   return x < 0 ? fail("#NUM!", "the square root of a negative number") : Math.sqrt(x);
@@ -1168,21 +1177,20 @@ defDist("BINOM.DIST.RANGE", 3, 4, (args) => {
   const n = Math.trunc(num(args, 0)), p = num(args, 1), lo = Math.trunc(num(args, 2)), hi = absent(args, 3) ? lo : Math.trunc(num(args, 3));
   probability(p, false);
   need(lo >= 0 && lo <= hi && hi <= n, `successes ${lo} to ${hi} of ${n}`);
-  let total = 0;
-  for (let k = lo; k <= hi; k++) total += D.binomialMass(k, n, p);
-  return total;
+  return Math.max(0, D.binomialCdf(hi, n, p) - (lo > 0 ? D.binomialCdf(lo - 1, n, p) : 0));
 });
 defDist("BINOM.INV", 3, 3, (args) => {
   const n = Math.trunc(num(args, 0)), p = num(args, 1), alpha = num(args, 2);
   need(n >= 0, `trials ${n}`);
   probability(p, false);
   probability(alpha);
-  let total = 0;
-  for (let k = 0; k <= n; k++) {
-    total += D.binomialMass(k, n, p);
-    if (total >= alpha - 1e-12) return k;
+  // The smallest k whose cumulative reaches alpha: bisection over the cumulative.
+  let lo = 0, hi = n;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (D.binomialCdf(mid, n, p) >= alpha - 1e-12) hi = mid; else lo = mid + 1;
   }
-  return n;
+  return lo;
 });
 defDist("POISSON.DIST", 3, 3, (args) => {
   const k = Math.trunc(num(args, 0)), mean = num(args, 1);
@@ -2231,4 +2239,178 @@ def("TRIMRANGE", 1, 3, (args) => {
   const t = trimmed(array(values.length / width, width, values), rows, cols);
   if (!t) return fail("#REF!", "TRIMRANGE trims to nothing");
   return t.values.length === 1 ? t.values[0] : t;
+});
+
+// --- more of Excel's maths (found missing by IronCalc's calc_tests workbooks) ---
+
+// ROMAN(n, [form]): 0 to 3999 as Roman numerals; form 0 is classic, 1 to 4
+// let a symbol be subtracted from a bigger one further off (form 1: 499 is
+// LDVLIV, 4: ID); TRUE is 0 and FALSE is 4.
+const ROMAN_SYMBOLS = ["M", "D", "C", "L", "X", "V", "I"], ROMAN_VALUES = [1000, 500, 100, 50, 10, 5, 1];
+function roman(n: number, form: number): string {
+  let out = "", rest = n;
+  for (let i = 0; i < 7; i++) {
+    while (rest >= ROMAN_VALUES[i]) { out += ROMAN_SYMBOLS[i]; rest -= ROMAN_VALUES[i]; }
+    // The subtractive pair: the symbol one level down (CD, XL, IV), or as far
+    // down as the form allows (form 1: LD, VL), the longest that fits.
+    const first = i % 2 === 0 ? i + 2 : i + 1;
+    for (let j = Math.min(6, first + form); j >= first && j > i; j--) {
+      const d = ROMAN_VALUES[i] - ROMAN_VALUES[j];
+      if (rest >= d) { out += ROMAN_SYMBOLS[j] + ROMAN_SYMBOLS[i]; rest -= d; break; }
+    }
+  }
+  return out;
+}
+def("ROMAN", 1, 2, (args) => {
+  const n = Math.trunc(num(args, 0));
+  const f = absent(args, 1) ? 0 : args[1].values[0] === true ? 0 : args[1].values[0] === false ? 4 : Math.trunc(num(args, 1));
+  if (n < 0 || n > 3999) return fail("#VALUE!", `ROMAN of ${n}: 0 to 3999`);
+  if (f < 0 || f > 4) return fail("#VALUE!", `ROMAN's form is 0 to 4, not ${f}`);
+  return roman(n, f);
+});
+// ARABIC(text): Roman numerals (any case, a leading minus) as a number.
+def("ARABIC", 1, 1, (args) => {
+  const text = str(args, 0).trim().toUpperCase();
+  if (text.length > 255) return fail("#VALUE!", "ARABIC of more than 255 characters");
+  const negative = text.startsWith("-"), body = negative ? text.slice(1) : text;
+  let total = 0;
+  for (let i = 0; i < body.length; i++) {
+    const at = ROMAN_SYMBOLS.indexOf(body[i]);
+    if (at < 0) return fail("#VALUE!", `ARABIC of ${text}: ${body[i]} is no Roman numeral`);
+    const v = ROMAN_VALUES[at], next = i + 1 < body.length ? ROMAN_VALUES[ROMAN_SYMBOLS.indexOf(body[i + 1])] ?? 0 : 0;
+    total += v < next ? -v : v;
+  }
+  return negative ? -total : total;
+});
+def("ISO.CEILING", 1, 2, (args) => call("CEILING.PRECISE", args));
+
+// The reciprocal trigonometric functions. Excel refuses an angle of 2^27
+// or more (#NUM!), and a zero divisor is #DIV/0!.
+const angle = (args: readonly Arg[]): number => {
+  const x = num(args, 0);
+  return Math.abs(x) >= 134217728 ? fail("#NUM!", `an angle of ${x}: under 2^27`) : x;
+};
+const reciprocal = (what: string, f: (x: number) => number): Fn => (args) => {
+  const d = f(angle(args));
+  return d === 0 ? fail("#DIV/0!", `${what} of ${num(args, 0)}: the divisor is 0`) : 1 / d;
+};
+def("SEC", 1, 1, reciprocal("SEC", Math.cos));
+def("CSC", 1, 1, reciprocal("CSC", Math.sin));
+def("COT", 1, 1, reciprocal("COT", Math.tan));
+def("SECH", 1, 1, (args) => 1 / Math.cosh(num(args, 0)));
+def("CSCH", 1, 1, (args) => { const x = num(args, 0); return x === 0 ? fail("#DIV/0!", "CSCH of 0") : 1 / Math.sinh(x); });
+def("COTH", 1, 1, (args) => { const x = num(args, 0); return x === 0 ? fail("#DIV/0!", "COTH of 0") : 1 / Math.tanh(x); });
+def("ACOT", 1, 1, (args) => Math.PI / 2 - Math.atan(num(args, 0)));
+def("ACOTH", 1, 1, (args) => { const x = num(args, 0); return Math.abs(x) <= 1 ? fail("#NUM!", `ACOTH of ${x}: more than 1 either way`) : 0.5 * Math.log((x + 1) / (x - 1)); });
+
+// COMBINA(n, k): choose k of n with repeats; PERMUTATIONA: in order, with repeats.
+def("COMBINA", 2, 2, (args) => {
+  const n = Math.trunc(num(args, 0)), k = Math.trunc(num(args, 1));
+  if (n < 0 || k < 0 || (n === 0 && k > 0)) return fail("#NUM!", `COMBINA of ${k} from ${n}`);
+  if (n === 0 && k === 0) return 1;
+  return call("COMBIN", [single(n + k - 1), single(k)]);
+});
+def("PERMUTATIONA", 2, 2, (args) => {
+  const n = Math.trunc(num(args, 0)), k = Math.trunc(num(args, 1));
+  return n < 0 || k < 0 ? fail("#NUM!", `PERMUTATIONA of ${k} from ${n}`) : real(n ** k, "PERMUTATIONA overflows");
+});
+def("FACTDOUBLE", 1, 1, (args) => {
+  const n = Math.trunc(num(args, 0));
+  if (n < -1) return fail("#NUM!", `FACTDOUBLE of ${n}: negative`);
+  let f = 1;
+  for (let i = n; i > 1; i -= 2) f *= i;
+  return real(f, `FACTDOUBLE of ${n} overflows`);
+});
+def("SQRTPI", 1, 1, (args) => { const x = num(args, 0); return x < 0 ? fail("#NUM!", "SQRTPI of a negative number") : Math.sqrt(x * Math.PI); });
+def("MULTINOMIAL", 1, Infinity, (args) => {
+  const ns = every(args).map((v) => Math.trunc(toNumber(scalar(v))));
+  if (ns.some((n) => n < 0)) return fail("#NUM!", "MULTINOMIAL of a negative number");
+  return real(Math.round(factorial(sum(ns)) / ns.reduce((p, n) => p * factorial(n), 1)), "MULTINOMIAL overflows");
+});
+// SERIESSUM(x, n, m, coefficients): the sum of a_i * x^(n + i*m).
+def("SERIESSUM", 4, 4, (args) => {
+  const x = num(args, 0), n = num(args, 1), m = num(args, 2);
+  const cs = args[3].values.map((v) => { const s = scalar(v); return typeof s === "number" ? s : fail("#VALUE!", "SERIESSUM's coefficients are numbers"); });
+  return real(cs.reduce((total, a, i) => total + a * power(x, n + i * m), 0), "SERIESSUM overflows");
+});
+
+// SUMX2MY2, SUMX2PY2 and SUMXMY2 over pairs of numbers (a pair with text or
+// a blank in it is left out); the two ranges must be the same size.
+function pairsOf(name: string, args: readonly Arg[]): [number, number][] {
+  if (args[0].values.length !== args[1].values.length) return fail("#N/A", `${name}'s ranges differ in size`);
+  return args[0].values.flatMap((v, i): [number, number][] => {
+    const x = scalar(v), y = scalar(args[1].values[i]);
+    return typeof x === "number" && typeof y === "number" ? [[x, y]] : [];
+  });
+}
+def("SUMX2MY2", 2, 2, (args) => sum(pairsOf("SUMX2MY2", args).map(([x, y]) => x * x - y * y)));
+def("SUMX2PY2", 2, 2, (args) => sum(pairsOf("SUMX2PY2", args).map(([x, y]) => x * x + y * y)));
+def("SUMXMY2", 2, 2, (args) => sum(pairsOf("SUMXMY2", args).map(([x, y]) => (x - y) ** 2)));
+
+// The A forms of the spread: TRUE counts 1, text 0 (the cells that hold something).
+const spreadA = (name: string, args: readonly Arg[], least: number): number[] => {
+  const ns = everything(args);
+  return ns.length < least ? fail("#DIV/0!", `${name} needs ${plural(least)} or more`) : ns;
+};
+def("VARA", 1, Infinity, (args) => squares(spreadA("VARA", args, 2)) / (spreadA("VARA", args, 2).length - 1));
+def("VARPA", 1, Infinity, (args) => squares(spreadA("VARPA", args, 1)) / spreadA("VARPA", args, 1).length);
+def("STDEVA", 1, Infinity, (args) => Math.sqrt(squares(spreadA("STDEVA", args, 2)) / (spreadA("STDEVA", args, 2).length - 1)));
+def("STDEVPA", 1, Infinity, (args) => Math.sqrt(squares(spreadA("STDEVPA", args, 1)) / spreadA("STDEVPA", args, 1).length));
+def("SKEW.P", 1, Infinity, (args) => {
+  const ns = atLeast("SKEW.P", args, 3), n = ns.length, m = mean(ns), s = Math.sqrt(squares(ns) / n);
+  if (s === 0) return fail("#DIV/0!", "SKEW.P of numbers all alike");
+  return sum(ns.map((x) => ((x - m) / s) ** 3)) / n;
+});
+
+// Matrices: MMULT, MDETERM, MINVERSE, MUNIT.
+function matrixOf(name: string, a: Arg): number[][] {
+  if (a.values.length === 0 || a.cols === 0) return fail("#VALUE!", `${name} of nothing`);
+  const rows = a.values.length / a.cols;
+  const out: number[][] = [];
+  for (let r = 0; r < rows; r++) {
+    out.push(a.values.slice(r * a.cols, (r + 1) * a.cols).map((v) => { const s = scalar(v); return typeof s === "number" ? s : fail("#VALUE!", `${name}'s array holds numbers only`); }));
+  }
+  return out;
+}
+const asArray = (m: number[][]): ArrayValue => array(m.length, m[0].length, m.flat());
+def("MMULT", 2, 2, (args) => {
+  const a = matrixOf("MMULT", args[0]), b = matrixOf("MMULT", args[1]);
+  if (a[0].length !== b.length) return fail("#VALUE!", `MMULT of ${a.length} by ${a[0].length} and ${b.length} by ${b[0].length}: the columns of the first must be the rows of the second`);
+  const out = a.map((row) => b[0].map((_, j) => finite(row.reduce((s, x, k) => s + x * b[k][j], 0))));
+  return out.length === 1 && out[0].length === 1 ? out[0][0] : asArray(out);
+});
+// Gaussian elimination with partial pivoting: the determinant and the inverse.
+function eliminate(m: number[][]): { det: number; inverse: number[][] | null } {
+  const n = m.length, a = m.map((r, i) => [...r, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  let det = 1;
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(a[r][c]) > Math.abs(a[p][c])) p = r;
+    if (Math.abs(a[p][c]) < 1e-15 * Math.max(1, ...m.flat().map(Math.abs))) return { det: 0, inverse: null };
+    if (p !== c) { [a[p], a[c]] = [a[c], a[p]]; det = -det; }
+    det *= a[c][c];
+    const pivot = a[c][c];
+    for (let k = 0; k < 2 * n; k++) a[c][k] /= pivot;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = a[r][c];
+      for (let k = 0; k < 2 * n; k++) a[r][k] -= f * a[c][k];
+    }
+  }
+  return { det, inverse: a.map((r) => r.slice(n)) };
+}
+const square = (name: string, args: readonly Arg[]): number[][] => {
+  const m = matrixOf(name, args[0]);
+  return m.length === m[0].length ? m : fail("#VALUE!", `${name} needs a square array, not ${m.length} by ${m[0].length}`);
+};
+def("MDETERM", 1, 1, (args) => eliminate(square("MDETERM", args)).det);
+def("MINVERSE", 1, 1, (args) => {
+  const inv = eliminate(square("MINVERSE", args)).inverse;
+  if (!inv) return fail("#NUM!", "MINVERSE of a singular array");
+  return inv.length === 1 ? inv[0][0] : asArray(inv);
+});
+def("MUNIT", 1, 1, (args) => {
+  const n = Math.trunc(num(args, 0));
+  if (n < 1) return fail("#VALUE!", `MUNIT of ${n}: 1 or more`);
+  return n === 1 ? 1 : asArray(Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))));
 });

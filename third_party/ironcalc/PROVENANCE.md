@@ -95,24 +95,32 @@ Formula compatibility workbooks (docs/comparisons/IRONCALC.md action 2):
 
 | Upstream path | Local destination | What was adapted |
 |---|---|---|
-| `xlsx/tests/calc_tests/**/*.xlsx` (the 59 listed by `tests/headless/sheet_ironcalc_calc.ts`, those that come out as Excel stored them) | `third_party/ironcalc/fixtures/calc_tests/` (same relative paths) | nothing (byte for byte); read by the headless tests as base64 in `tests/headless/lib/ironcalc_calc_fixtures.ts`, which `tests/headless/lib/mkironcalc_calc.py` generates from the copies |
+| `xlsx/tests/calc_tests/**/*.xlsx` (173 of the 221; the list is `tests/headless/lib/ironcalc_calc_<group>.ts`, one group per folder) | `third_party/ironcalc/fixtures/calc_tests/` (same relative paths) | nothing (byte for byte); read by the headless tests as base64 in `tests/headless/lib/ironcalc_calc_<group>.ts`, which `tests/headless/lib/mkironcalc_calc.py` generates from the copies, with the `sheet_ironcalc_calc_<group>.ts` test of each |
 
 Each workbook was saved by Excel (`docProps/app.xml` says Microsoft Excel) with
 the value it worked out stored beside each formula; the assertions are ours:
 `lib/ironcalc_cached.ts` reads those stored values and compares what this app
 works out, cell by cell. They are placeholder numbers, short strings and
-function names; no third-party notice is in the repository for them. The rest of
-`calc_tests` (162 more workbooks) is not copied yet: they come in as their
-functions are made to agree, and the ledger in `sheet_ironcalc_calc.ts`
-(`KNOWN`) lists the cells that still differ.
+function names; no third-party notice is in the repository for them. The 48 not
+copied differ from Excel in more than twelve cells each (the largest are the
+date, financial and statistical edge cases); they come in as their functions
+are fixed. The 389 cells that still differ in the 173 are listed in
+`lib/ironcalc_calc_known.ts`, each with how it differs (a listed cell that comes
+right fails the test, so the list only shrinks). `NOW_TODAY`, `REPT` (it
+exhausts memory) and the `WORKDAY` pair (it does not finish) are left out until
+those are fixed.
 
 What the workbooks found, fixed here (our own code, written from how Excel
-stores a file): Excel keeps a function newer than 2007 under `_xlfn.` in a
-file, and a LAMBDA's parameters under `_xlpm.`; none of that was understood, so
-a file saved by Excel with TEXTJOIN, XLOOKUP, SORT, LET or STDEV.S read as
-`#NAME?`, and one written by us would show the same in Excel. Cells a dynamic
-array spilled into were read as constants of their own, and then blocked the
-spill (`#SPILL!`).
+behaves): the `_xlfn.`/`_xlpm.`/ANCHORARRAY storage of newer functions and cells
+a dynamic array spilled into (headless `sheet_xlfn`); whole-column and whole-row
+references (`sheet_wholecols`); TRUE and FALSE typed into a cell were text;
+overflow was `#VALUE!` where Excel gives `#NUM!`; `0^0` was 1; and the
+functions ROMAN (all five forms, checked against Excel over 2,000 numbers),
+ARABIC, ISO.CEILING, SEC CSC COT SECH CSCH COTH ACOT ACOTH, COMBINA,
+PERMUTATIONA, FACTDOUBLE, SQRTPI, MULTINOMIAL, SERIESSUM, SUMX2MY2, SUMX2PY2,
+SUMXMY2, VARA VARPA STDEVA STDEVPA, SKEW.P, MMULT, MDETERM, MINVERSE and MUNIT
+(`sheet_mathmore`); the binomial and Poisson distributions looped for a huge
+count.
 
 ## Deliberate differences
 
