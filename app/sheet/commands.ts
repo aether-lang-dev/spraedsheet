@@ -580,6 +580,21 @@ async function reshaped(wb: Workbook, axis: "row" | "col" | null, editOf: (moves
   }
   wb.notes.remap((a) => edit.cell(a, { col: false, row: false }), (e) => wb.sheet.language.rewrite(`=${e}`, edit).slice(1));
   const page = wb.page(wb.active)!, still = { col: false, row: false };
+  // Names that are ranges on this sheet move with their cells: the workbook's
+  // (naming this sheet) and the sheet's own. One whose cells were deleted goes
+  // (Excel keeps it as #REF!; this app has no name without a range).
+  for (const [n] of wb.names()) {
+    const b = wb.bookName(n);
+    if (!b || "formula" in b || b.page !== page) continue;
+    const to = edit.range(b.range[0], b.range[1], still, still);
+    if (!to || rangeName(to) !== rangeName(b.range)) await wb.defineName(n, to ? { page, range: to } : null);
+  }
+  for (const [n] of wb.sheet.names()) {
+    const r = wb.sheet.name(n);
+    if (!r) continue;
+    const to = edit.range(r[0], r[1], still, still);
+    if (!to || rangeName(to) !== rangeName(r)) await wb.sheet.define(n, to);
+  }
   page.rules = page.rules.flatMap((r): CfRule[] => {
     const to = edit.range(r.range[0], r.range[1], still, still);
     return to ? [{ ...r, range: to }] : [];

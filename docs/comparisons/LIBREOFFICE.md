@@ -11,11 +11,23 @@ script rollback (TODO 1-4, 7.1); the full-size sheet (1.4); large-file limits
 XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
 (7.9, 7.10).
 
-1. **Cross-feature structural-edit workbook.** Insert a row into a table read by
+1. ~~**Cross-feature structural-edit workbook.** Insert a row into a table read by
    another sheet, rename that sheet, undo and redo, save, reopen; compare
    formulas, values, names, metadata. Include validation, conditional formats,
    merges, chart sources. Copy (`$` anchors) tested separately from move. Same
-   workload by commands, REXX/bus and UI. Shared with Univer 3.
+   workload by commands, REXX/bus and UI. Shared with Univer 3.~~ Done 2026-10-21
+   for commands, the file, the text form and the REXX program (headless
+   `sheet_structural`): a table, workbook and sheet-own names, validation, a
+   conditional format, a merge, a chart source, a comment and a second sheet's
+   formulas, a row inserted above them, the other sheet renamed, undo and redo,
+   reopened three ways, and a column inserted after. It found one bug, fixed: a
+   name that is a range (the workbook's or a sheet's own) did not move when rows
+   or columns were inserted or deleted on its sheet, so `=TOTAL` read the wrong
+   cell (a name whose cells are deleted is removed; Excel keeps it as `#REF!`).
+   Left: copy against move with `$` anchors, the same workload by REXX/bus and
+   UI, and a gap it showed: a structured reference to a table on another sheet
+   (`=SUM(Sales[Amount])` on a sheet other than the table's) gives `#REF!` here,
+   Excel's tables being the workbook's.
 2. **Calculation measurement** (dirty formulas, range visits, settlement rounds,
    history memory; chains, diamonds, running totals, dynamic refs, spills,
    volatiles). See HyperFormula 1. No parallelism or GPU work without evidence.

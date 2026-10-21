@@ -23,10 +23,12 @@ labels, params, journal and grouped undo; `journaled` and `unstepped` flags
    parameters (`Outcome.resolved`), which the recorder keeps, so the line says
    `at=C3`. Headless `sheet_recordcontext` (failed before); `sheet_macros`'
    expected programs gained the activate line.
-3. **Feature participation in structural edits.** Require each feature (tables,
+3. ~~**Feature participation in structural edits.** Require each feature (tables,
    charts, validation, conditional formats, names, merges) to show behaviour
    through insert, delete, copy, undo and reopen; one headless test that attaches
-   all of them to a row insert.
+   all of them to a row insert.~~ Done 2026-10-21 with LibreOffice 1: headless
+   `sheet_structural` attaches them all to a row insert and a column insert,
+   undo, redo and reopen; names were the one feature that did not follow (fixed).
 4. ~~**Extension lifetimes.** Triggers and macros (7.2) are saved with the
    workbook; make sure closing a workbook removes its triggers and panels'
    callbacks, with no stale workbook state in globals.~~ Done 2026-10-21: a
