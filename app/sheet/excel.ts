@@ -10,7 +10,7 @@ import { movedBy } from "./shift.ts";
 import type { Edit, Fixed } from "./shift.ts";
 import { SPECIAL_FORMS, VOLATILE_FORMS, evaluate } from "./evaluate.ts";
 import { names } from "./functions.ts";
-import type { Language, Offset } from "./language.ts";
+import type { Language, Offset, Wide } from "./language.ts";
 import { FormulaError, tokens } from "./lexer.ts";
 import type { Token } from "./lexer.ts";
 import { parse } from "./parser.ts";
@@ -25,7 +25,14 @@ export function* refsOf(e: Expr, seen: Set<string> = new Set()): Generator<strin
     case "spill":
       if (cellAddr(e.name)) yield e.name;
       return;
+    // Whole columns or rows are not spelled out cell by cell (a million): they
+    // are marked "~", and compile() takes them as `wide`.
     case "range":
+      if (e.whole) {
+        const a = cellAddr(e.from), b = cellAddr(e.to);
+        if (a && b) yield `~${splitKey(e.from).sheet ?? ""}|${e.whole}|${e.whole === "col" ? Math.min(a.col, b.col) : Math.min(a.row, b.row)}|${e.whole === "col" ? Math.max(a.col, b.col) : Math.max(a.row, b.row)}`;
+        return;
+      }
       yield* span(e.from, e.to)?.keys ?? [];
       return;
     // Its header row (which of its cells a reference comes to depends on
@@ -114,6 +121,15 @@ function written(t: Ref, to: Addr): string {
   return `${t.text.slice(0, t.text.lastIndexOf("!") + 1)}${t.fixCol ? "$" : ""}${colName(to.col)}${t.fixRow ? "$" : ""}${to.row + 1}${t.spill ? "#" : ""}`;
 }
 
+// Whole columns (rows) at their new place, written as they were ($ and sheet).
+type Wide_ = Extract<Token, { kind: "wide" }>;
+function writtenWide(t: Wide_, r: [number, number]): string {
+  if (r[0] === t.lo && r[1] === t.hi) return t.text;
+  const sheet = t.text.slice(0, t.text.lastIndexOf("!") + 1);
+  const one = (n: number, fixed: boolean) => `${fixed ? "$" : ""}${t.axis === "col" ? colName(n) : n + 1}`;
+  return `${sheet}${one(r[0], t.fixLo)}:${one(r[1], t.fixHi)}`;
+}
+
 // A cell's input with its references moved by `edit` (a constant, or a
 // formula that does not lex, is unchanged). Token by token, so only the
 // references change.
@@ -129,6 +145,14 @@ function rewrite(input: string, edit: Edit): string {
   let out = "", from = 0;
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i];
+    // Whole columns or rows: only edits along their own axis move them.
+    if (t.kind === "wide") {
+      if (!edit.moves(t.sheet)) continue;
+      const r = edit.wide(t.axis, t.lo, t.hi, t.fixLo, t.fixHi);
+      out += input.slice(from, t.at) + (r ? writtenWide(t, r) : "#REF!");
+      from = t.at + t.text.length;
+      continue;
+    }
     if (t.kind !== "ref") continue;
     const end = toks[i + 2];
     const other = toks[i + 1]?.kind === ":" && end?.kind === "ref" ? end : null;
@@ -174,6 +198,13 @@ function renamed(input: string, from: string, to: string): string {
       const ends = typed.map((n) => (n.toUpperCase() === from ? to : n));
       const both = ends.join(":");
       out += input.slice(at, t.at) + (ends.every((n) => /^[A-Za-z_]\w*$/.test(n)) ? `${both}!` : `'${both}'!`) + t.text.slice(bang + 1);
+      at = t.at + t.text.length;
+      continue;
+    }
+    // Whole columns or rows there.
+    if (t.kind === "wide") {
+      if (t.sheet !== from) continue;
+      out += input.slice(at, t.at) + sheetPrefix(to) + t.text.slice(t.text.lastIndexOf("!") + 1);
       at = t.at + t.text.length;
       continue;
     }
@@ -280,8 +311,13 @@ export const EXCEL: Language = {
       const expr = parse(formula, names ?? (() => null), formulas, tables, at ? cellAddr(at)?.row ?? null : null);
       // One calling OFFSET or INDIRECT makes references at run time: it
       // is worked out again on every change.
-      const reads = [...refsOf(expr)].flatMap((k) => (!k.startsWith("@") ? [k] : k.slice(1) === at ? [] : [k.slice(1)]));
-      return { kind: "formula", reads, volatile: calls(expr, VOLATILE_FORMS), run: (env) => evaluate(expr, env, at ?? null) };
+      const all = [...refsOf(expr)];
+      const reads = all.flatMap((k) => (k.startsWith("~") ? [] : !k.startsWith("@") ? [k] : k.slice(1) === at ? [] : [k.slice(1)]));
+      const wide = all.filter((k) => k.startsWith("~")).map((k): Wide => {
+        const [sheet, axis, lo, hi] = k.slice(1).split("|");
+        return { sheet: sheet === "" ? null : sheet, axis: axis as "col" | "row", lo: Number(lo), hi: Number(hi) };
+      });
+      return { kind: "formula", reads, ...(wide.length ? { wide } : {}), volatile: calls(expr, VOLATILE_FORMS), run: (env) => evaluate(expr, env, at ?? null) };
     } catch (e) {
       if (!(e instanceof FormulaError)) throw e;
       return { kind: "broken", error: new CellError("#ERROR!", `parse error at ${e.at}: ${e.message}`) };

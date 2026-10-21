@@ -244,8 +244,9 @@ class Evaluator {
         return v instanceof CellError ? v : fail("#REF!", `${e.name} spills nothing`);
       }
       case "range": {
-        const s = span(e.from, e.to);
-        if (!s) return fail("#REF!", `${cellAddr(e.from) ? e.to : e.from} is not on the sheet`);
+        const [from, to] = this.#corners(e);
+        const s = span(from, to);
+        if (!s) return fail("#REF!", `${cellAddr(from) ? to : from} is not on the sheet`);
         const all = array(s.keys.length / s.cols, s.cols, s.keys.map((k) => this.#env.get(k)));
         if (!e.trim) return all;
         const ends = e.trim === "leading" ? 1 : e.trim === "trailing" ? 2 : 3;
@@ -534,6 +535,18 @@ class Evaluator {
     return isArray(r) ? fail("#VALUE!", "an array where one value goes") : r;
   }
 
+  // A range's two corners; whole columns or rows (A:A, 1:1) go as far as the
+  // sheet is used, at least to its first row or column.
+  #corners(e: Extract<Expr, { kind: "range" }>): [string, string] {
+    if (!e.whole) return [e.from, e.to];
+    const a = cellAddr(e.from), b = cellAddr(e.to);
+    if (!a || !b) return [e.from, e.to];
+    const sheet = splitKey(e.from).sheet, used = this.#env.extent?.(sheet) ?? { rows: 100, cols: 26 };
+    const at = (c: Addr) => keyOf(c);
+    const to = e.whole === "col" ? at({ col: b.col, row: Math.max(a.row, used.rows - 1) }) : at({ col: Math.max(a.col, used.cols - 1), row: b.row });
+    return [e.from, sheet === null ? to : `${sheet}!${to}`];
+  }
+
   // A 3-D reference's cells: each sheet's from the first to the last in
   // tab order (either way round), stacked sheet under sheet; each told
   // the Env, as the sheets between are the workbook's to say.
@@ -559,8 +572,9 @@ class Evaluator {
   // column (a row), or both; of anything else, its first value.
   #intersect(e: Expr): Result {
     if (e.kind === "range") {
-      const a = cellAddr(e.from), b = cellAddr(e.to);
-      if (!a || !b) return fail("#REF!", `${a ? e.to : e.from} is not on the sheet`);
+      const [from, to] = this.#corners(e);
+      const a = cellAddr(from), b = cellAddr(to);
+      if (!a || !b) return fail("#REF!", `${a ? to : from} is not on the sheet`);
       const here = this.#at ? cellAddr(this.#at) : null;
       const r0 = Math.min(a.row, b.row), r1 = Math.max(a.row, b.row), c0 = Math.min(a.col, b.col), c1 = Math.max(a.col, b.col);
       const row = r0 === r1 ? r0 : here ? here.row : -1, col = c0 === c1 ? c0 : here ? here.col : -1;
@@ -594,8 +608,9 @@ class Evaluator {
         return a ? { sheet, a, b: a } : fail("#REF!", `${e.name} is not on the sheet`);
       }
       case "range": {
-        const a = cellAddr(e.from), b = cellAddr(e.to);
-        if (!a || !b) return fail("#REF!", `${a ? e.to : e.from} is not on the sheet`);
+        const [from, to] = this.#corners(e);
+        const a = cellAddr(from), b = cellAddr(to);
+        if (!a || !b) return fail("#REF!", `${a ? to : from} is not on the sheet`);
         return { sheet: splitKey(e.from).sheet, a, b };
       }
       case "call":

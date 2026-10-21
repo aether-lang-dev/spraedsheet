@@ -35,7 +35,9 @@ the number-format cases, the series-detection cases.
    Found so far: file interchange read `_xlfn.`/`_xlpm.`/ANCHORARRAY as
    `#NAME?` and read spilled values as cells (fixed, headless `sheet_xlfn`, and
    the prefixes are now written); whole-column and whole-row references
-   (`SUM(A:A)`, `$1:$1`) did not parse; a run of functions is missing (ROMAN,
+   (`SUM(A:A)`, `$1:$1`) did not parse (fixed 2026-10-21, headless
+   `sheet_wholecols`: read as far as the sheet is used, worked out again when a
+   cell in them changes, moved by columns and rows along their own axis only); a run of functions is missing (ROMAN,
    ARABIC, the reciprocal trig functions, MMULT, MINVERSE, MDETERM, MUNIT,
    COMBINA, PERMUTATIONA, FACTDOUBLE, SQRTPI, MULTINOMIAL, SERIESSUM,
    SUMX2MY2/PY2, SUMXMY2, STDEVA ...); and Excel gives `#NUM!`/`#VALUE!` for

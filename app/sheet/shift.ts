@@ -18,6 +18,9 @@ export interface Fixed {
 export interface Edit {
   cell(a: Addr, fixed: Fixed): Addr | null;
   range(a: Addr, b: Addr, fa: Fixed, fb: Fixed): [Addr, Addr] | null;
+  // Whole columns (or rows) lo to hi, 0-based: where they go, or null when
+  // they are gone. Rows moving does nothing to whole columns, and the other way.
+  wide(axis: "col" | "row", lo: number, hi: number, fixLo: boolean, fixHi: boolean): [number, number] | null;
   // A cell this edit deletes (as against one it pushes off the sheet).
   deletes(a: Addr): boolean;
   // Whether it moves a reference on `sheet` (its name in upper case, as a
@@ -39,6 +42,11 @@ export function byOffset(by: Offset): Edit {
     range: (a, b, fa, fb) => {
       const x = cell(a, fa), y = cell(b, fb);
       return x && y ? [x, y] : null;
+    },
+    wide: (axis, lo, hi, fl, fh) => {
+      const move = axis === "col" ? by.cols : by.rows, limit = axis === "col" ? COLS : ROWS;
+      const x = fl ? lo : lo + move, y = fh ? hi : hi + move;
+      return x >= 0 && y >= 0 && x < limit && y < limit ? [x, y] : null;
     },
     deletes: () => false,
     moves: () => true,
@@ -64,6 +72,8 @@ export function blockMoved(from: readonly [Addr, Addr], by: Offset, moves: Scope
       }
       return [a, b];
     },
+    // Whole columns or rows are not in a block that is not the whole sheet.
+    wide: (_axis, lo, hi) => [lo, hi],
     deletes: covered,
     moves,
   };
@@ -85,6 +95,12 @@ export function inserted(axis: Axis, at: number, n: number, moves: Scope = LOCAL
     range: (a, b) => {
       const x = cell(a), y = cell(b);
       return x && y ? [x, y] : null;
+    },
+    wide: (ax, lo, hi) => {
+      if (ax !== axis) return [lo, hi];
+      const limit = axis === "col" ? COLS : ROWS;
+      const x = lo >= at ? lo + n : lo, y = hi >= at ? hi + n : hi;
+      return x < limit ? [x, Math.min(y, limit - 1)] : null;
     },
     deletes: () => false,
     moves,
@@ -109,6 +125,13 @@ export function deleted(axis: Axis, at: number, n: number, moves: Scope = LOCAL)
       const first = along(a, axis) <= along(b, axis);
       return [moved(a, axis, first ? start : end), moved(b, axis, first ? end : start)];
     },
+    wide: (ax, lo, hi) => {
+      if (ax !== axis) return [lo, hi];
+      const l = Math.min(lo, hi), h = Math.max(lo, hi);
+      const start = l < at ? l : gone(l) ? at : l - n;
+      const end = h < at ? h : gone(h) ? at - 1 : h - n;
+      return start > end ? null : [start, end];
+    },
     deletes: (a) => gone(along(a, axis)),
     moves,
   };
@@ -126,6 +149,13 @@ export function swapped(axis: Axis, i: number, j: number, moves: Scope = LOCAL):
       if (lo <= Math.min(i, j) && hi >= Math.max(i, j)) return [a, b];
       const x = swap(along(a, axis)), y = swap(along(b, axis)), first = along(a, axis) <= along(b, axis);
       return [moved(a, axis, first ? Math.min(x, y) : Math.max(x, y)), moved(b, axis, first ? Math.max(x, y) : Math.min(x, y))];
+    },
+    wide: (ax, lo, hi) => {
+      if (ax !== axis) return [lo, hi];
+      const l = Math.min(lo, hi), h = Math.max(lo, hi);
+      if (l <= Math.min(i, j) && h >= Math.max(i, j)) return [lo, hi];
+      const x = swap(lo), y = swap(hi);
+      return [Math.min(x, y), Math.max(x, y)];
     },
     deletes: () => false,
     moves,

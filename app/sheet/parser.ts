@@ -9,7 +9,7 @@
 import { FormulaError, tokens } from "./lexer.ts";
 import type { Op, Token } from "./lexer.ts";
 import type { ErrorCode } from "./values.ts";
-import { keyOf, splitKey } from "./address.ts";
+import { COLS, ROWS, colName, keyOf, splitKey } from "./address.ts";
 import type { Addr } from "./address.ts";
 import type { FoundTable, Formulas, Names, Tables } from "./language.ts";
 import { parseSpec } from "./structured.ts";
@@ -22,7 +22,7 @@ export type Expr =
   | { readonly kind: "bool"; readonly value: boolean }
   | { readonly kind: "ref"; readonly name: string }
   // A trim ref (A1:.E10) trims empty rows and columns from that end.
-  | { readonly kind: "range"; readonly from: string; readonly to: string; readonly trim?: "leading" | "trailing" | "both" }
+  | { readonly kind: "range"; readonly from: string; readonly to: string; readonly trim?: "leading" | "trailing" | "both"; readonly whole?: "col" | "row" }
   // A 3-D reference: the same cell or range on every sheet from `first`
   // to `last` (upper case) in the workbook's tab order, then.
   | { readonly kind: "span3d"; readonly first: string; readonly last: string; readonly from: string; readonly to: string }
@@ -319,6 +319,14 @@ class Parser {
         const spec = parseSpec(t.spec, t.at);
         const table = this.#tables(t.name);
         return table ? { kind: "table", table, spec, row: table.sheet ? null : this.#row, text: t.text } : { kind: "error", code: "#REF!", why: `no table ${t.text.slice(0, t.text.indexOf("["))}` };
+      }
+      // Whole columns or rows: a range as far as the sheet is used, when worked out.
+      case "wide": {
+        const prefix = t.sheet ? `${t.sheet}!` : "";
+        const [lo, hi] = [Math.min(t.lo, t.hi), Math.max(t.lo, t.hi)];
+        return t.axis === "col"
+          ? { kind: "range", from: `${prefix}${colName(lo)}1`, to: `${prefix}${colName(hi)}${ROWS}`, whole: "col" }
+          : { kind: "range", from: `${prefix}A${lo + 1}`, to: `${prefix}${colName(COLS - 1)}${hi + 1}`, whole: "row" };
       }
       case "ref": {
         const sheets = splitKey(t.name).sheet;

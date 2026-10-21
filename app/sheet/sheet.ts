@@ -24,7 +24,7 @@ import { COLS, ROWS, addrOf, cellAddr, keyOf, order, splitKey } from "./address.
 import { CellError, isArray } from "./values.ts";
 import type { ArrayValue, Result, Value } from "./values.ts";
 import { EXCEL } from "./excel.ts";
-import type { FoundTable, Formula, Formulas, Hidden, Language, Named, Names, TableDef, Tables } from "./language.ts";
+import type { FoundTable, Formula, Formulas, Hidden, Language, Named, Names, TableDef, Tables, Wide } from "./language.ts";
 import type { Addr } from "./address.ts";
 import { show } from "./format.ts";
 
@@ -129,6 +129,8 @@ export interface Context {
   // Whether a cell's row (its key qualified) is hidden by hand, by a
   // filter, or not.
   hidden?(key: string): Hidden;
+  // How far another sheet (its name upper case) is used: its last row and column that hold something.
+  extent?(sheet: string): { rows: number; cols: number };
   // How the workbook calculates (Calc), when it is not automatically and
   // without iteration.
   calc?(): Calc;
@@ -162,6 +164,14 @@ export class Sheet {
   readonly #compiled = new Map<string, Compiled>();
   readonly #values = new Map<string, Value>();
   readonly #reads = new Map<string, Set<string>>();     // a cell -> the cells it reads
+  // Formulas reading whole columns or rows (A:A, 1:1), by what they read
+  // ("SHEET|c|0": that sheet's column A, "|r|0": this sheet's row 1), and each
+  // formula's own list; a cell in a whole column is read by those without being
+  // listed among the formula's reads.
+  readonly #wideBy = new Map<string, Set<string>>();
+  readonly #wideOf = new Map<string, readonly Wide[]>();
+  // How far the sheet is used, until a cell is set or a formula worked out again.
+  #extent: { rows: number; cols: number } | null = null;
   readonly #readBy = new Map<string, Set<string>>();    // a cell -> the cells that read it
   readonly #volatile = new Set<string>();               // the cells whose formula is volatile
   readonly #listener: SheetListener | undefined;
@@ -302,6 +312,7 @@ export class Sheet {
     if (list.length) this.#snap = null;
     for (const [key, input] of list) {
       if (input === "") this.#inputs.delete(key); else this.#inputs.set(key, input);
+      this.#extent = null;
       this.#compile(key);
     }
     return this.#recompute(list.map(([key]) => key));
@@ -444,6 +455,36 @@ export class Sheet {
     this.#compiled.set(key, c);
     if (c.kind === "formula" && c.volatile) this.#volatile.add(key); else this.#volatile.delete(key);
     this.#link(key, new Set(c.kind === "formula" ? c.reads.map((k) => this.#local(k) ?? k) : []));
+    this.#linkWide(key, c.kind === "formula" ? c.wide ?? [] : []);
+  }
+
+  // Whole columns and rows a formula reads: indexed by sheet and number, so a
+  // changed cell finds the formulas that read its column or row at once.
+  #linkWide(key: string, wide: readonly Wide[]): void {
+    const slot = (w: Wide, n: number) => `${w.sheet === this.#context.name ? "" : w.sheet ?? ""}|${w.axis === "col" ? "c" : "r"}|${n}`;
+    for (const old of this.#wideOf.get(key) ?? []) for (let n = old.lo; n <= old.hi; n++) this.#wideBy.get(slot(old, n))?.delete(key);
+    if (wide.length) this.#wideOf.set(key, wide); else this.#wideOf.delete(key);
+    for (const w of wide) for (let n = w.lo; n <= w.hi; n++) getOrAdd(this.#wideBy, slot(w, n), () => new Set()).add(key);
+  }
+
+  // The formulas that read the whole column or row a cell is in.
+  #wideReaders(k: string): string[] {
+    if (this.#wideBy.size === 0) return [];
+    const { sheet, cell } = splitKey(k), a = addrOf(cell);
+    if (!a) return [];
+    const sheetKey = sheet === null || sheet === this.#context.name ? "" : sheet;
+    return [...(this.#wideBy.get(`${sheetKey}|c|${a.col}`) ?? []), ...(this.#wideBy.get(`${sheetKey}|r|${a.row}`) ?? [])];
+  }
+
+  // How far the sheet is used: its last row and column that hold a cell's input
+  // or a spilled value (1-based; 0 for none).
+  usedExtent(): { rows: number; cols: number } {
+    if (this.#extent) return this.#extent;
+    let rows = 0, cols = 0;
+    const note = (k: string) => { const a = addrOf(k); if (a) { rows = Math.max(rows, a.row + 1); cols = Math.max(cols, a.col + 1); } };
+    for (const k of this.#inputs.keys()) note(k);
+    for (const k of this.#spilledBy.keys()) note(k);
+    return (this.#extent = { rows, cols });
   }
 
   #inTurn<T>(work: () => Promise<T>): Promise<T> {
@@ -458,13 +499,25 @@ export class Sheet {
 
   // What a cell reads, and what reads it, a spilled cell reading the
   // formula it shows.
-  #readsOf(k: string): string[] {
+  // `among`: the cells being worked out together, of which a whole column or
+  // row a formula reads names those it holds.
+  #readsOf(k: string, among?: ReadonlySet<string>): string[] {
     const by = this.#spilledBy.get(k);
-    return [...(this.#reads.get(k) ?? []), ...(by ? [by] : [])];
+    const wide = among && this.#wideOf.has(k) ? [...among].filter((c) => this.#inWide(k, c)) : [];
+    return [...(this.#reads.get(k) ?? []), ...(by ? [by] : []), ...wide];
+  }
+
+  // Whether a cell (a key, perhaps of another sheet) is in a whole column or row the formula reads.
+  #inWide(formula: string, cell: string): boolean {
+    const { sheet, cell: c } = splitKey(cell), a = addrOf(c);
+    if (!a) return false;
+    const here = sheet === null || sheet === this.#context.name;
+    return (this.#wideOf.get(formula) ?? []).some((w) => (w.sheet === null || w.sheet === this.#context.name ? here : w.sheet === sheet)
+      && (w.axis === "col" ? a.col >= w.lo && a.col <= w.hi : a.row >= w.lo && a.row <= w.hi));
   }
 
   #readersOf(k: string): string[] {
-    return [...(this.#readBy.get(k) ?? []), ...(this.#spills.has(k) ? this.#areas.get(k) ?? [] : [])];
+    return [...(this.#readBy.get(k) ?? []), ...this.#wideReaders(k), ...(this.#spills.has(k) ? this.#areas.get(k) ?? [] : [])];
   }
 
   // What formulas see: the cells, and what a cell spills (A1#); `read`
@@ -481,6 +534,7 @@ export class Sheet {
         return { sheets, here: Math.max(0, sheets.findIndex((s) => s.toUpperCase() === this.#context.name)) };
       },
       calc: () => this.#context.calc?.() ?? AUTOMATIC,
+      extent: (sheet: string | null) => (sheet === null || sheet === this.#context.name ? this.usedExtent() : this.#context.extent?.(sheet) ?? { rows: 0, cols: 0 }),
       hidden: (k: string) => { const local = this.#local(k); return this.#context.hidden?.(local === null ? k : `${this.#context.name}!${local}`) ?? null; },
     };
   }
@@ -504,7 +558,7 @@ export class Sheet {
     // The edges as they are now: working a formula out may move a spill.
     const readers = new Map([...cells].map((k) => [k, this.#readersOf(k)]));
     const waiting = new Map<string, number>();
-    for (const k of cells) waiting.set(k, new Set(this.#readsOf(k).filter((r) => cells.has(r))).size);
+    for (const k of cells) waiting.set(k, new Set(this.#readsOf(k, cells).filter((r) => cells.has(r))).size);
     const ready = [...cells].filter((k) => waiting.get(k) === 0).sort(byOrder);
     const ordered: string[] = [];
     // Taken from the front by an index: shift() is linear, and over a big
@@ -529,7 +583,7 @@ export class Sheet {
     const seen = new Set<string>();
     const walk = (k: string): boolean => {
       path.push(k);
-      for (const r of this.#readsOf(k)) {
+      for (const r of this.#readsOf(k, left)) {
         if (r === start) return true;
         if (left.has(r) && !seen.has(r)) {
           seen.add(r);
@@ -552,6 +606,7 @@ export class Sheet {
   // them is stale until the sheet is calculated. Under iteration a cycle's
   // cells are worked round (#iterate) instead of being #CYCLE!.
   async #recompute(set: readonly string[], depth = 0, all = false): Promise<string[]> {
+    this.#extent = null;
     const calc = this.#context.calc?.() ?? AUTOMATIC;
     const before = new Map<string, string>();
     // As a set: includes() over a big change (a file opened, 100,000 cells)

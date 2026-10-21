@@ -72,7 +72,7 @@ function printed(n: Node): string {
   switch (e.kind) {
     case "ref": return e.name;
     case "spill": return `${e.name}#`;
-    case "range": return `${e.from}${e.trim === "leading" ? ".:" : e.trim === "trailing" ? ":." : e.trim === "both" ? ".:." : ":"}${e.to}`;
+    case "range": if (e.whole) return `${e.whole === "col" ? e.from.replace(/\d+$/, "").replace(/^.*!/, "") + ":" + e.to.replace(/\d+$/, "").replace(/^.*!/, "") : e.from.replace(/^.*!/, "").replace(/^[A-Z]+/, "") + ":" + e.to.replace(/^.*!/, "").replace(/^[A-Z]+/, "")}`; return `${e.from}${e.trim === "leading" ? ".:" : e.trim === "trailing" ? ":." : e.trim === "both" ? ".:." : ":"}${e.to}`;
     case "at": return `@${wrap(n.kids[0], level(n.kids[0]) < ATOM)}`;
     case "span3d": return `${e.first}:${e.last}!${e.from === e.to ? e.from : `${e.from}:${e.to}`}`;
     case "table": return e.text;

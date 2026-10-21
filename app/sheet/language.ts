@@ -77,6 +77,10 @@ export interface Env {
   // Whether a cell's row is hidden: by hand, by a filter, or not (null),
   // for SUBTOTAL and AGGREGATE.
   hidden?(key: string): Hidden;
+  // How far a sheet (its name upper case, null for this one) is used: its last
+  // row and column that hold something, 1-based; whole columns and rows
+  // (A:A, 1:1) are read as far as that.
+  extent?(sheet: string | null): { readonly rows: number; readonly cols: number };
   // How the workbook calculates, for INFO("recalc").
   calc?(): { readonly manual: boolean };
 }
@@ -93,10 +97,20 @@ export interface Offset {
   readonly rows: number;
 }
 
+// Whole columns (or rows) a formula reads, on a sheet (upper case; null: its
+// own): any cell in them changing changes the formula, whether or not it holds
+// anything yet. 0-based, lo to hi.
+export interface Wide {
+  readonly sheet: string | null;
+  readonly axis: "col" | "row";
+  readonly lo: number;
+  readonly hi: number;
+}
+
 // A volatile formula (one calling OFFSET, INDIRECT ...) is worked out again
 // on every change, as Excel's are, whatever its `reads`.
 export type Formula =
-  | { readonly kind: "formula"; readonly reads: readonly string[]; readonly volatile?: boolean; run(env: Env): Result | Promise<Result> }
+  | { readonly kind: "formula"; readonly reads: readonly string[]; readonly wide?: readonly Wide[]; readonly volatile?: boolean; run(env: Env): Result | Promise<Result> }
   | { readonly kind: "broken"; readonly error: CellError };
 
 export interface Language {

@@ -525,6 +525,7 @@ export class Workbook {
         return this.page(sheet ?? "")?.sheet.input(cell) ?? "";
       },
       sheets: () => this.sheetNames(),
+      extent: (sheet) => this.page(sheet)?.sheet.usedExtent() ?? { rows: 0, cols: 0 },
       calc: () => this.calculation,
       hidden: (key) => {
         const { sheet, cell } = splitKey(key), p = this.page(sheet ?? ""), row = cellAddr(cell)?.row;
