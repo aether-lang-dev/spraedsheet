@@ -233,6 +233,11 @@ export function sheetGrid(v: SheetView): void {
       pointing = false;
       setTimeout(() => typed(null), 0);
     }
+    // F2 in the read view: into edit mode (B.7), as the 2012 entry's hotkey.
+    if (key === "F2" && !v.wb.editMode) {
+      v.run("view.editMode", { on: "1" });
+      return;
+    }
     // F6, Shift+F6: the panels in turn, the focus in each (keyboard only).
     if (key === "F6") {
       v.cyclePanel((mods & SHIFT) !== 0 ? -1 : 1);

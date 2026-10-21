@@ -149,6 +149,13 @@ const held = new WeakMap<Store, string>();
 const heldOf = (store: Store): string => held.get(store) ?? refuse("nothing is held for review: review.hold first");
 const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
 
+// A read view (view.editMode off): what is let through is what only looks,
+// moves between sheets or workbooks, or opens a file; every other command
+// that changes the workbook is refused.
+const READ_VIEW = "read view: switch edit mode on to change the workbook";
+const CHANGES_UNJOURNALED = new Set(["macro.set", "macro.delete", "macro.record", "check.add", "check.remove"]);
+const looksOnly = (id: string) => id.startsWith("view.") || id.startsWith("book.") || id.startsWith("file.") || id === "sheet.activate";
+
 // A json= parameter: an object, or a refusal that says why not.
 function jsonOf(text: string): Record<string, any> {
   try {
@@ -4101,6 +4108,21 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // Edit mode (B.7): on= 1 is edit mode, 0 the read view, none toggles. In
+    // the read view the grid opens no editor and every command that changes
+    // the workbook is refused (Commands.execute).
+    id: "view.editMode", label: "Edit Mode", params: [], optional: ["on"], journaled: false,
+    run: async (wb, p) => {
+      const on = p.on === undefined || p.on.trim() === "" ? !wb.editMode : p.on.trim() === "1" ? true : p.on.trim() === "0" ? false : refuse(`on= is 1 (edit mode) or 0 (the read view), not ${p.on}`);
+      wb.editMode = on;
+      return { ok: true, message: on ? "edit mode is on" : "read view: edit mode is off", changed: [], output: on ? 1 : 0 };
+    },
+  },
+  {
+    id: "view.editModeState", label: "Edit Mode State", params: [], journaled: false,
+    run: async (wb) => ({ ok: true, message: wb.editMode ? "edit mode is on" : "read view: edit mode is off", changed: [], output: wb.editMode ? 1 : 0 }),
+  },
+  {
     // Assertions in the sheet (B.6, checks.ts): a formula that must be TRUE,
     // with a message, kept in the workbook and worked out after every
     // command; a failing one is named in the status bar and the Audit
@@ -4496,6 +4518,8 @@ export class Commands {
     try {
       if (!spec) refuse(`no command ${id}`);
       for (const name of spec!.params) if (params[name] === undefined) refuse(`${id} needs ${name}`);
+      // The read view: nothing that changes the workbook runs.
+      if (!this.#wb.editMode && ((spec!.journaled && !looksOnly(id)) || CHANGES_UNJOURNALED.has(id))) refuse(READ_VIEW);
       // Several workbooks: theirs to answer (books.ts).
       if (id.startsWith("book.")) return this.books ? await this.books.run(id, params) : refuse("one workbook here: no others to open beside it");
       // The workbook as it was, kept as a step to undo once the command has

@@ -381,6 +381,10 @@ export class Workbook {
   // workbook, and what they gave when last worked out (runChecks).
   checks: Check[] = [];
   checkResults: CheckResult[] = [];
+  // Edit mode (B.7): on, the workbook is changed as always; off, it is a read
+  // view and every command that changes it is refused. A session's state, not
+  // the file's: it is not saved, and opening a file leaves it as it is.
+  editMode = true;
   selecting = false;
   // How a URL is handed to the system (a hyperlink followed): "" when it
   // was, or why not. The app's view sets it to sae's shell.open.
