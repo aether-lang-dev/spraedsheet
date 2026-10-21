@@ -20,6 +20,7 @@ import type { ChartView, DrawingView, SlicerView, Watch } from "../workbook.ts";
 import { Workbooks } from "../books.ts";
 import { pageRepo } from "../pagerepo.ts";
 import { statsLine } from "../workbook.ts";
+import { checksLine } from "../checks.ts";
 import { sliderToZoom, zoomToSlider } from "./zoom.ts";
 import { syncFloats } from "./floats.ts";
 import type { CellEditor } from "../editors.ts";
@@ -79,6 +80,8 @@ export class SheetView {
   // The interface's language (locale.ts).
   readonly locale = state<string>("en");
   readonly watches = state<Watch[]>([]);
+  // The workbook's checks and what they gave (checks.ts), for the Audit panel.
+  readonly checks = state<{ name: string; formula: string; message: string; ok: boolean; shown: string }[]>([]);
   readonly charts = state<(ChartView & { n: number })[]>([]);
   readonly slicers = state<SlicerView[]>([]);
   readonly drawings = state<DrawingView[]>([]);
@@ -262,7 +265,7 @@ export class SheetView {
     const many = sel && (others.length > 0 || sel[0].col !== sel[1].col || sel[0].row !== sel[1].row);
     const cells = this.wb.sheet.keys().length;
     const words = (s: string) => (this.wb.locale === "en" ? s : s.replace(/\b(Ready|Average|Numerical Count|Count|Min|Max|Sum)\b/g, (w) => t(this.wb.locale, w)));
-    const bar = [words(many ? statsLine(this.wb.stats([...others, sel!])) : "Ready"), `${cells} cell${cells === 1 ? "" : "s"}`, `Zoom ${this.wb.zoom}%`, this.wb.calculation.manual && this.wb.stale().length ? "Calculate" : "", this.bus ? "Control bus" : ""];
+    const bar = [words(many ? statsLine(this.wb.stats([...others, sel!])) : "Ready"), `${cells} cell${cells === 1 ? "" : "s"}`, `Zoom ${this.wb.zoom}%`, this.wb.calculation.manual && this.wb.stale().length ? "Calculate" : "", this.bus ? "Control bus" : "", checksLine(this.wb.checkResults)];
     if (this.zoomSlider && sliderToZoom(ui.get_slider(this.zoomSlider)) !== this.wb.zoom) ui.set_slider(this.zoomSlider, zoomToSlider(this.wb.zoom));
     if (this.zoomLabel) ui.set_text(this.zoomLabel, `${this.wb.zoom}%`);
     if (this.#extras) ui.set_visible(this.#extras, this.wb.extraControls);
@@ -356,6 +359,7 @@ export class SheetView {
       this.bookNames.set(this.books.all.map((b) => (b === this.books.active ? `${b.wb.name} (active)` : b.wb.name)));
       if (this.locale.value !== this.wb.locale) this.locale.set(this.wb.locale);
       this.watches.set(this.wb.watches());
+      this.checks.set(this.wb.checks.map((c, i) => ({ name: c.name, formula: c.formula, message: c.message, ok: this.wb.checkResults[i]?.ok ?? true, shown: this.wb.checkResults[i]?.shown ?? "" })));
       this.charts.set(this.wb.charts().map((c, i) => ({ ...c, n: i + 1 })));
       this.slicers.set(this.wb.slicerViews());
       this.drawings.set(this.wb.drawingViews());

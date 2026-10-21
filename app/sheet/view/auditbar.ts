@@ -50,6 +50,19 @@ export function auditBar(v: SheetView): void {
       await check();
     });
   }));
+  // Checks (B.6): formulas that must be TRUE, worked out on every recalculation;
+  // a failing one is named here with its message, and in the status bar.
+  const cname = state(""), cformula = state(""), cmessage = state("");
+  ui.wrap(() => {
+    bind(ui.textfield("check name", () => {}), cname);
+    bind(ui.textfield("check formula (must be TRUE)", () => {}), cformula);
+    bind(ui.textfield("check message", () => {}), cmessage);
+    v.btn("Add check", () => v.run("check.add", { name: cname.value, formula: cformula.value, message: cmessage.value }));
+  });
+  each(v.checks, (c: { name: string; ok: boolean; shown: string }) => `${c.name}|${c.ok}|${c.shown}`, (c: { name: string; formula: string; message: string; ok: boolean; shown: string }) => ui.wrap(() => {
+    ui.text(c.ok ? `Check ${c.name}: passing` : `Check ${c.name}: FAILING, ${c.message} (it gave ${c.shown})`);
+    ui.btn(`Remove check ${c.name}`, () => v.run("check.remove", { name: c.name }));
+  }));
   bind(ui.text_wrapped("", 720), steps);
   each(info, (l: string) => l, (l: string) => ui.text(l));
   each(v.watches, (w: Watch) => `${w.sheet}!${w.cell}`, (w: Watch) => ui.wrap(() => {
