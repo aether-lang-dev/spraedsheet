@@ -39,6 +39,7 @@ import { asApp, editorOf, refusal, toggled } from "./editors.ts";
 import { ICONS, PERIODS, THRESHOLDS, describeRule as describeCf, rangeName } from "./rules.ts";
 import type { CfRule, Comparison, IconSet, Threshold } from "./rules.ts";
 import { borderLine, colour, toStyle } from "./formats.ts";
+import { clockIsFixed, instantText, now as clockNow, parseInstant, setClock } from "./dates.ts";
 import { CATEGORIES, numberFormat } from "./numfmt.ts";
 import { ROLES, THEMES, isRole, resolved } from "./themes.ts";
 import type { Role, Theme } from "./themes.ts";
@@ -3522,6 +3523,28 @@ const SPECS: readonly Spec[] = [
       await wb.setDateSystem(sys as 1900 | 1904);
       return changedBy(wb, wb.sheet.keys(), `the ${sys} date system`);
     },
+  },
+  {
+    // An injectable clock (IronCalc action 6): at= "2026-10-21 09:30", a date,
+    // or a serial pins TODAY() and NOW(); none is the host's clock again. A
+    // session's setting, not saved. The volatile cells are worked out at once.
+    id: "workbook.clock", label: "Clock", params: [], optional: ["at"], journaled: false,
+    run: async (wb, p) => {
+      if (p.at === undefined || p.at.trim() === "") {
+        setClock(null);
+        await recalculated(wb);
+        return { ok: true, message: "the clock is the host's", changed: wb.sheet.keys(), output: clockNow() };
+      }
+      const s = parseInstant(p.at);
+      if (s === null) refuse(`${p.at} is not a date or time (2026-10-21, 2026-10-21 09:30, or a serial)`);
+      setClock(s);
+      const changed = await recalculated(wb);
+      return { ok: true, message: `the clock is ${instantText(s!)}`, changed, output: s };
+    },
+  },
+  {
+    id: "workbook.clockState", label: "Clock State", params: [], journaled: false,
+    run: async () => ({ ok: true, message: clockIsFixed() ? `the clock is fixed at ${instantText(clockNow())}` : "the clock is the host's", changed: [], output: clockNow() }),
   },
   {
     // View > Animations: on (as it starts) the selection's outline glides

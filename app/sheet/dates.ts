@@ -194,8 +194,37 @@ export function dateDif(start: number, end: number, unit: string): number | null
   }
 }
 
-// Now as a serial, in the page's local time (the coarse clock in the browser).
+// An injected clock (workbook.clock): a fixed serial instead of the host's
+// clock, so a test, or a demonstration, can pin TODAY() and NOW(); null is the
+// host's. Not saved with a file.
+let fixedNow: number | null = null;
+export const setClock = (serial: number | null): void => { fixedNow = serial; };
+export const clockIsFixed = (): boolean => fixedNow !== null;
+
+// Now as a serial, in the page's local time (the coarse clock in the browser),
+// or the injected clock's.
 export const now = (): number => {
+  if (fixedNow !== null) return fixedNow;
   const t = new Date();
   return (t.getTime() - t.getTimezoneOffset() * 60_000 - EPOCH) / DAY;
 };
+
+// A clock's text as a serial: "2026-10-21", "2026-10-21 09:30" (or with
+// seconds, or a T between), or a serial number; null if it is none of these.
+export function parseInstant(text: string): number | null {
+  const t = text.trim();
+  if (/^\d+(\.\d+)?$/.test(t)) return Number(t);
+  const m = /^(\d{4}-\d{1,2}-\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(t);
+  if (!m) return null;
+  const day = parseDate(m[1]);
+  if (day === null) return null;
+  const h = Number(m[2] ?? 0), min = Number(m[3] ?? 0), sec = Number(m[4] ?? 0);
+  if (h > 23 || min > 59 || sec > 59) return null;
+  return day + (h * 3600 + min * 60 + sec) / 86400;
+}
+
+// A serial as "2026-10-21 09:30:00".
+export function instantText(s: number): string {
+  const { y, m, d } = parts(s), secs = Math.round((s - Math.floor(s)) * 86400), p = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${p(y, 4)}-${p(m)}-${p(d)} ${p(Math.floor(secs / 3600))}:${p(Math.floor(secs / 60) % 60)}:${p(secs % 60)}`;
+}

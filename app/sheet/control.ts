@@ -162,6 +162,10 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   SAVEVERSION: async (exec, m) => String((await must(exec, "version.save", { message: text(m) })).output).slice(0, 7),
   VERSIONS: async (exec) => stem(((await must(exec, "version.list")).output as { id: string; message: string }[]).map((v) => `${v.id.slice(0, 7)} ${v.message.split("\n")[0]}`)),
   DIFFVERSIONS: async (exec, a, b) => stem(((await must(exec, "version.diff", { ...(text(a).trim() ? { a: text(a) } : {}), ...(text(b).trim() ? { b: text(b) } : {}) })).output as { where: string; was: string; now: string }[]).map((c) => changeLine(c))),
+  // The clock (IronCalc action 6): SETCLOCK("2026-10-21 09:30") pins TODAY() and NOW(),
+  // SETCLOCK() gives the host's back; GETCLOCK() is NOW() as a serial.
+  SETCLOCK: async (exec, at) => (await must(exec, "workbook.clock", at === undefined || text(at).trim() === "" ? {} : { at: text(at) })).message,
+  GETCLOCK: async (exec) => (await must(exec, "workbook.clockState")).output as number,
   // Edit mode (B.7): SETEDITMODE(0) is the read view, SETEDITMODE(1) edit mode, none
   // toggles; GETEDITMODE() is 1 or 0.
   SETEDITMODE: async (exec, on) => (await must(exec, "view.editMode", on === undefined || text(on).trim() === "" ? {} : { on: text(on) })).message,

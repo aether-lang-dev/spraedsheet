@@ -26,9 +26,13 @@ the number-format cases, the series-detection cases.
    structural edits, scripted group, redo memory. Patches only if it pays.
 5. **Original workbook corpus:** open, calculate, edit, save, reopen, comparing
    semantics (not ZIP bytes) and unsupported-feature reports.
-6. **Locale/time controls:** `dates.ts` `now()` reads the host clock and zone;
+6. ~~**Locale/time controls:** `dates.ts` `now()` reads the host clock and zone;
    make the clock injectable for tests and keep saved results independent of host
-   locale.
+   locale.~~ Done 2026-10-21: `workbook.clock at=` (`SETCLOCK("2026-10-21 09:30")`,
+   a date or a serial) pins what `TODAY()` and `NOW()` read, none gives the host's
+   clock back, and the volatile cells are worked out at once; `GETCLOCK()`. A
+   session's setting, never saved, so a saved file is independent of both clock
+   and locale (a formula's cached value is not kept). Headless `sheet_clock`.
 
 ## Attribution rules
 

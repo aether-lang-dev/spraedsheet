@@ -9,7 +9,7 @@ ones are the record model, measurement, numerical tests and command hardening.
 
 | Project | Licence / reuse | Top actions |
 |---|---|---|
-| [IronCalc](IRONCALC.md) | MIT OR Apache-2.0: copy or port with attribution (`third_party/ironcalc/PROVENANCE.md`) | editing regressions and `calc_tests` workbooks; measure history cost |
+| [IronCalc](IRONCALC.md) | MIT OR Apache-2.0: copy or port with attribution (`third_party/ironcalc/PROVENANCE.md`) | editing regressions and `calc_tests` workbooks; measure history cost (the injectable clock is done) |
 | [Grist](GRIST.md) | Apache-2.0, ideas only | record identity; keyed JSON reconcile; reference fields |
 | [Airtable](AIRTABLE.md) | proprietary, public docs ideas only | saved views and record form; trigger run log |
 | [VisiData](VISIDATA.md) | GPL-3.0, ideas only | record by identity; replay preview; query lineage |
