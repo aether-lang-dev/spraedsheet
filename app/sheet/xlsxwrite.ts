@@ -12,7 +12,7 @@ import { COLS, addrOf, keyOf, order } from "./address.ts";
 import { CellError } from "./values.ts";
 import type { Value } from "./values.ts";
 import type { Page, Workbook } from "./workbook.ts";
-import { BUILTIN_FORMATS } from "./xlsx.ts";
+import { BUILTIN_FORMATS, storedFormula } from "./xlsx.ts";
 import type { Look } from "./formats.ts";
 import type { Rule } from "./validation.ts";
 import { cfXml, personId, personsXml, styleDxf, tableXml, threadsXml } from "./xlsxparts.ts";
@@ -229,7 +229,7 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
     const spark = input.startsWith("=") && /\bSPARKLINE\s*\(/i.test(input);
     if (spark) sparks++;
     if (input.startsWith("=") && excel && !spark) {
-      const f = `<f>${escapeXml(input.slice(1))}</f>`;
+      const f = `<f>${escapeXml(storedFormula(input.slice(1)))}</f>`;
       c = v instanceof CellError ? `<c r="${k}" t="e"${attrS}>${f}<v>${escapeXml(v.code)}</v></c>`
         : typeof v === "string" ? `<c r="${k}" t="str"${attrS}>${f}<v>${escapeXml(v)}</v></c>`
         : typeof v === "boolean" ? `<c r="${k}" t="b"${attrS}>${f}<v>${v ? 1 : 0}</v></c>`

@@ -12,6 +12,7 @@ import { unzip, utf8Text } from "./zip.ts";
 import { attr, all, kid, kids, parseXml, textOf } from "./xml.ts";
 import type { El } from "./xml.ts";
 import { COLS, ROWS, addrOf, colName, keyOf } from "./address.ts";
+import type { Addr } from "./address.ts";
 import { moved } from "./excel.ts";
 import type { Look } from "./formats.ts";
 import { ALLOWS } from "./protection.ts";
@@ -34,6 +35,65 @@ export interface XlsxRead {
   // The parts a file written from it carries over unchanged (its document
   // properties and theme: xlsxparts.ts's PASS_THROUGH).
   readonly kept: [string, Uint8Array][];
+}
+
+// A formula as the file stores it, as the sheet writes it: Excel keeps a
+// function newer than 2007 under a prefix (_xlfn.TEXTJOIN, _xlfn._xlws.SORT) and
+// a LAMBDA's parameters under another (_xlpm.x), and a spill's reference as
+// ANCHORARRAY(A1) where the sheet writes A1#. Text in quotes is left alone.
+export function plainFormula(text: string): string {
+  let out = "", i = 0;
+  while (i < text.length) {
+    if (text[i] === '"') {
+      let j = i + 1;
+      for (; j < text.length; j++) if (text[j] === '"') { if (text[j + 1] === '"') j++; else break; }
+      out += text.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+    const m = /^(?:_xlfn\._xlws\.|_xlfn\.|_xlpm\.|_xlws\.)/.exec(text.slice(i));
+    if (m && !/[A-Za-z0-9_.]/.test(text[i - 1] ?? "")) { i += m[0].length; continue; }
+    out += text[i++];
+  }
+  return out.replace(/\bANCHORARRAY\(([^()]*)\)/g, "$1#");
+}
+
+// The functions Excel keeps under `_xlfn.` in a file (added since Excel 2007),
+// and the two it keeps under `_xlfn._xlws.`.
+const FUTURE = new Set(`ACOT ACOTH AGGREGATE ARABIC ARRAYTOTEXT BASE BETA.DIST BETA.INV BINOM.DIST BINOM.DIST.RANGE BINOM.INV BITAND BITLSHIFT BITOR BITRSHIFT BITXOR
+BYCOL BYROW CEILING.MATH CEILING.PRECISE CHISQ.DIST CHISQ.DIST.RT CHISQ.INV CHISQ.INV.RT CHISQ.TEST CHOOSECOLS CHOOSEROWS COMBINA CONCAT CONFIDENCE.NORM CONFIDENCE.T COT COTH
+COVARIANCE.P COVARIANCE.S CSC CSCH DAYS DECIMAL DROP ERF.PRECISE ERFC.PRECISE EXPAND EXPON.DIST F.DIST F.DIST.RT F.INV F.INV.RT F.TEST FLOOR.MATH FLOOR.PRECISE
+FORECAST.ETS FORECAST.LINEAR FORMULATEXT GAMMA GAMMA.DIST GAMMA.INV GAMMALN.PRECISE GAUSS HSTACK HYPGEOM.DIST IFNA IFS IMAGE ISFORMULA ISOMITTED ISOWEEKNUM LAMBDA LET
+LOGNORM.DIST LOGNORM.INV MAKEARRAY MAP MAXIFS MINIFS MODE.MULT MODE.SNGL MUNIT NEGBINOM.DIST NETWORKDAYS.INTL NORM.DIST NORM.INV NORM.S.DIST NORM.S.INV NUMBERVALUE
+PDURATION PERCENTILE.EXC PERCENTILE.INC PERCENTRANK.EXC PERCENTRANK.INC PERMUTATIONA PHI POISSON.DIST QUARTILE.EXC QUARTILE.INC RANDARRAY RANK.AVG RANK.EQ REDUCE
+REGEXEXTRACT REGEXREPLACE REGEXTEST RRI SCAN SEC SECH SEQUENCE SHEET SHEETS SKEW.P SORTBY STDEV.P STDEV.S SWITCH T.DIST T.DIST.2T T.DIST.RT T.INV T.INV.2T T.TEST
+TAKE TEXTAFTER TEXTBEFORE TEXTJOIN TEXTSPLIT TOCOL TOROW TRIMRANGE UNICHAR UNICODE UNIQUE VALUETOTEXT VAR.P VAR.S VSTACK WEIBULL.DIST WORKDAY.INTL WRAPCOLS WRAPROWS
+XLOOKUP XMATCH XOR Z.TEST`.split(/\s+/));
+const FUTURE_WS = new Set(["FILTER", "SORT"]);
+
+// A formula as the sheet writes it, as the file stores it (the reverse of
+// plainFormula): the prefix before each newer function, and ANCHORARRAY(A1)
+// for A1#. Text in quotes is left alone.
+export function storedFormula(text: string): string {
+  let out = "", i = 0;
+  while (i < text.length) {
+    if (text[i] === '"') {
+      let j = i + 1;
+      for (; j < text.length; j++) if (text[j] === '"') { if (text[j + 1] === '"') j++; else break; }
+      out += text.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+    const w = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*(?=\()/.exec(text.slice(i));
+    if (w && !/[A-Za-z0-9_.]/.test(text[i - 1] ?? "")) {
+      const up = w[0].toUpperCase();
+      out += (FUTURE_WS.has(up) ? "_xlfn._xlws." : FUTURE.has(up) ? "_xlfn." : "") + w[0];
+      i += w[0].length;
+      continue;
+    }
+    out += text[i++];
+  }
+  return out.replace(/(\$?[A-Za-z]{1,3}\$?[0-9]+)#/g, "_xlfn.ANCHORARRAY($1)");
 }
 
 const NUMERIC = /^\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?\s*$/;
@@ -213,6 +273,9 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
     if (!xml) { report.push(`${name}: not a worksheet (a chart sheet or dialog sheet), left out`); return; }
     const ws = parseXml(utf8Text(xml));
     const shared = new Map<string, { formula: string; from: string }>();
+    // An array formula's cells (A1:C3): the others hold only the values it gave,
+    // which are its spill here, not cells of their own.
+    const arrays: [Addr, Addr][] = [];
     for (const row of all(ws, "row")) {
       const r = Number(attr(row, "r") ?? 0) - 1;
       if (r >= 0 && r < ROWS) {
@@ -223,18 +286,24 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
         const ref = attr(c, "r") ?? "", key = at(ref);
         const t = attr(c, "t") ?? "n", v = kid(c, "v"), f = kid(c, "f");
         let input = "";
+        if (f && attr(f, "t") === "array") {
+          const [from, to] = (attr(f, "ref") ?? "").replace(/\$/g, "").split(":"), a = addrOf(from ?? ""), b = addrOf(to ?? from ?? "");
+          if (a && b && keyOf(a) !== keyOf(b)) arrays.push([a, b]);
+        }
+        const spilled = !f && arrays.length > 0 && arrays.some(([a, b]) => { const x = addrOf(ref.replace(/\$/g, "")); return !!x && x.col >= a.col && x.col <= b.col && x.row >= a.row && x.row <= b.row; });
+        if (spilled && !attr(c, "s")) continue;
         if (f) {
           const kind = attr(f, "t"), si = attr(f, "si"), text = textOf(f);
           if (kind === "shared" && si !== undefined) {
-            if (text) shared.set(si, { formula: text, from: ref });
+            if (text) shared.set(si, { formula: plainFormula(text), from: ref });
             const master = shared.get(si);
             if (master) {
               const a = addrOf(master.from.replace(/\$/g, "")), b = addrOf(ref.replace(/\$/g, ""));
               input = a && b ? moved(`=${master.formula}`, { cols: b.col - a.col, rows: b.row - a.row }) : `=${master.formula}`;
             }
-          } else if (text) input = `=${text}`;
+          } else if (text) input = `=${plainFormula(text)}`;
         }
-        if (!input) {
+        if (!input && !spilled) {
           const raw = v ? textOf(v) : "";
           if (t === "s") input = strings[Number(raw)] ?? "";
           else if (t === "inlineStr") input = textOf(kid(c, "is") ?? { name: "", attrs: {}, children: [] });

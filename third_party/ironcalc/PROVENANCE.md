@@ -91,6 +91,29 @@ Editing scenarios (no code ported; the scenarios and what they expect, translate
 | `base/src/test/user_model/test_paste_merged_cells.rs` | same | a merged block onto an identical merge, onto itself, a single cell into a merge, a paste overlapping its own source, cut onto a merge; undo and redo throughout; the CSV, external-replay and containment-replacement cases not translated (see below) |
 | `base/src/test/user_model/test_autofill_rows.rs` (`styles`) | same | fill carries each source cell's look, undo and redo |
 
+Formula compatibility workbooks (docs/comparisons/IRONCALC.md action 2):
+
+| Upstream path | Local destination | What was adapted |
+|---|---|---|
+| `xlsx/tests/calc_tests/**/*.xlsx` (the 59 listed by `tests/headless/sheet_ironcalc_calc.ts`, those that come out as Excel stored them) | `third_party/ironcalc/fixtures/calc_tests/` (same relative paths) | nothing (byte for byte); read by the headless tests as base64 in `tests/headless/lib/ironcalc_calc_fixtures.ts`, which `tests/headless/lib/mkironcalc_calc.py` generates from the copies |
+
+Each workbook was saved by Excel (`docProps/app.xml` says Microsoft Excel) with
+the value it worked out stored beside each formula; the assertions are ours:
+`lib/ironcalc_cached.ts` reads those stored values and compares what this app
+works out, cell by cell. They are placeholder numbers, short strings and
+function names; no third-party notice is in the repository for them. The rest of
+`calc_tests` (162 more workbooks) is not copied yet: they come in as their
+functions are made to agree, and the ledger in `sheet_ironcalc_calc.ts`
+(`KNOWN`) lists the cells that still differ.
+
+What the workbooks found, fixed here (our own code, written from how Excel
+stores a file): Excel keeps a function newer than 2007 under `_xlfn.` in a
+file, and a LAMBDA's parameters under `_xlpm.`; none of that was understood, so
+a file saved by Excel with TEXTJOIN, XLOOKUP, SORT, LET or STDEV.S read as
+`#NAME?`, and one written by us would show the same in Excel. Cells a dynamic
+array spilled into were read as constants of their own, and then blocked the
+spill (`#SPILL!`).
+
 ## Deliberate differences
 
 Merged cells under paste and cut (`sheet_ironcalc_editing.ts`): IronCalc removes

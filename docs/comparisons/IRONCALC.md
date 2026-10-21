@@ -26,7 +26,21 @@ the number-format cases, the series-detection cases.
    that replicates merges, CSE and dynamic-array cut/paste (spill cells), the
    column-width and row-height undo cases of `test_delete_row_column_formatting`.
 2. **Formula compatibility workbooks:** a curated subset of
-   `xlsx/tests/calc_tests/`, copied byte for byte, assertions ours.
+   `xlsx/tests/calc_tests/`, copied byte for byte, assertions ours. Started
+   2026-10-21 (headless `sheet_ironcalc_calc`): Excel stored its own value beside
+   every formula in those workbooks, so they are an oracle; of 221 workbooks
+   (71,000 formula cells) 59 agreed with this app once the first two gaps below
+   were fixed, and those are in. The rest differ (about 150 workbooks) and come
+   in as the cause of each is fixed, with the ledger of cells still different.
+   Found so far: file interchange read `_xlfn.`/`_xlpm.`/ANCHORARRAY as
+   `#NAME?` and read spilled values as cells (fixed, headless `sheet_xlfn`, and
+   the prefixes are now written); whole-column and whole-row references
+   (`SUM(A:A)`, `$1:$1`) did not parse; a run of functions is missing (ROMAN,
+   ARABIC, the reciprocal trig functions, MMULT, MINVERSE, MDETERM, MUNIT,
+   COMBINA, PERMUTATIONA, FACTDOUBLE, SQRTPI, MULTINOMIAL, SERIESSUM,
+   SUMX2MY2/PY2, SUMXMY2, STDEVA ...); and Excel gives `#NUM!`/`#VALUE!` for
+   edge cases (dates out of range, negative arguments) where this app returns a
+   number.
 3. **Small ports, only where a test shows a gap:** a routine from
    `base/src/formatter/` for `numfmt.ts` (the cases are in; no code ported yet).
    Port the smallest unit with its cases.
