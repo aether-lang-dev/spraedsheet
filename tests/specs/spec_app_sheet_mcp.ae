@@ -189,5 +189,48 @@ main() {
             spec.assert_true(g.wait_cell("D", 1, ""), "D1 as it was")
         }
     }
+    spec.describe(fw, "one request, one reviewable diff (--review, B.5)") {
+        spec.it("a write is held: it is on the grid, and its diff comes back, each cell added") callback {
+            out = ok_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_write_cells", "{\"cell\": \"E7\", \"rows\": [[\"held\", \"=1+1\"]]}", "held write")
+            spec.assert_contains(out, "\"review\":{\"changes\":[\"Sheet1!E7: added held\",\"Sheet1!F7: added =1+1\"]}", "held, its diff back")
+            spec.assert_true(g.wait_cell("E", 7, "held"), "on the grid")
+            spec.assert_true(g.wait_cell("F", 7, "2"), "worked out")
+        }
+        spec.it("another request that writes is refused while it waits, and nothing is written") callback {
+            out, status = mcp_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_write_cells", "{\"cell\": \"E11\", \"rows\": [[\"no\"]]}")
+            spec.assert_eq(status, 0, "the client exits 0")
+            spec.assert_contains(out, "\"isError\":true", "a tool error")
+            spec.assert_contains(out, "a review is waiting: 2 changes; keep them or take them back first", "why")
+            spec.assert_true(g.wait_cell("E", 11, ""), "L5 untouched")
+        }
+        spec.it("the diff is read again, then taken back whole: both cells gone, the expenses as they were") callback {
+            again = ok_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_review", "{\"action\": \"diff\"}", "diff")
+            spec.assert_contains(again, "Sheet1!E7: added held", "still there")
+            out = ok_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_review", "{\"action\": \"take_back\"}", "take back")
+            spec.assert_contains(out, "took back 2 changes", "both")
+            spec.assert_true(g.wait_cell("E", 7, ""), "L1 gone")
+            spec.assert_true(g.wait_cell("F", 7, ""), "M1 gone")
+            spec.assert_true(g.wait_cell("C", 5, "75.5"), "the expenses as they were")
+            gone, _s = mcp_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_review", "{\"action\": \"diff\"}")
+            spec.assert_contains(gone, "nothing is held for review", "the hold is gone")
+        }
+        spec.it("a program is held the same way; kept, it stays, and the next request is held anew") callback {
+            out = ok_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_run_program", "{\"program\": \"LET r = SETCELL(\\\"E8\\\", \\\"kept\\\")\"}", "program")
+            spec.assert_contains(out, "\"review\":{\"changes\":[\"Sheet1!E8: added kept\"]}", "one change")
+            spec.assert_true(g.wait_cell("E", 8, "kept"), "on the grid")
+            kept = ok_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_review", "{\"action\": \"keep\"}", "keep")
+            spec.assert_contains(kept, "kept 1 change", "kept")
+            ok_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_write_cells", "{\"cell\": \"E9\", \"rows\": [[\"second\"]]}", "next")
+            ok_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_review", "{\"action\": \"take_back\"}", "take the second back")
+            spec.assert_true(g.wait_cell("E", 9, ""), "the second taken back")
+            spec.assert_true(g.wait_cell("E", 8, "kept"), "the first, kept, stays")
+        }
+        spec.it("a request that only reads leaves no hold") callback {
+            out = ok_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_call", "{\"function\": \"GETCELL\", \"args\": [\"E8\"]}", "a read")
+            spec.assert_false(string.contains(out, "\"review\""), "nothing held")
+            gone, _s = mcp_env_("SPREADSHEET_MCP_REVIEW=1", "spreadsheet_review", "{\"action\": \"diff\"}")
+            spec.assert_contains(gone, "nothing is held for review", "no hold")
+        }
+    }
     return spec.run_summary(fw)
 }

@@ -9,6 +9,13 @@ const fs = require('fs');
 const [app, command] = process.argv.slice(2);
 if (process.env.FAKE_BUS_LOG) fs.appendFileSync(process.env.FAKE_BUS_LOG, JSON.stringify(process.env.FAKE_BUS_LOG_ENV ? [app, command, process.env.SAE_APPDATA_DIR || ''] : [app, command]) + '\n');
 
+// The review (HOLDREVIEW and the rest): held or not, and the changes since,
+// in a file beside the log, since each call is a process of its own.
+const path = require('path');
+const REVIEW = process.env.FAKE_BUS_LOG ? process.env.FAKE_BUS_LOG + '.review' : null;
+const review = () => (REVIEW && fs.existsSync(REVIEW) ? JSON.parse(fs.readFileSync(REVIEW, 'utf8')) : { held: false, changes: [] });
+const keepReview = (r) => REVIEW && fs.writeFileSync(REVIEW, JSON.stringify(r));
+
 const answer = (result) => process.stdout.write(JSON.stringify({ success: true, result, errorCode: 0, error: '' }) + '\n');
 const refuse = (error) => process.stdout.write(JSON.stringify({ success: false, result: null, errorCode: 1, error }) + '\n');
 const cell = (ref, value, expression = '') => ({ ref, value, expression, comment: '', format: '' });
@@ -42,6 +49,11 @@ function batch(json) {
     if (c.command === 'SORTRANGE' && c.args[1] === 'Q') return refuse(`command ${index + 1} (SORTRANGE): Q is not in A1:B2 (nothing it did was kept)`);
     const result = c.command === 'SETCELL' ? c.args[1] : c.command === 'GETCELL' ? 'shown' : c.command === 'GETSHEETNAMES' ? stem(['Sheet1', 'Costs']) : 'OK';
     results.push({ index, command: c.command, success: true, result });
+  }
+  const r = review();
+  if (r.held) {
+    for (const c of calls) if (c.command === 'SETCELL') r.changes.push('Sheet1!' + c.args[0] + ': added ' + c.args[1]);
+    keepReview(r);
   }
   answer(JSON.stringify(results));
 }
@@ -87,6 +99,17 @@ if (process.env.FAKE_BUS_NO_APP) {
   answer([{ id: 1, type: 'vstack' }]);
 } else if (command.startsWith('@ui ')) {
   refuse('@ui: ' + command.slice(4) + ' is not a path the control bus passes to the UI driver');
+} else if (command === 'HOLDREVIEW(1)' || command === 'HOLDREVIEW()') {
+  const r = review();
+  if (r.held && command === 'HOLDREVIEW(1)') refuse('a review is waiting: ' + r.changes.length + ' changes; keep them or take them back first');
+  else { if (!r.held) keepReview({ held: true, changes: [] }); answer(r.held ? 'already held: ' + r.changes.length + ' changes so far' : 'holding the workbook as it is for review'); }
+} else if (command === 'REVIEWDIFF()') {
+  const r = review();
+  if (!r.held) refuse('nothing is held for review: review.hold first'); else answer(stem(r.changes));
+} else if (command === 'KEEPREVIEW()' || command === 'TAKEBACKREVIEW()') {
+  const r = review();
+  if (!r.held) refuse('nothing is held for review: review.hold first');
+  else { keepReview({ held: false, changes: [] }); answer((command === 'KEEPREVIEW()' ? 'kept ' : 'took back ') + r.changes.length + ' changes'); }
 } else if (command === 'SPREADSHEET_VERSION()') {
   answer('1.0');
 } else if (command === 'LISTCOMMANDS(1)') {

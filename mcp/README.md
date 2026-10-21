@@ -71,6 +71,28 @@ and models choose better among a few. `spreadsheet_list_commands` is how a
 client finds the function it wants, and a function added to the app needs
 nothing here.
 
+## Review: one request, one diff
+
+Started with `--review` (or `SPREADSHEET_MCP_REVIEW=1`), the server holds a
+request's changes for the person to review. Before a request that writes
+(`spreadsheet_write_cells`, `spreadsheet_call`, `spreadsheet_run`,
+`spreadsheet_run_program`) the app holds the workbook as it is
+(`HOLDREVIEW`); after it, the cells it changed come back in the reply, old and
+new value or formula, as `review.changes` (`REVIEWDIFF`, B.4's diff of the
+workbook's text form). They wait. The tool `spreadsheet_review` then does one
+of:
+
+| `action` | |
+|---|---|
+| `diff` | the changes again (the person's own edits meanwhile are in them) |
+| `keep` | keeps them (`KEEPREVIEW`) |
+| `take_back` | takes every one back whole, the workbook as it was held (`TAKEBACKREVIEW`; not undoable) |
+| `hold` | holds by hand what is done from now on |
+
+While changes wait, another request that writes is refused, nothing sent.
+A request that changes nothing, or fails (the app has taken it back whole),
+leaves no hold. The hold lives in the app, so it outlasts the server.
+
 ## Nothing to escape
 
 `spreadsheet_write_cells`, `spreadsheet_call` and `spreadsheet_run_program`

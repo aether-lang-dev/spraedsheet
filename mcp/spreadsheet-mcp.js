@@ -252,11 +252,36 @@ const UI = {
   },
 };
 
-function toolsFor(surface) {
-  if (surface === 'rexx') return [RUN, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_run or a program'), SCREENSHOT, KEY, UI];
-  if (surface === 'all') return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call, a program, or spreadsheet_run'), RUN, SCREENSHOT, KEY, UI];
-  return [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call or a program'), SCREENSHOT, KEY, UI];
+// One request, one reviewable diff (--review): what a request changed waits
+// to be kept or taken back whole.
+const REVIEW_ACTIONS = ['hold', 'diff', 'keep', 'take_back'];
+const REVIEW = {
+  name: 'spreadsheet_review',
+  title: 'Review what a request changed',
+  description:
+    'With review on (the server started with --review), one request, one diff: before a request that writes, the app holds the workbook as it is; ' +
+    'after it, the cells it changed (old and new value or formula) are shown, and they wait. action "diff" shows them again, ' +
+    '"keep" keeps them, "take_back" takes every one back whole (not undoable), "hold" holds by hand what is done from now on. ' +
+    'Until the changes are kept or taken back, another request that writes is refused. The diff also holds any edit the person makes meanwhile. ' + LIMITS,
+  inputSchema: {
+    type: 'object',
+    properties: { action: { type: 'string', enum: REVIEW_ACTIONS, description: 'hold, diff, keep or take_back' } },
+    required: ['action'],
+    additionalProperties: false,
+  },
+};
+
+function toolsFor(surface, review = false) {
+  const tools = surface === 'rexx'
+    ? [RUN, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_run or a program'), SCREENSHOT, KEY, UI]
+    : surface === 'all'
+      ? [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call, a program, or spreadsheet_run'), RUN, SCREENSHOT, KEY, UI]
+      : [WRITE_CELLS, CALL, RUN_PROGRAM, READ_RANGE, INSPECT, listCommands('spreadsheet_call or a program'), SCREENSHOT, KEY, UI];
+  return review ? [...tools, REVIEW] : tools;
 }
+
+// --review, or SPREADSHEET_MCP_REVIEW=1.
+const reviewOf = (argv, env) => argv.includes('--review') || env.SPREADSHEET_MCP_REVIEW === '1';
 
 // --tools=X, or SPREADSHEET_MCP_TOOLS; json when neither.
 function surfaceOf(argv, env) {
@@ -517,9 +542,51 @@ function failed(message) {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
-async function callTool(name, args, surface = 'all') {
+const WRITES = new Set(['spreadsheet_write_cells', 'spreadsheet_call', 'spreadsheet_run', 'spreadsheet_run_program']);
+
+// What the app tells of a review, as a list of its changes.
+async function changesOf() {
+  const d = await bus('REVIEWDIFF()');
+  if (!d.ok) return { error: d.error };
+  const list = unstem(d.result);
+  return { changes: (Array.isArray(list) ? list : []).map(String) };
+}
+
+async function review(args) {
+  if (!REVIEW_ACTIONS.includes(args.action)) return failed('spreadsheet_review: action is hold, diff, keep or take_back, not ' + JSON.stringify(args.action));
+  if (args.action === 'diff') {
+    const c = await changesOf();
+    if (c.error) return failed(c.error);
+    return ok(c.changes.length ? c.changes.join('\n') : 'no changes', { changes: c.changes });
+  }
+  const a = await bus({ hold: 'HOLDREVIEW()', keep: 'KEEPREVIEW()', take_back: 'TAKEBACKREVIEW()' }[args.action]);
+  return a.ok ? ok(String(a.result), { result: a.result }) : failed(a.error);
+}
+
+// A tool that may write, with review on: held first (refused while another
+// request's changes wait), its diff read after; nothing changed, or a
+// failure (the app took the request back whole), leaves no hold.
+async function reviewed(name, args, surface) {
+  const h = await bus('HOLDREVIEW(1)');
+  if (!h.ok) return failed(h.error);
+  const r = await callTool(name, args, surface, false);
+  const c = r.isError ? { changes: [] } : await changesOf();
+  if (c.error || c.changes.length === 0) {
+    await bus('KEEPREVIEW()');
+    return c.error ? failed(c.error) : r;
+  }
+  const lines = c.changes.length + ' change' + (c.changes.length === 1 ? '' : 's');
+  r.content[0].text += '\n\nheld for review: ' + lines + ':\n' + c.changes.join('\n') +
+    '\nspreadsheet_review with keep or take_back ends the hold; no other request that writes is taken until then.';
+  r.structuredContent = { ...(r.structuredContent || {}), review: { changes: c.changes } };
+  return r;
+}
+
+async function callTool(name, args, surface = 'all', reviewing = false) {
   args = args || {};
-  if (!toolsFor(surface).some((t) => t.name === name)) return null;
+  if (!toolsFor(surface, reviewing).some((t) => t.name === name)) return null;
+  if (name === 'spreadsheet_review') return review(args);
+  if (reviewing && WRITES.has(name)) return reviewed(name, args, surface);
   if (name === 'spreadsheet_screenshot') {
     const a = await bus('@ui GET /screenshot?b64=1');
     if (!a.ok) return failed(a.error);
@@ -649,7 +716,7 @@ function error(id, code, message) {
   send({ jsonrpc: '2.0', id, error: { code, message } });
 }
 
-async function handle(msg, surface) {
+async function handle(msg, surface, reviewing = false) {
   const isRequest = msg.id !== undefined && msg.id !== null;
   switch (msg.method) {
     case 'initialize': {
@@ -668,11 +735,11 @@ async function handle(msg, surface) {
       if (isRequest) reply(msg.id, {});
       return;
     case 'tools/list':
-      reply(msg.id, { tools: toolsFor(surface) });
+      reply(msg.id, { tools: toolsFor(surface, reviewing) });
       return;
     case 'tools/call': {
       const p = msg.params || {};
-      const result = await callTool(p.name, p.arguments, surface);
+      const result = await callTool(p.name, p.arguments, surface, reviewing);
       if (result === null) error(msg.id, -32602, 'no tool named ' + JSON.stringify(p.name));
       else reply(msg.id, result);
       return;
@@ -686,6 +753,7 @@ async function handle(msg, surface) {
 
 if (require.main === module) {
   let surface;
+  const reviewing = reviewOf(process.argv.slice(2), process.env);
   try {
     surface = surfaceOf(process.argv.slice(2), process.env);
   } catch (e) {
@@ -708,11 +776,11 @@ if (require.main === module) {
       queue = queue.then(() => error(null, -32700, 'not JSON: ' + e.message));
       return;
     }
-    queue = queue.then(() => handle(msg, surface)).catch((e) => {
+    queue = queue.then(() => handle(msg, surface, reviewing)).catch((e) => {
       if (msg.id !== undefined && msg.id !== null) error(msg.id, -32603, String(e && e.message || e));
     });
   });
   lines.on('close', () => queue.then(() => { stopHeadless(); process.exit(0); }));
 }
 
-module.exports = { toolsFor, surfaceOf, rexxString, batchCommand, programCommand, unstem, plain, parseRange, asRows, checked, callTool, handle };
+module.exports = { reviewOf, toolsFor, surfaceOf, rexxString, batchCommand, programCommand, unstem, plain, parseRange, asRows, checked, callTool, handle };

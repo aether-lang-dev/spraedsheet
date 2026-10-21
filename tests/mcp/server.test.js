@@ -399,3 +399,77 @@ test('spreadsheet_ui: a request the driver answers, a refusal the bus gives as a
   assert.equal(replies[3].result.isError, true);
   assert.equal(calls.length, 2, 'the bad shape never reached the bus');
 });
+
+// ---- spreadsheet_review (B.5): one request, one reviewable diff
+
+const REVIEW = ['--review'];
+const sets = (cell, v) => call(2, 'spreadsheet_write_cells', { cell, rows: [[v]] });
+const commandsOf = (calls) => calls.map((c) => (c[1].startsWith('BATCH_EXECUTE') ? 'BATCH' : c[1]));
+
+test('review is off by default: no spreadsheet_review tool, and a write is one request on the bus as before', async () => {
+  const { replies, calls } = await talk([INIT, LIST, sets('A1', 'x')]);
+  assert.ok(!names(replies[1]).includes('spreadsheet_review'));
+  assert.deepEqual(commandsOf(calls), ['BATCH']);
+  assert.equal(replies[2].result.content[0].text, 'wrote 1 cell in A1:A1');
+});
+
+test('--review, or SPREADSHEET_MCP_REVIEW=1, offers spreadsheet_review with its four actions', async () => {
+  for (const { replies } of [await talk([INIT, LIST], {}, REVIEW), await talk([INIT, LIST], { SPREADSHEET_MCP_REVIEW: '1' })]) {
+    const t = replies[1].result.tools.find((x) => x.name === 'spreadsheet_review');
+    assert.deepEqual(t.inputSchema.properties.action.enum, ['hold', 'diff', 'keep', 'take_back']);
+    assert.match(t.description, /one request, one diff/);
+  }
+});
+
+test('--review: a write is held first, its diff read after, and the reply says the changes wait for keep or take_back', async () => {
+  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_write_cells', { cell: 'A1', rows: [['x', 'y']] })], {}, REVIEW);
+  assert.deepEqual(commandsOf(calls), ['HOLDREVIEW(1)', 'BATCH', 'REVIEWDIFF()']);
+  const r = replies[1].result;
+  assert.equal(r.isError, false);
+  assert.deepEqual(r.structuredContent.review, { changes: ['Sheet1!A1: added x', 'Sheet1!B1: added y'] });
+  assert.match(r.content[0].text, /held for review: 2 changes/);
+  assert.match(r.content[0].text, /Sheet1!A1: added x/);
+  assert.match(r.content[0].text, /spreadsheet_review with keep or take_back/);
+});
+
+test('--review: until it is kept or taken back, another request is refused and nothing is sent', async () => {
+  const { replies, calls } = await talk([INIT, sets('A1', 'x'), call(3, 'spreadsheet_write_cells', { cell: 'B1', rows: [['z']] })], {}, REVIEW);
+  assert.equal(replies[2].result.isError, true);
+  assert.match(replies[2].result.content[0].text, /a review is waiting: 1 changes; keep them or take them back first/);
+  assert.deepEqual(commandsOf(calls), ['HOLDREVIEW(1)', 'BATCH', 'REVIEWDIFF()', 'HOLDREVIEW(1)']);
+});
+
+test('--review: spreadsheet_review diff reads the changes again; keep and take_back end the hold, and the next request is held anew', async () => {
+  const { replies, calls } = await talk([INIT, sets('A1', 'x'),
+    call(3, 'spreadsheet_review', { action: 'diff' }), call(4, 'spreadsheet_review', { action: 'take_back' }),
+    sets('B1', 'y'), call(6, 'spreadsheet_review', { action: 'keep' }), call(7, 'spreadsheet_review', { action: 'keep' })], {}, REVIEW);
+  assert.deepEqual(replies[2].result.structuredContent, { changes: ['Sheet1!A1: added x'] });
+  assert.equal(replies[3].result.content[0].text, 'took back 1 changes');
+  assert.equal(replies[5].result.content[0].text, 'kept 1 changes');
+  assert.equal(replies[6].result.isError, true, 'nothing is held now');
+  assert.match(replies[6].result.content[0].text, /nothing is held for review/);
+  assert.deepEqual(commandsOf(calls), ['HOLDREVIEW(1)', 'BATCH', 'REVIEWDIFF()', 'REVIEWDIFF()', 'TAKEBACKREVIEW()', 'HOLDREVIEW(1)', 'BATCH', 'REVIEWDIFF()', 'KEEPREVIEW()', 'KEEPREVIEW()']);
+});
+
+test('--review: a request that changes nothing, or fails, leaves no hold behind', async () => {
+  const read = await talk([INIT, call(2, 'spreadsheet_call', { function: 'GETCELL', args: ['A1'] })], {}, REVIEW);
+  assert.deepEqual(commandsOf(read.calls), ['HOLDREVIEW(1)', 'LISTCOMMANDS(1)', 'BATCH', 'REVIEWDIFF()', 'KEEPREVIEW()']);
+  assert.ok(!/held for review/.test(read.replies[1].result.content[0].text));
+  const bad = await talk([INIT, call(2, 'spreadsheet_call', { function: 'SORTRANGE', args: ['A1:B2', 'Q'] })], {}, REVIEW);
+  assert.equal(bad.replies[1].result.isError, true);
+  assert.deepEqual(commandsOf(bad.calls), ['HOLDREVIEW(1)', 'LISTCOMMANDS(1)', 'BATCH', 'KEEPREVIEW()']);
+});
+
+test('--review: the hold action holds by hand; an action it does not know is refused before the bus', async () => {
+  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_review', { action: 'hold' }), call(3, 'spreadsheet_review', { action: 'burn' }), call(4, 'spreadsheet_review', {})], {}, REVIEW);
+  assert.equal(replies[1].result.content[0].text, 'holding the workbook as it is for review');
+  assert.equal(replies[2].result.isError, true);
+  assert.match(replies[2].result.content[0].text, /action is hold, diff, keep or take_back/);
+  assert.equal(replies[3].result.isError, true);
+  assert.deepEqual(commandsOf(calls), ['HOLDREVIEW()']);
+});
+
+test('--review: spreadsheet_review is no tool without it', async () => {
+  const { replies } = await talk([INIT, call(2, 'spreadsheet_review', { action: 'diff' })]);
+  assert.equal(replies[1].error.code, -32602);
+});
