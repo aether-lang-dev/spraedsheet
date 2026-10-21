@@ -162,6 +162,14 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   SAVEVERSION: async (exec, m) => String((await must(exec, "version.save", { message: text(m) })).output).slice(0, 7),
   VERSIONS: async (exec) => stem(((await must(exec, "version.list")).output as { id: string; message: string }[]).map((v) => `${v.id.slice(0, 7)} ${v.message.split("\n")[0]}`)),
   DIFFVERSIONS: async (exec, a, b) => stem(((await must(exec, "version.diff", { ...(text(a).trim() ? { a: text(a) } : {}), ...(text(b).trim() ? { b: text(b) } : {}) })).output as { where: string; was: string; now: string }[]).map((c) => changeLine(c))),
+  // One request, one reviewable diff (review.* in commands.ts): HOLDREVIEW()
+  // holds the workbook as it is (HOLDREVIEW(1) refusing when one is waiting),
+  // REVIEWDIFF() is the cells changed since as a stem, KEEPREVIEW() and
+  // TAKEBACKREVIEW() end it, whole.
+  HOLDREVIEW: async (exec, strict) => (await must(exec, "review.hold", strict !== undefined && text(strict).trim() !== "" ? { strict: text(strict) } : {})).message,
+  REVIEWDIFF: async (exec) => stem(((await must(exec, "review.diff")).output as { where: string; was: string; now: string }[]).map((c) => changeLine(c))),
+  KEEPREVIEW: async (exec) => (await must(exec, "review.keep")).message,
+  TAKEBACKREVIEW: async (exec) => (await must(exec, "review.takeback")).message,
   RESTOREVERSION: async (exec, id) => (await must(exec, "version.restore", { id: text(id) })).message,
   // Everything non-default about a cell, as a stem: CELLINFO("B3") gives
   // VALUE, FORMULA, FORMAT, COMMENT, LOOK.FILL, VALIDATION.KIND, RULES.0 and

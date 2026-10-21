@@ -144,6 +144,11 @@ const refuse = (message: string): never => { throw new Refused(message); };
 // The version repository of the page, or a refusal that says why there is none.
 const repoOf = (store: Store): RepoFs => store.repo ?? refuse("no version repository: this page has no fs grant to keep one in");
 
+// The workbook's text held for review (review.hold), by page.
+const held = new WeakMap<Store, string>();
+const heldOf = (store: Store): string => held.get(store) ?? refuse("nothing is held for review: review.hold first");
+const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
+
 // A json= parameter: an object, or a refusal that says why not.
 function jsonOf(text: string): Record<string, any> {
   try {
@@ -4137,6 +4142,48 @@ const SPECS: readonly Spec[] = [
         if (e instanceof RangeError) return refuse(e.message);
         throw e;
       }
+    },
+  },
+  {
+    // One request, one reviewable diff (B.5): the workbook's text held as it
+    // is, what is done after it the diff against that (diffText, as B.4's),
+    // kept whole or taken back whole. The MCP server's spreadsheet_review
+    // holds before a request and shows the diff after it. A hold lives with
+    // the page (no repository needed); strict= refuses a second hold.
+    id: "review.hold", label: "Hold for Review", params: [], optional: ["strict"], journaled: false,
+    run: async (wb, p, store) => {
+      const was = held.get(store);
+      if (was !== undefined) {
+        const n = diffText(was, textOfFile(writeSheetFile(wb))).length;
+        if (p.strict !== undefined && p.strict.trim() !== "" && p.strict.trim() !== "0") return refuse(`a review is waiting: ${plural(n, "change")}; keep them or take them back first`);
+        return { ok: true, message: `already held: ${plural(n, "change")} so far`, changed: [] };
+      }
+      held.set(store, textOfFile(writeSheetFile(wb)));
+      return { ok: true, message: "holding the workbook as it is for review", changed: [] };
+    },
+  },
+  {
+    id: "review.diff", label: "Review the Changes", params: [], journaled: false,
+    run: async (wb, _p, store) => {
+      const changes = diffText(heldOf(store), textOfFile(writeSheetFile(wb)));
+      return { ok: true, message: changes.length ? `${plural(changes.length, "change")}: ${changes.map(changeLine).join("; ")}` : "no changes", changed: [], output: changes };
+    },
+  },
+  {
+    id: "review.keep", label: "Keep the Changes", params: [], journaled: false,
+    run: async (wb, _p, store) => {
+      const n = diffText(heldOf(store), textOfFile(writeSheetFile(wb))).length;
+      held.delete(store);
+      return { ok: true, message: `kept ${plural(n, "change")}`, changed: [] };
+    },
+  },
+  {
+    id: "review.takeback", label: "Take the Changes Back", params: [], journaled: true, unstepped: true,
+    run: async (wb, _p, store) => {
+      const was = heldOf(store), n = diffText(was, textOfFile(writeSheetFile(wb))).length;
+      await open(wb, readSheetFile(fileOfText(was)));
+      held.delete(store);
+      return { ok: true, message: `took back ${plural(n, "change")}`, changed: wb.sheet.keys() };
     },
   },
   {
