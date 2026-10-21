@@ -116,6 +116,10 @@ export interface Outcome {
   readonly message: string;
   readonly changed: readonly string[];
   readonly output?: unknown;
+  // The parameters as the command resolved them (a default taken from the
+  // selection, made explicit), for a recording to keep: a replay then goes to
+  // the same place whatever is selected later.
+  readonly resolved?: Params;
 }
 
 interface Spec {
@@ -275,7 +279,7 @@ async function drawn(wb: Workbook, p: Params, parts: Partial<Drawing> & { kind: 
   if (page.drawings.some((d) => d.name.toLowerCase() === name.toLowerCase())) refuse(`a drawing is named ${name} already`);
   const d = { ...parts, name, at, w: size(p.w, w0), h: size(p.h, h0) } as Drawing;
   page.drawings = [...page.drawings, d];
-  return { ok: true, message: `${name}: ${describeDrawing(d)}`, changed: [], output: name };
+  return { ok: true, message: `${name}: ${describeDrawing(d)}`, changed: [], output: name, resolved: { ...p, at: keyOf(at) } };
 }
 
 // fill= and line= as colours (a theme's roles kept), when given.
@@ -1087,7 +1091,7 @@ const SPECS: readonly Spec[] = [
       const name = p.name.trim();
       if (!MACRO_NAME.test(name)) refuse(`${p.name} is not a macro's name (a letter, then letters, digits or _)`);
       if (wb.recording) refuse(`recording ${wb.recording.name} already: stop it first`);
-      wb.recording = { name, lines: [] };
+      wb.recording = { name, lines: [], sheet: wb.active };
       return { ok: true, message: `recording ${name}`, changed: [] };
     },
   },
@@ -1096,7 +1100,11 @@ const SPECS: readonly Spec[] = [
     run: async (wb) => {
       const r = wb.recording ?? refuse("nothing is being recorded");
       wb.recording = null;
-      const text = toRexx(r.name, r.lines);
+      // With several sheets, the program starts on the sheet it was recorded on, so a
+      // run from another sheet does not do it there; a recording that begins by
+      // switching sheet has its own first line.
+      const lines = r.lines.length && wb.pages().length > 1 && !r.lines[0].startsWith("sheet.activate ") ? [lineOf("sheet.activate", { name: r.sheet }), ...r.lines] : r.lines;
+      const text = toRexx(r.name, lines, r.lines.length);
       wb.macros.set(r.name, text);
       return { ok: true, message: `${r.name}: ${r.lines.length} command${r.lines.length === 1 ? "" : "s"} recorded`, changed: [], output: text };
     },
@@ -4578,7 +4586,7 @@ export class Commands {
         try { await this.runOnOpen(); } finally { this.#triggering--; }
       }
       // Recording a macro: the command, as its line.
-      if (outcome.ok && spec!.journaled && this.#wb.recording && this.#replaying === 0) this.#wb.recording.lines.push(lineOf(id, params));
+      if (outcome.ok && spec!.journaled && this.#wb.recording && this.#replaying === 0) this.#wb.recording.lines.push(lineOf(id, outcome.resolved ?? params));
       if (outcome.ok && before) this.#wb.changed(before, spec!.label);
       if (outcome.ok && spec!.journaled) this.#journal.push(lineOf(id, params));
       // Every recalculation: the workbook's checks worked out again (B.6).

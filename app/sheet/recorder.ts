@@ -36,13 +36,13 @@ export function literal(s: string): string {
 const quoted = (s: string): string => `"${s.replace(/"/g, '""')}"`;
 
 // The recorded command lines as a program, headed by its name.
-export function toRexx(name: string, lines: readonly string[]): string {
+export function toRexx(name: string, lines: readonly string[], counted = lines.length): string {
   const body = lines.map((line) => {
     const { id, params } = parseLine(line);
     if (id === "cell.set" && Object.keys(params).length === 2) return `CALL SETCELL ${literal(params.cell)}, ${literal(params.input)}`;
     return `ADDRESS SHEET ${quoted(line)}`;
   });
-  return [`/* ${name}: recorded by the spreadsheet, ${lines.length} command${lines.length === 1 ? "" : "s"} */`, ...body].join("\n");
+  return [`/* ${name}: recorded by the spreadsheet, ${counted} command${counted === 1 ? "" : "s"} */`, ...body].join("\n");
 }
 
 // A macro's parameters as the REXX it starts with: "CELL=B2;N=5" is

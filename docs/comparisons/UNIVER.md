@@ -10,9 +10,19 @@ labels, params, journal and grouped undo; `journaled` and `unstepped` flags
 1. **Classify commands by effect.** Durable edit, view change, external effect,
    query: one field in the registry, consumed by recording, help and MCP
    discovery (today `journaled`/`unstepped` only separate two of the four).
-2. **Record resolved context.** A toolbar action on "the selection" should record
+2. ~~**Record resolved context.** A toolbar action on "the selection" should record
    its resolved sheet and range, so a replay does not target whatever is selected
-   later. Check `recorder.ts` first; this is a 7.1 follow-up, no step yet.
+   later. Check `recorder.ts` first; this is a 7.1 follow-up, no step yet.~~ Done
+   2026-10-21. Checked: ranges were already explicit in the recorded line (the
+   panels pass `v.range()`), but two things were not. A macro recorded on one
+   sheet ran on whichever sheet was active when it was run: with several sheets
+   a recording now starts `sheet.activate name=<the sheet recorded on>` (unless
+   its first command already switches sheet), and the run leaves that sheet
+   active. And `insert.shape`, `insert.picture` and `insert.textbox` without an
+   `at=` took the selection at replay time: a command can now return `resolved`
+   parameters (`Outcome.resolved`), which the recorder keeps, so the line says
+   `at=C3`. Headless `sheet_recordcontext` (failed before); `sheet_macros`'
+   expected programs gained the activate line.
 3. **Feature participation in structural edits.** Require each feature (tables,
    charts, validation, conditional formats, names, merges) to show behaviour
    through insert, delete, copy, undo and reopen; one headless test that attaches

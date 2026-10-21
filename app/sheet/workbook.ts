@@ -378,7 +378,8 @@ export class Workbook {
   // Macros, by name, their REXX (recorder.ts), saved with the workbook; and
   // the one being recorded, its command lines so far, or null.
   macros = new Map<string, string>();
-  recording: { readonly name: string; readonly lines: string[] } | null = null;
+  // The sheet that was active when recording began: the macro starts there (recorder.ts).
+  recording: { readonly name: string; readonly lines: string[]; readonly sheet: string } | null = null;
   triggers: Trigger[] = [];
   // Assertions (checks.ts): formulas that must be TRUE, kept with the
   // workbook, and what they gave when last worked out (runChecks).

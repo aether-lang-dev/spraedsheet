@@ -30,7 +30,7 @@ await cmds.run('cell.set cell=A1 input="a second sheet"');
 await cmds.run("sheet.activate name=Sheet1");
 const stopped = await cmds.run("macro.stop");
 eq("recorded: what changed the workbook, not a zoom or a read", [started.message, stopped.message, String(stopped.output).split("\n").length, String(stopped.output).includes("view.zoom"), String(stopped.output).includes("cell.get")],
-  ["recording Budget", "Budget: 8 commands recorded", 9, false, false]);
+  ["recording Budget", "Budget: 8 commands recorded", 10, false, false]);
 const again = new Workbook(), cmds2 = new Commands(again);
 await cmds2.run("formulas.use language=Excel");
 await cmds2.execute("macro.set", { name: "Budget", text: String(stopped.output) });
@@ -49,7 +49,7 @@ eq("opened again, the macros with it", [(await cmds3.run("macro.list")).output, 
 // Recording while a macro runs: the run, not what it did.
 await cmds.run("macro.record name=Twice");
 await cmds.run("macro.run name=Fill");
-eq("a macro run while recording is one line", (await cmds.run("macro.stop")).output, '/* Twice: recorded by the spreadsheet, 1 command */\nADDRESS SHEET "macro.run name=Fill"');
+eq("a macro run while recording is one line", (await cmds.run("macro.stop")).output, '/* Twice: recorded by the spreadsheet, 1 command */\nADDRESS SHEET "sheet.activate name=Sheet1"\nADDRESS SHEET "macro.run name=Fill"');
 eq("refusals", [(await cmds.run("macro.record name=9lives")).message, (await cmds.run("macro.stop")).message, (await cmds.run("macro.run name=Nope")).message, (await cmds.run("macro.delete name=Nope")).message],
   ["9lives is not a macro's name (a letter, then letters, digits or _)", "nothing is being recorded", "no macro Nope", "no macro Nope"]);
 // 7.2: parameters, and triggers. (SETCELL called as a function where an
@@ -71,7 +71,7 @@ eq("taken away", [(await cmds.run("macro.trigger name=Twice on=change range=I1:I
 await cmds.run("macro.trigger name=Hello on=open off=1");
 const said: string[] = [];
 await cmds.script('SAY RECORDMACRO("R")\nLET r = SETCELL("F1", 7)\nm = STOPRECORDING()\nSAY m\nSAY RUNMACRO("R")\nl = LISTMACROS()\nSAY l.0 l.3\nSAY DELETEMACRO("R")', (l) => said.push(l));
-eq("from REXX", said, ["recording R", '/* R: recorded by the spreadsheet, 1 command */\nCALL SETCELL "F1", "7"', "R ran", "6 Hello", "R deleted"]);
+eq("from REXX", said, ["recording R", '/* R: recorded by the spreadsheet, 1 command */\nADDRESS SHEET "sheet.activate name=Sheet1"\nCALL SETCELL "F1", "7"', "R ran", "6 Hello", "R deleted"]);
 const said2: string[] = [];
 await cmds.script('SAY RUNMACRO("Put", "CELL=H2;N=5")\nSAY GETCELL("H2")\nSAY ONCHANGE("I1:I5", "Twice")\nSAY ONCHANGE("I1:I5", "Twice", 1)\nSAY ONOPEN("Hello")', (l) => said2.push(l));
 eq("7.2 from REXX", said2, ["Put ran", "10", "Twice runs after a change to Sheet1!I1:I5", "Twice no longer runs on a change to I1:I5", "Hello runs when the workbook opens"]);
@@ -82,7 +82,7 @@ await cmds.execute("cell.set", { cell: "M1", input: "C:\\new\ttable" });
 const slashes = (await cmds.run("macro.stop")).output as string;
 await cmds.execute("cell.set", { cell: "M1", input: "" });
 await cmds.run("macro.run name=Slashes");
-eq("a recorded cell with a backslash and a tab runs back as it was", [slashes.split("\n")[1], wb.sheet.input("M1")], ['CALL SETCELL "M1", "C:\\\\new\\ttable"', "C:\\new\ttable"]);
+eq("a recorded cell with a backslash and a tab runs back as it was", [slashes.split("\n")[2], wb.sheet.input("M1")], ['CALL SETCELL "M1", "C:\\\\new\\ttable"', "C:\\new\ttable"]);
 const said3: string[] = [];
 await cmds.script('LET r = CALL twice 21\nSAY r\nCALL twice 4\nSAY RESULT\nEXIT\ntwice:\nPARSE ARG n\nRETURN n * 2', (l) => said3.push(l));
 eq("LET r = CALL f gives f's RETURN value, as RESULT does (RexxJS 5d96050)", said3, ["42", "8"]);
