@@ -357,6 +357,9 @@ export class Workbook {
   // with the file. Set through setDateSystem, which works everything out.
   #dateSystem: DateSystem = 1900;
   get dateSystem(): DateSystem { return this.#dateSystem; }
+  // The page has one epoch (dates.ts) and several workbooks may each have its
+  // own date system: the workbook now shown takes the page's epoch back.
+  claimDates(): void { setDates(this.#dateSystem); }
   async setDateSystem(system: DateSystem): Promise<void> {
     this.#dateSystem = system;
     setDates(system);

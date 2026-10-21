@@ -17,9 +17,15 @@ labels, params, journal and grouped undo; `journaled` and `unstepped` flags
    charts, validation, conditional formats, names, merges) to show behaviour
    through insert, delete, copy, undo and reopen; one headless test that attaches
    all of them to a row insert.
-4. **Extension lifetimes.** Triggers and macros (7.2) are saved with the
+4. ~~**Extension lifetimes.** Triggers and macros (7.2) are saved with the
    workbook; make sure closing a workbook removes its triggers and panels'
-   callbacks, with no stale workbook state in globals.
+   callbacks, with no stale workbook state in globals.~~ Done 2026-10-21: a
+   macro and its trigger are the workbook's own and go when it closes (tested);
+   one global did leak: the date system's epoch (`dates.ts`, one for the page).
+   Switching to a workbook counted from the epoch of the last one set, so a 1900
+   workbook shown after a 1904 one made 1904 serials. `Workbook.claimDates()` now
+   runs whenever a workbook becomes the active one (`books.ts`). Headless
+   `sheet_booksglobals`. The new clock (`workbook.clock`) is the page's by design.
 5. **Mutation journal (later).** Could cut snapshot cost and give blog-entry-todo
    B.4/B.5 their diff; do after the history-cost measurement (see IronCalc).
 

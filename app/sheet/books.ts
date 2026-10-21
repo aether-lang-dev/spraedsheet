@@ -56,6 +56,7 @@ export class Workbooks {
 
   #switch(i: number): void {
     this.#active = i;
+    this.active.wb.claimDates();
     this.onSwitch(this.active);
   }
 
