@@ -1729,7 +1729,7 @@ main() {
             spec.assert_true(g.wait_cell("H", 14, "7"), "a whole number in range is kept")
             g.command("cell.set cell=J9 input=99")
             g.command("edit.copy range=J9")
-            g.command("edit.paste at=H15")
+            g.command("edit.pasteSpecial at=H15 what=values")
             b.click("Circle invalid")
             spec.assert_true(b.wait_for_console("sheet: 1 invalid: H15"), "a paste got past it; circled")
             g.pick("A", 1)
