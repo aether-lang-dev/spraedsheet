@@ -44,6 +44,8 @@ import type { Drawing } from "./drawings.ts";
 import { ALLOWS } from "./protection.ts";
 import type { Allow, BookProtection, EditRange, SheetProtection } from "./protection.ts";
 import type { Trigger } from "./recorder.ts";
+import { checksOf } from "./checks.ts";
+import type { Check } from "./checks.ts";
 import { AUTOMATIC } from "./sheet.ts";
 import type { Calc } from "./sheet.ts";
 import type { Aggregate } from "./pivot.ts";
@@ -94,6 +96,8 @@ export interface SheetFile {
   // Its macros (recorder.ts), by name: their REXX; and what runs them.
   readonly macros: readonly [string, string][];
   readonly triggers: readonly Trigger[];
+  // Its assertions (checks.ts).
+  readonly checks: readonly Check[];
   // The Extra controls shown (the rows under the grid): a view setting.
   readonly extraControls: boolean;
 }
@@ -296,6 +300,7 @@ export function readSheetFile(data: any): SheetFile {
       ? Object.entries(data.macros as Record<string, unknown>).filter(([n, t]) => /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(n) && typeof t === "string").map(([n, t]): [string, string] => [n, t as string]) : [],
     triggers: Array.isArray(data?.triggers) ? data.triggers.filter((t: any) => t && typeof t.macro === "string" && (t.on === "open" || (t.on === "change" && parseRange(String(t.range)) && typeof t.sheet === "string")))
       .map((t: any): Trigger => ({ macro: t.macro, on: t.on, ...(t.on === "change" ? { range: parseRange(String(t.range))!, sheet: t.sheet } : {}) })) : [],
+    checks: checksOf(data?.checks),
     extraControls: data?.extraControls === true,
     cellStyles: data?.cellStyles && typeof data.cellStyles === "object" && !Array.isArray(data.cellStyles)
       ? Object.entries(data.cellStyles as Record<string, unknown>).filter(([, l]) => l && typeof l === "object").map(([n, l]): [string, Look] => [n, l as Look]) : [],
@@ -388,6 +393,7 @@ export function writeSheetFile(wb: Workbook) {
     ...(wb.extraControls ? { extraControls: true } : {}),
     ...(wb.macros.size ? { macros: Object.fromEntries([...wb.macros].sort(([a], [b]) => (a < b ? -1 : 1))) } : {}),
     ...(wb.triggers.length ? { triggers: wb.triggers.map((t) => ({ macro: t.macro, on: t.on, ...(t.range ? { range: rangeName(t.range), sheet: t.sheet } : {}) })) } : {}),
+    ...(wb.checks.length ? { checks: wb.checks.map((c) => ({ name: c.name, formula: c.formula, message: c.message, sheet: c.sheet })) } : {}),
     ...(JSON.stringify(wb.theme) !== JSON.stringify(THEMES.Office) ? { theme: THEMES[wb.theme.name] === wb.theme ? wb.theme.name : wb.theme } : {}),
   };
 }

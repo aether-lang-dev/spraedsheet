@@ -162,6 +162,12 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   SAVEVERSION: async (exec, m) => String((await must(exec, "version.save", { message: text(m) })).output).slice(0, 7),
   VERSIONS: async (exec) => stem(((await must(exec, "version.list")).output as { id: string; message: string }[]).map((v) => `${v.id.slice(0, 7)} ${v.message.split("\n")[0]}`)),
   DIFFVERSIONS: async (exec, a, b) => stem(((await must(exec, "version.diff", { ...(text(a).trim() ? { a: text(a) } : {}), ...(text(b).trim() ? { b: text(b) } : {}) })).output as { where: string; was: string; now: string }[]).map((c) => changeLine(c))),
+  // Assertions (checks.ts): ADDCHECK("Total", "B3=D3", "B3 is not the reported total")
+  // keeps a formula that must be TRUE; CHECKS() is the failing ones, a stem of
+  // "name: message"; REMOVECHECK("Total").
+  ADDCHECK: async (exec, name, formula, message) => (await must(exec, "check.add", { name: text(name), formula: text(formula), message: text(message) })).message,
+  CHECKS: async (exec) => stem(((await must(exec, "check.list")).output as { name: string; message: string; ok: boolean }[]).filter((c) => !c.ok).map((c) => `${c.name}: ${c.message}`)),
+  REMOVECHECK: async (exec, name) => (await must(exec, "check.remove", { name: text(name) })).message,
   // One request, one reviewable diff (review.* in commands.ts): HOLDREVIEW()
   // holds the workbook as it is (HOLDREVIEW(1) refusing when one is waiting),
   // REVIEWDIFF() is the cells changed since as a stem, KEEPREVIEW() and

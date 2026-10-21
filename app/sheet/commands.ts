@@ -479,6 +479,7 @@ async function openEnd(wb: Workbook, file: SheetFile): Promise<void> {
   wb.extraControls = file.extraControls;
   wb.macros = new Map(file.macros);
   wb.triggers = file.triggers.filter((t) => wb.macros.has(t.macro) && (t.on === "open" || wb.page(t.sheet ?? "")));
+  wb.checks = [...file.checks];
   wb.name = file.name;
   wb.setupScript = file.setupScript;
   await wb.settle();
@@ -488,6 +489,8 @@ async function openEnd(wb: Workbook, file: SheetFile): Promise<void> {
   // And a slicer's picks.
   for (const page of wb.pages()) if (page.slicers.some((x) => x.picked.length)) page.filtered = slicedRows(page);
   if (wb.pages().some((page) => page.slicers.length)) await wb.hiddenChanged();
+  // The checks, worked out against the file as it opens.
+  await wb.runChecks();
 }
 
 // Saved files: each under "sheet.file.<name>" (any character of the name
@@ -4098,6 +4101,43 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // Assertions in the sheet (B.6, checks.ts): a formula that must be TRUE,
+    // with a message, kept in the workbook and worked out after every
+    // command; a failing one is named in the status bar and the Audit
+    // panel. Added by a name again, in any case, it replaces that check.
+    id: "check.add", label: "Add a Check", params: ["name", "formula", "message"], journaled: false,
+    run: async (wb, p) => {
+      const name = p.name.trim(), formula = p.formula.trim().replace(/^=/, "").trim(), message = p.message.trim();
+      if (!name) refuse("a check needs a name");
+      if (!formula) refuse("a check needs a formula that must be TRUE");
+      if (!message) refuse("a check needs a message");
+      const at = wb.checks.findIndex((c) => c.name.toUpperCase() === name.toUpperCase()), check = { name, formula, message, sheet: wb.active };
+      wb.checks = at < 0 ? [...wb.checks, check] : wb.checks.map((c, i) => (i === at ? check : c));
+      const r = (await wb.runChecks()).find((x) => x.name === name)!;
+      return { ok: true, message: `${name}: ${formula} (${r.ok ? "passing" : "failing"})`, changed: [] };
+    },
+  },
+  {
+    id: "check.remove", label: "Remove a Check", params: ["name"], journaled: false,
+    run: async (wb, p) => {
+      const name = p.name.trim();
+      if (!wb.checks.some((c) => c.name.toUpperCase() === name.toUpperCase())) refuse(`no check named ${name}`);
+      wb.checks = wb.checks.filter((c) => c.name.toUpperCase() !== name.toUpperCase());
+      await wb.runChecks();
+      return { ok: true, message: `removed ${name}`, changed: [] };
+    },
+  },
+  {
+    // Every check with its state now.
+    id: "check.list", label: "Checks", params: [], journaled: false,
+    run: async (wb) => {
+      const results = await wb.runChecks();
+      const list = wb.checks.map((c, i) => ({ name: c.name, formula: c.formula, message: c.message, sheet: c.sheet, ok: results[i].ok, shown: results[i].shown }));
+      const failing = list.filter((c) => !c.ok).length;
+      return { ok: true, message: `${list.length} check${list.length === 1 ? "" : "s"}, ${failing} failing`, changed: [], output: list };
+    },
+  },
+  {
     // Versions kept in a git repository (gitstore.ts, in the page's fs):
     // each save a commit of the workbook's text, with a message; a log; the
     // difference of two versions, or of the last and the workbook now, cell
@@ -4494,6 +4534,8 @@ export class Commands {
       if (outcome.ok && spec!.journaled && this.#wb.recording && this.#replaying === 0) this.#wb.recording.lines.push(lineOf(id, params));
       if (outcome.ok && before) this.#wb.changed(before, spec!.label);
       if (outcome.ok && spec!.journaled) this.#journal.push(lineOf(id, params));
+      // Every recalculation: the workbook's checks worked out again (B.6).
+      if (outcome.ok && this.#wb.checks.length) await this.#wb.runChecks();
       return outcome;
     } catch (e) {
       if (e instanceof Refused || e instanceof RangeError) return { ok: false, message: e.message, changed: [] };

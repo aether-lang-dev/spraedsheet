@@ -41,6 +41,7 @@ import type { Drawing } from "./drawings.ts";
 import { imageOf } from "./functions.ts";
 import type { BookProtection, EditRange, SheetProtection } from "./protection.ts";
 import type { Trigger } from "./recorder.ts";
+import type { Check, CheckResult } from "./checks.ts";
 import { canonical, localized } from "./locale.ts";
 import type { Locale } from "./locale.ts";
 import type { ChartData, ChartKind, ChartOptions, Shape } from "./charts.ts";
@@ -376,6 +377,10 @@ export class Workbook {
   macros = new Map<string, string>();
   recording: { readonly name: string; readonly lines: string[] } | null = null;
   triggers: Trigger[] = [];
+  // Assertions (checks.ts): formulas that must be TRUE, kept with the
+  // workbook, and what they gave when last worked out (runChecks).
+  checks: Check[] = [];
+  checkResults: CheckResult[] = [];
   selecting = false;
   // How a URL is handed to the system (a hyperlink followed): "" when it
   // was, or why not. The app's view sets it to sae's shell.open.
@@ -615,6 +620,22 @@ export class Workbook {
     await this.#recalculate();
   }
 
+  // Every check worked out, each on its own sheet: kept as checkResults.
+  async runChecks(): Promise<CheckResult[]> {
+    const results: CheckResult[] = [];
+    for (const c of this.checks) {
+      let v: Value;
+      try {
+        v = await (this.page(c.sheet) ?? this.#pages[0]).sheet.evaluate(c.formula);
+      } catch (e) {
+        v = new CellError("#ERROR!", (e as Error).message);
+      }
+      results.push({ name: c.name, message: c.message, ok: v === true || (typeof v === "number" && v !== 0), shown: show(v) });
+    }
+    this.checkResults = results;
+    return results;
+  }
+
   // One empty sheet, as a file opened starts; where undo stops.
   reset(name = "Sheet1"): void {
     this.#active = this.#make(name, this.sheet.language);
@@ -629,6 +650,8 @@ export class Workbook {
     this.extraControls = false;
     this.macros = new Map();
     this.triggers = [];
+    this.checks = [];
+    this.checkResults = [];
     this.carried = [];
     this.#pending.clear();
     this.#undo.length = 0;
