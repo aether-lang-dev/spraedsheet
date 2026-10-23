@@ -13,7 +13,48 @@ What came before (demo 18's To do 1 to 15) is in
 `docs/spreadsheet_demo_done_and_todo.md`.
 
 
-## Paused here (2026-10-21)
+## Paused here (2026-10-23)
+
+Resumed 2026-10-21's pause; the GPU work (ae3d bump to Aether 0.837.0) paused it again.
+
+**Done since 2026-10-21, pushed** (spraedsheet main, head eecbf99; aether-ui main 426748a4):
+- Backend parity for `datagrid_set_view_only` and `datagrid_on_edit_cancel`: both live
+  in the shared `ui/module.ae` (no per-backend ABI), so nothing was missing. The datagrid_demo
+  spec ran for real: macOS and aether-linux (87 passing), iOS simulator (87), win11 MSYS2 (87),
+  Android emulator (86 + 2 failing, fixed: aether-ui 426748a4, the Android driver now lays the
+  UI out after an action, as the other three backends do; then 87).
+- Cross-sheet table references (`=SUM(Sales[Amount])`) ef8af39; IronCalc 1, editing scenarios
+  (Paste carries look/validation/comment, merges under paste/cut, fill carries the look) 5bb2192;
+  IronCalc 2 first part (`_xlfn.` read and written, spilled cells, 59 Excel-authored workbooks as an
+  oracle) ab6dd75; whole-column and whole-row references d49b29a; spec_sheet values-paste fix eecbf99.
+
+**Done, NOT pushed (local branch `ironcalc2-wip`, f893dcf and 5082ff7):** IronCalc 2 second part:
+173 of IronCalc's calc_tests workbooks (4,033 of 71,000 cells still differ, listed in
+`tests/headless/lib/ironcalc_calc_known.ts`), 25 missing functions, typed TRUE/FALSE logical,
+overflow `#NUM!`, `0^0`, fast huge binomial/Poisson; headless is green on it (all groups, sheet_mathmore).
+It is not pushed because the full `./run-tests.sh` is not green: `spec_sheet` fails from "Page Break
+Preview" on (A9's heavier border not found in 2 s, then later cases cascade, the app grows to 4 GB
+with preview left on over a far cell). The same failure showed on eecbf99 (already pushed, and green
+at 05:40) under load, and passes alone in a one-case spec, so it looks load-dependent (an Android
+emulator and mediaanalysisd were running). Unresolved: rerun `./run-tests.sh spec_sheet` on a quiet
+machine under with-test-lock.sh; if it still fails, make the case wait longer or find why
+`pageEdges` (commands.ts `printedPages`/`pdfSheet`) is slow on a many-sheet workbook.
+
+**Resume point:** `git checkout main && git merge ironcalc2-wip` (fast-forward), full
+`./run-tests.sh` green, push. Then the rest of `docs/comparisons/` in README order, none started:
+IronCalc 4, 5 (history cost; corpus round trip); VisiData 2; Univer 1, 5; HyperFormula 1, 3, 4, 5;
+Gnumeric; LibreOffice 2 to 7. Toolchain: ../aether dev tree 0.835.0 first on PATH, sae/target/toolchain
+(aeb v0.328); `touch sae/target/build/bin/sae*` after an aether-ui change that is Android-only.
+
+**Decisions needed from Paul (not built):**
+- Grist 1 to 4, Airtable 1 to 3, VisiData 1 and 4, LibreOffice 7: a record model (stable record IDs
+  independent of row position, reference fields, saved views, keyed reconcile). Wanted, and how far
+  (an ID column plus references on tables, or a full relations layer)?
+- Importer: a formula Excel stored with no array flag is intersected implicitly; this app spills it
+  (38 cells in the ledger). Insert `@` as Excel's loader does?
+- Charts on aether-ui's `vg/chart` (as before).
+
+## Earlier pause (2026-10-21)
 
 Resumed 2026-10-20's pause and worked B.4 to B.7 and some of the
 `docs/comparisons/` actions in one session (the GPU work was idle). Stage 9 (the
