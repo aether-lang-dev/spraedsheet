@@ -93,6 +93,16 @@ export interface Work {
   readonly reads: number;      // cells read by formulas, a range's every cell counted
 }
 
+// Per-formula timing (formulas.profile): null while off, else the time and runs
+// of each formula evaluated since it was turned on, by "Sheet!cell".
+let PROFILE: Map<string, { ms: number; runs: number }> | null = null;
+export function profile(on?: boolean): readonly { sheet: string; cell: string; ms: number; runs: number }[] | null {
+  if (on === true) PROFILE = new Map();
+  else if (on === false) PROFILE = null;
+  return PROFILE && [...PROFILE].map(([k, v]) => { const i = k.lastIndexOf("!"); return { sheet: k.slice(0, i), cell: k.slice(i + 1), ...v }; })
+    .sort((a, b) => b.ms - a.ms || b.runs - a.runs || (a.cell < b.cell ? -1 : 1));
+}
+
 export class Turns {
   #turn: Promise<unknown> = Promise.resolve();
   #busy = false;
@@ -793,7 +803,13 @@ export class Sheet {
     if (c?.kind === "formula") {
       const dynamic = new Set<string>();
       this.#work.evaluated++;
+      const started = PROFILE ? Date.now() : 0;
       r = (await c.run(this.#env((k) => dynamic.add(this.#local(k) ?? k)))) ?? 0;
+      if (PROFILE) {
+        const slot = `${this.#context.name}!${key}`, t = PROFILE.get(slot) ?? { ms: 0, runs: 0 };
+        t.ms += Date.now() - started; t.runs++;
+        PROFILE.set(slot, t);
+      }
       if (c.volatile || dynamic.size) this.#link(key, new Set([...c.reads.map((k) => this.#local(k) ?? k), ...dynamic]));
     } else if (c?.kind === "broken") r = c.error;
     else if (c?.kind === "constant") r = c.value;

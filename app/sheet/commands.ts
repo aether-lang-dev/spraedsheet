@@ -73,6 +73,7 @@ import { criterion, recordTest } from "./functions.ts";
 import { errorCheck } from "./errorcheck.ts";
 import { PANELS, menuLines } from "./menus.ts";
 import { allFunctions, functionInfo } from "./funcinfo.ts";
+import { profile } from "./sheet.ts";
 import { complete, cycleRef } from "./complete.ts";
 import { KEYS } from "./keys.ts";
 import { infer, run as runFill } from "./flashfill.ts";
@@ -3936,6 +3937,23 @@ const SPECS: readonly Spec[] = [
     run: async (wb) => {
       const fs = [...wb.sheet.language.functions()].sort();
       return { ok: true, message: `${fs.length} ${wb.sheet.language.name} functions`, changed: [], output: fs };
+    },
+  },
+  {
+    // Calculation timings: on=1 starts timing each formula's evaluations, on=0
+    // stops; with no on= the slowest cells (top=N, 10 by default) with their
+    // time and runs.
+    id: "formulas.profile", label: "Profile Calculation", params: [], optional: ["on", "top"], journaled: false, effect: "query",
+    run: async (_wb, p) => {
+      if (p.on !== undefined) {
+        const on = flag(p.on);
+        profile(on);
+        return { ok: true, message: on ? "profiling formula evaluations" : "profiling stopped", changed: [] };
+      }
+      const rows = profile();
+      if (!rows) return { ok: true, message: "not profiling: formulas.profile on=1 starts it", changed: [], output: [] };
+      const top = p.top === undefined ? 10 : countOf(p.top), shown = rows.slice(0, top);
+      return { ok: true, message: shown.length ? `slowest: ${shown.map((r) => `${r.sheet}!${r.cell} ${r.ms} ms in ${r.runs} run${r.runs === 1 ? "" : "s"}`).join(", ")}` : "no formula has run yet", changed: [], output: shown };
     },
   },
   {

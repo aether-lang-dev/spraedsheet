@@ -387,6 +387,7 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   STOPRECORDING: async (exec) => String((await must(exec, "macro.stop", {})).output),
   PREVIEWMACRO: async (exec, n, a) => (await must(exec, "macro.preview", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
   FUNCTIONINFO: async (exec, n) => (await must(exec, "formulas.functionInfo", { name: text(n) })).message,
+  PROFILE: async (exec, on) => (await must(exec, "formulas.profile", text(on) === "" ? {} : { on: text(on) })).message,
   RUNMACRO: async (exec, n, a) => (await must(exec, "macro.run", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
   // A macro run on open, or after a change to a range: ONOPEN("Setup"),
   // ONCHANGE("A1:A9", "Recalc"); off=1 as the last argument takes it away.

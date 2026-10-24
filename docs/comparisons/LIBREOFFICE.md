@@ -48,7 +48,12 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    the record form, and unique keys validated across a whole batch.
 4. **Inspection beyond Excel's:** calculation timings, query row lineage,
    grouping explanations; stepwise RexxJS evaluation belongs in canonical RexxJS
-   first, then vendored. Lineage: see VisiData 3.
+   first, then vendored. Lineage: see VisiData 3. Done in part 2026-10-24:
+   calculation timings, `formulas.profile` (`PROFILE()`): on=1 times each formula's
+   evaluations, none lists the slowest cells with their milliseconds and runs
+   (headless `sheet_profile`; the clock is `Date.now`, so a page's coarse clock
+   limits it). Not done: row lineage and grouping explanations wait on VisiData 3
+   (typed group keys first); stepwise REXX is RexxJS's.
 5. **Interchange honesty:** publish supported semantics and known losses; an
    exported RexxJS workbook needs a formula/results policy for apps that cannot
    run RexxJS. ODS stays cached-value import.
