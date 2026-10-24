@@ -368,9 +368,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!C23": "excel-error",
     "Sheet1!B24": "value",
     "Sheet1!C24": "value",
-    "Sheet1!B47": "value",
-    "Sheet1!C47": "value",
-    "Sheet1!B55": "value",
   },
   "MATH_AND_TRIGONOMETRY/SEQUENCE.xlsx": {
     "Sheet1!C16": "excel-error",
