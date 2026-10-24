@@ -32,13 +32,16 @@ Resumed 2026-10-21's pause; the GPU work (ae3d bump to Aether 0.837.0) paused it
 173 of IronCalc's calc_tests workbooks (4,033 of 71,000 cells still differ, listed in
 `tests/headless/lib/ironcalc_calc_known.ts`), 25 missing functions, typed TRUE/FALSE logical,
 overflow `#NUM!`, `0^0`, fast huge binomial/Poisson; headless is green on it (all groups, sheet_mathmore).
-It is not pushed because the full `./run-tests.sh` is not green: `spec_sheet` fails from "Page Break
-Preview" on (A9's heavier border not found in 2 s, then later cases cascade, the app grows to 4 GB
-with preview left on over a far cell). The same failure showed on eecbf99 (already pushed, and green
-at 05:40) under load, and passes alone in a one-case spec, so it looks load-dependent (an Android
-emulator and mediaanalysisd were running). Unresolved: rerun `./run-tests.sh spec_sheet` on a quiet
-machine under with-test-lock.sh; if it still fails, make the case wait longer or find why
-`pageEdges` (commands.ts `printedPages`/`pdfSheet`) is slow on a many-sheet workbook.
+It was held back because the full `./run-tests.sh` was red on macOS: `spec_sheet` failed from "Page Break
+Preview" on and the app grew to 4-6 GB. That was NOT load, and NOT ironcalc2-wip (eecbf99 on main failed the
+same way, quiet machine, either toolchain). Cause, found 2026-10-24 with `heap` and `malloc_history` on the
+running app: aether-ui's test server answers GET /widgets on its own pthread, which has no autorelease pool, so
+every accessibility getter it called (NSSets, NSArrays, NSStrings per widget) was leaked; spec_sheet polls
+/widgets constantly. By Page Break Preview the machine was swapping, a sae page entry ran past its 5 s time
+limit ("InternalError: interrupted" in a promise job), the Turns queue (sheet.ts) was left waiting on a promise
+that never settled, and `sheet.add` / `cell.set` never finished (A50 never set, so no page edge at A9), the
+cases after it cascading. Fixed in aether-ui c8bf9018 (a pool per request; ci.sh Phase 3c bounds RSS while
+polling /widgets). Left as it is: an interrupted promise job still wedges the Turns queue for good.
 
 **Resume point:** `git checkout main && git merge ironcalc2-wip` (fast-forward), full
 `./run-tests.sh` green, push. Then the rest of `docs/comparisons/` in README order, none started:
