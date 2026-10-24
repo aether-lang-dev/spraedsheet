@@ -32,10 +32,12 @@ export function gamma(x: number): number {
   return Math.exp(lnGamma(x));
 }
 
-// P(a, x), the regularised lower incomplete gamma function: a series
-// below a + 1, a continued fraction (Lentz) above.
-export function lowerGamma(a: number, x: number): number {
-  if (x <= 0) return 0;
+// P(a, x) and Q(a, x) = 1 - P, the regularised incomplete gamma functions,
+// each worked out directly where it is small (a series below a + 1, a continued
+// fraction (Lentz) above), so a far tail keeps its digits instead of being the
+// difference of two numbers near 1.
+function gammaPQ(a: number, x: number): { p: number; q: number } {
+  if (x <= 0) return { p: 0, q: 1 };
   const lead = a * Math.log(x) - x - lnGamma(a);
   if (x < a + 1) {
     let term = 1 / a, total = term;
@@ -44,7 +46,8 @@ export function lowerGamma(a: number, x: number): number {
       total += term;
       if (Math.abs(term) < Math.abs(total) * EPS) break;
     }
-    return Math.min(1, total * Math.exp(lead));
+    const p = Math.min(1, total * Math.exp(lead));
+    return { p, q: 1 - p };
   }
   let b = x + 1 - a, c = 1 / TINY, d = 1 / b, h = d;
   for (let i = 1; i < ITERATIONS; i++) {
@@ -59,8 +62,11 @@ export function lowerGamma(a: number, x: number): number {
     h *= step;
     if (Math.abs(step - 1) < EPS) break;
   }
-  return Math.max(0, 1 - Math.exp(lead) * h);
+  const q = Math.min(1, Math.exp(lead) * h);
+  return { p: Math.max(0, 1 - q), q };
 }
+export const lowerGamma = (a: number, x: number): number => gammaPQ(a, x).p;
+export const upperGamma = (a: number, x: number): number => gammaPQ(a, x).q;
 
 // The continued fraction of the incomplete beta function.
 function betaFraction(a: number, b: number, x: number): number {
@@ -120,9 +126,10 @@ export const erf = (x: number): number => (x < 0 ? -lowerGamma(0.5, x * x) : low
 // The standard normal's density and cumulative probability.
 export const normalDensity = (z: number): number => Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI);
 export function normalCdf(z: number): number {
-  // Far into the tails the complement keeps its precision.
-  const e = lowerGamma(0.5, (z * z) / 2);
-  return z < 0 ? (1 - e) / 2 : (1 + e) / 2;
+  // Far into the tails the complement keeps its precision: the small side is
+  // worked out directly (erfc), not as 1 minus the large one.
+  const tail = upperGamma(0.5, (z * z) / 2) / 2;
+  return z < 0 ? tail : 1 - tail;
 }
 export function normalInverse(p: number): number {
   if (!(p > 0 && p < 1)) throw new RangeError(`the normal inverse of ${p}: it must be between 0 and 1`);
@@ -143,6 +150,7 @@ export function tInverse(p: number, df: number): number {
 
 // χ² on df degrees of freedom.
 export const chiCdf = (x: number, df: number): number => lowerGamma(df / 2, x / 2);
+export const chiRightTail = (x: number, df: number): number => upperGamma(df / 2, x / 2);
 export const chiDensity = (x: number, df: number): number =>
   x <= 0 ? 0 : Math.exp((df / 2 - 1) * Math.log(x) - x / 2 - (df / 2) * Math.log(2) - lnGamma(df / 2));
 

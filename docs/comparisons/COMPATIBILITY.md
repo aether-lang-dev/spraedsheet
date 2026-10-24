@@ -35,8 +35,8 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 143 | this app gives an error where Excel stored a value |
+| `we-error` | 137 | this app gives an error where Excel stored a value |
 | `excel-error` | 132 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 75 | both give a value, and they differ |
 
-Counted 2026-10-24; the list by workbook is the ledger file itself.
+Counted 2026-10-24 (382 cells); the list by workbook is the ledger file itself.

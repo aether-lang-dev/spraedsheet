@@ -998,7 +998,60 @@ const line = (name: string, args: readonly Arg[], log: boolean): Result => {
 };
 def("TREND", 1, 3, (args) => line("TREND", args, false));
 def("GROWTH", 1, 3, (args) => line("GROWTH", args, true));
-def("LINEST", 1, 2, (args) => { const [y, x] = pairs("LINEST", known(args, 1), 0, 1, 2), f = fit("LINEST", y, x); return array(1, 2, [f.slope, f.intercept]); });
+// LINEST(known_y, [known_x], [const], [stats]): least squares on one or more
+// predictors (one column of known_x each when known_y is a column, one row each
+// when it is a row), coefficients last predictor first and the intercept
+// last; const FALSE fits through the origin; stats adds the standard errors,
+// R squared and the standard error of y, F and its degrees of freedom, and the
+// regression and residual sums of squares. Predictors that are collinear are
+// #NUM!, not a coefficient made of rounding. Fitted on centred data.
+def("LINEST", 1, 4, (args) => {
+  const yArg = args[0];
+  const asNumbers = (a: Arg): number[] => a.values.map((v) => { const t = scalar(v); return typeof t === "number" ? t : fail("#VALUE!", "LINEST takes numbers only"); });
+  const y = asNumbers(yArg), n = y.length, byRow = yArg.cols > 1 && yArg.values.length === yArg.cols;
+  if (n < 2) return fail("#DIV/0!", "LINEST needs two values or more");
+  const withConst = absent(args, 2) ? true : toNumber(val(args, 2)) !== 0, stats = absent(args, 3) ? false : toNumber(val(args, 3)) !== 0;
+  let X: number[][];
+  if (absent(args, 1)) X = y.map((_, i) => [i + 1]);
+  else {
+    const xs = asNumbers(args[1]), xa = args[1];
+    if (byRow) {
+      if (xa.cols !== n) return fail("#REF!", "LINEST's x has to have as many columns as y has");
+      const k = xs.length / n;
+      X = Array.from({ length: n }, (_, i) => Array.from({ length: k }, (_, j) => xs[j * n + i]));
+    } else {
+      if (xs.length % n !== 0 || xa.values.length / xa.cols !== n) return fail("#REF!", "LINEST's x has to have as many rows as y has");
+      X = Array.from({ length: n }, (_, i) => Array.from({ length: xa.cols }, (_, j) => xs[i * xa.cols + j]));
+    }
+  }
+  const k = X[0].length, df = n - k - (withConst ? 1 : 0);
+  if (df < 0) return fail("#NUM!", "LINEST: more predictors than values");
+  const xm = withConst ? X[0].map((_, j) => mean(X.map((r) => r[j]))) : X[0].map(() => 0), ym = withConst ? mean(y) : 0;
+  const Xc = X.map((r) => r.map((v, j) => v - xm[j])), yc = y.map((v) => v - ym);
+  const xtx = Array.from({ length: k }, (_, a) => Array.from({ length: k }, (_, b) => sum(Xc.map((r) => r[a] * r[b]))));
+  const inv = eliminate(xtx).inverse;
+  if (!inv) return fail("#NUM!", "LINEST: the x columns are collinear");
+  const xty = Array.from({ length: k }, (_, a) => sum(Xc.map((r, i) => r[a] * yc[i])));
+  const b = inv.map((row) => sum(row.map((v, j) => v * xty[j])));
+  const intercept = withConst ? ym - sum(b.map((v, j) => v * xm[j])) : 0;
+  const rev = <T,>(a: readonly T[]): T[] => [...a].reverse();
+  const coefficients: Value[] = [...rev(b), intercept];
+  if (!stats) return array(1, k + 1, coefficients);
+  const resid = X.map((r, i) => y[i] - (intercept + sum(r.map((v, j) => v * b[j]))));
+  const ssresid = sum(resid.map((r) => r * r)), sstotal = withConst ? sum(yc.map((v) => v * v)) : sum(y.map((v) => v * v)), ssreg = sstotal - ssresid;
+  const na = new CellError("#N/A", "not part of the statistics"), bad = (why: string) => new CellError("#NUM!", why);
+  const mse = df > 0 ? ssresid / df : NaN;
+  const se: Value[] = [...rev(inv.map((row, j) => Math.sqrt(mse * row[j]))), withConst ? Math.sqrt(mse * (1 / n + sum(inv.map((row, a) => sum(row.map((v, c) => xm[a] * v * xm[c])))))) : na];
+  const fixed = (v: number, why: string): Value => (Number.isFinite(v) ? v : bad(why));
+  const rows: Value[][] = [
+    coefficients,
+    se.map((v) => (typeof v === "number" ? fixed(v, "no degrees of freedom left") : v)),
+    [fixed(ssreg / sstotal, "the y values are all alike"), fixed(Math.sqrt(mse), "no degrees of freedom left"), ...Array(k - 1).fill(na)],
+    [fixed(ssreg / k / mse, "no degrees of freedom left"), df, ...Array(k - 1).fill(na)],
+    [ssreg, ssresid, ...Array(k - 1).fill(na)],
+  ];
+  return array(5, k + 1, rows.flatMap((r) => [...r, ...Array(k + 1 - r.length).fill(na)]));
+});
 // FREQUENCY(data, bins): how many fall in each bin (up to and including
 // its bound, above the one before), and one more for what is past the last.
 def("FREQUENCY", 2, 2, (args) => {
@@ -1142,14 +1195,25 @@ defDist("CHISQ.DIST", 3, 3, (args) => {
 defDist("CHISQ.DIST.RT", 2, 2, (args) => {
   const x = num(args, 0);
   need(x >= 0, `x is 0 or more, not ${x}`);
-  return 1 - D.chiCdf(x, degrees(args, 1));
+  return D.chiRightTail(x, degrees(args, 1));
 });
 const chiInverse = (p: number, df: number): number => {
   const f = (x: number) => D.chiCdf(x, df);
   return D.inverse(f, p, 0, D.upTo(f, p, df + 1));
 };
 defDist("CHISQ.INV", 2, 2, (args) => { const p = num(args, 0); probability(p, false); return chiInverse(p, degrees(args, 1)); });
-defDist("CHISQ.INV.RT", 2, 2, (args) => { const p = num(args, 0); probability(p, false); return chiInverse(1 - p, degrees(args, 1)); });
+// The right tail is inverted on the tail itself: 1 - p loses a small p.
+defDist("CHISQ.INV.RT", 2, 2, (args) => {
+  const p = num(args, 0), df = degrees(args, 1);
+  probability(p, false);
+  let lo = 0, hi = df + 1;
+  for (let i = 0; i < 2000 && D.chiRightTail(hi, df) > p; i++) hi *= 2;
+  for (let i = 0; i < 400 && hi - lo > 1e-15 * Math.max(1, lo + hi); i++) {
+    const mid = (lo + hi) / 2;
+    if (D.chiRightTail(mid, df) > p) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+});
 
 // F: left tail (or density), right tail, and their inverses.
 const fArgs = (args: readonly Arg[], i: number): [number, number] => [degrees(args, i), degrees(args, i + 1)];

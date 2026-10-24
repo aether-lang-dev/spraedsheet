@@ -439,14 +439,10 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "STATISTICAL/LINEST_LOGEST.xlsx": {
     "Sheet1!G2": "we-error",
     "Sheet1!G3": "we-error",
-    "Sheet1!D4": "we-error",
     "Sheet1!G4": "we-error",
-    "Sheet1!D5": "we-error",
     "Sheet1!G5": "we-error",
   },
   "STATISTICAL/LOGNORM.xlsx": {
-    "LOGNORM.DIST LOGNORM.INV!F17": "we-error",
-    "LOGNORM.DIST LOGNORM.INV!F18": "we-error",
     "LOGNORM.DIST LOGNORM.INV!F26": "value",
     "LOGNORM.DIST LOGNORM.INV!E66": "legacy",
     "LOGNORM.DIST LOGNORM.INV!F66": "legacy",
@@ -461,10 +457,8 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!G13": "excel-error",
   },
   "STATISTICAL/NORM_DIST.xlsx": {
-    "NORM.DIST NORM.INV!F58": "we-error",
     "NORM.DIST NORM.INV!E64": "value",
     "NORM.DIST NORM.INV!F64": "legacy",
-    "NORM.S.DIST NORM.S.INV!D19": "we-error",
     "NORM.S.DIST NORM.S.INV!C48": "legacy",
     "NORM.S.DIST NORM.S.INV!D48": "legacy",
     "NORM.S.DIST NORM.S.INV!C49": "value",
