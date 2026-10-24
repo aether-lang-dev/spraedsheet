@@ -337,6 +337,9 @@ export class Workbook {
   set theme(t: Theme) { setTheme(t); }
   readonly rexx = new RexxLanguage();
   readonly #turns = new Turns();
+  // The change being worked out failed, for good (a page job the time limit
+  // killed): the changes behind it go on. True when one was in progress.
+  interruptTurns(why: string): boolean { return this.#turns.interrupt(why); }
   // How Excel formulas are shown and typed (a view of them: they are
   // stored A1 either way, and RexxJS formulas are shown as written).
   referenceStyle: "A1" | "R1C1" = "A1";

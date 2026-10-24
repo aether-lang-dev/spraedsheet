@@ -83,22 +83,49 @@ const byKey = (a: string, b: string): number => {
 export class Turns {
   #turn: Promise<unknown> = Promise.resolve();
   #busy = false;
+  #abort: ((reason: Error) => void) | null = null;
 
   // Working a sheet out now: a formula is running (so whatever it calls
   // must not wait for a sheet to change, which waits for it).
   get busy(): boolean { return this.#busy; }
 
+  // A turn ends when its job does: with its value, or its error. A job
+  // that throws fails its turn and the queue goes on; one that never comes
+  // back (sae's page time limit killed the promise job its await was in) is
+  // failed by interrupt(), and a late answer from it is ignored.
   take<T>(work: () => Promise<T>): Promise<T> {
-    const done = this.#turn.then(async () => {
-      this.#busy = true;
-      try {
-        return await work();
-      } finally {
+    const done = this.#turn.then(() => new Promise<T>((resolve, reject) => {
+      let over = false;
+      const end = (): boolean => {
+        if (over) return false;
+        over = true;
+        if (this.#abort === abort) this.#abort = null;
         this.#busy = false;
+        return true;
+      };
+      const abort = (reason: Error) => { if (end()) reject(reason); };
+      this.#busy = true;
+      this.#abort = abort;
+      let job: Promise<T>;
+      try {
+        job = work();
+      } catch (e) {
+        if (end()) reject(e);
+        return;
       }
-    });
+      job.then((v) => { if (end()) resolve(v); }, (e) => { if (end()) reject(e); });
+    }));
     this.#turn = done.catch(() => {});
     return done;
+  }
+
+  // Fail the turn in progress, if any, with an error ("interrupted: why"),
+  // so the turns behind it run. True when there was one.
+  interrupt(why: string): boolean {
+    const abort = this.#abort;
+    if (!abort) return false;
+    abort(new Error(`interrupted: ${why}`));
+    return true;
   }
 }
 

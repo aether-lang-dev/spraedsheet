@@ -4864,6 +4864,9 @@ export class Commands {
     return this.#wb.endStoppedGroup(true) ? `taken back${await this.#takeBack()}` : "nothing to take back";
   }
 
+    // An interrupted job never comes back: the turn it held fails, so the
+    // changes behind it are not left waiting for it.
+    if (reason === "interrupted") this.#wb.interruptTurns("the page's time limit");
   #request: { cancelled: boolean } | null = null;
 
   // The step a failed request folded into, undone, with nothing to redo.
