@@ -31,6 +31,7 @@ import { CellNotes } from "./notes.ts";
 import type { Note } from "./notes.ts";
 import { RexxLanguage } from "./rexx.ts";
 import { AUTOMATIC, Sheet, Turns } from "./sheet.ts";
+import type { Work } from "./sheet.ts";
 import type { Calc, Context, SavedSheet } from "./sheet.ts";
 import { CellError } from "./values.ts";
 import type { Value } from "./values.ts";
@@ -890,6 +891,22 @@ export class Workbook {
   // After a change: what reads, on other sheets, the cells that changed
   // worked out again (and what reads those, in turn), then the active
   // sheet's styles.
+  // The work done by every sheet since resetWork(), and the rounds settle()
+  // passed changes between sheets.
+  work(): Work & { readonly rounds: number } {
+    const sum = { evaluated: 0, considered: 0, passes: 0, notified: 0, reads: 0 };
+    for (const p of this.#pages) {
+      const w = p.sheet.work();
+      sum.evaluated += w.evaluated; sum.considered += w.considered; sum.passes += w.passes; sum.notified += w.notified; sum.reads += w.reads;
+    }
+    return { ...sum, rounds: this.#rounds };
+  }
+  resetWork(): void {
+    for (const p of this.#pages) p.sheet.resetWork();
+    this.#rounds = 0;
+  }
+  #rounds = 0;
+
   async settle(): Promise<void> {
     await this.#crossCycles();
     // Under iteration a cycle through sheets is worked round by these
@@ -897,6 +914,7 @@ export class Workbook {
     const rounds = Math.max(ROUNDS, this.calculation.iterate?.max ?? 0);
     for (let round = 0; round < rounds && this.#pending.size; round++) {
       const pending = this.#pending;
+      this.#rounds++;
       this.#pending = new Map();
       for (const [from, keys] of pending) {
         const touched = [...keys].map((k) => `${from}!${k}`);

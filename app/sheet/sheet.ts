@@ -82,6 +82,17 @@ const byKey = (a: string, b: string): number => {
 
 // One change at a time, across the sheets that share it: a language's
 // evaluation may be asynchronous, and RexxJS's holds one interpreter.
+// Calculation work done, counted rather than timed: formulas evaluated, cells
+// considered for it (everything downstream of a change), recalculation
+// passes, and cells reported as changed. (The workbook adds its settle rounds.)
+export interface Work {
+  readonly evaluated: number;
+  readonly considered: number;
+  readonly passes: number;
+  readonly notified: number;
+  readonly reads: number;      // cells read by formulas, a range's every cell counted
+}
+
 export class Turns {
   #turn: Promise<unknown> = Promise.resolve();
   #busy = false;
@@ -202,6 +213,8 @@ export class Sheet {
   // How far the sheet is used, until a cell is set or a formula worked out again.
   #extent: { rows: number; cols: number } | null = null;
   readonly #readBy = new Map<string, Set<string>>();    // a cell -> the cells that read it
+  // What working things out has cost since resetWork(): see Work.
+  #work: { evaluated: number; considered: number; passes: number; notified: number; reads: number } = { evaluated: 0, considered: 0, passes: 0, notified: 0, reads: 0 };
   readonly #volatile = new Set<string>();               // the cells whose formula is volatile
   readonly #listener: SheetListener | undefined;
   #language: Language;
@@ -554,7 +567,7 @@ export class Sheet {
   // workbook's sheets (FORMULATEXT, SHEET).
   #env(read?: (k: string) => void) {
     return {
-      get: (k: string) => this.value(k),
+      get: (k: string) => { this.#work.reads++; return this.value(k); },
       spill: (k: string) => this.#spills.get(this.#local(k) ?? "") ?? null,
       read,
       input: (k: string) => { const local = this.#local(k); return local === null ? this.#context.input?.(k) ?? "" : this.input(local); },
@@ -568,15 +581,21 @@ export class Sheet {
     };
   }
 
+  work(): Work { return { ...this.#work }; }
+  resetWork(): void { this.#work = { evaluated: 0, considered: 0, passes: 0, notified: 0, reads: 0 }; }
+
   // The set cells and everything downstream of them.
   #downstream(from: readonly string[]): Set<string> {
+    // With a stack of its own: a running total thousands of rows long is a
+    // chain as deep, and recursing over it overran the engine's call stack.
     const seen = new Set<string>();
-    const visit = (k: string): void => {
-      if (seen.has(k)) return;
+    const todo = [...from].reverse();
+    while (todo.length) {
+      const k = todo.pop()!;
+      if (seen.has(k)) continue;
       seen.add(k);
-      this.#readersOf(k).forEach(visit);
-    };
-    from.forEach(visit);
+      for (const r of this.#readersOf(k)) if (!seen.has(r)) todo.push(r);
+    }
     return seen;
   }
 
@@ -651,6 +670,8 @@ export class Sheet {
     }
     this.#spillChanged = new Set();
     const mine = [...affected].filter((k) => !k.includes("!"));
+    this.#work.passes++;
+    this.#work.considered += mine.length;
     for (const k of mine) before.set(k, show(this.value(k)));
 
     const { ordered, left } = this.#ordered(affected);
@@ -671,6 +692,7 @@ export class Sheet {
     }
 
     let changed = mine.filter((k) => inSet.has(k) || before.get(k) !== show(this.value(k))).sort(byOrder);
+    this.#work.notified += changed.length;
     for (const k of changed) this.#listener?.changed(k, this.value(k));
     const moved = [...this.#spillChanged];
     if (moved.length && depth < 4) changed = [...new Set([...changed, ...(await this.#recompute(moved, depth + 1, all))])].sort(byOrder);
@@ -770,6 +792,7 @@ export class Sheet {
     let r: Result = null;
     if (c?.kind === "formula") {
       const dynamic = new Set<string>();
+      this.#work.evaluated++;
       r = (await c.run(this.#env((k) => dynamic.add(this.#local(k) ?? k)))) ?? 0;
       if (c.volatile || dynamic.size) this.#link(key, new Set([...c.reads.map((k) => this.#local(k) ?? k), ...dynamic]));
     } else if (c?.kind === "broken") r = c.error;
