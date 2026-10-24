@@ -53,12 +53,17 @@ export function call(name: string, args: readonly Arg[]): Result {
   return lifted(spec.fn, args, new Set());
 }
 
+// A function's arity, or null for the evaluator's own forms.
+export const arityOf = (name: string): { min: number; max: number } | null => library.get(name) ?? null;
+
 // Functions whose numbers must be numbers: Excel gives #VALUE! for TRUE or
 // FALSE (the maths functions read them as 1 and 0).
 const NO_LOGICALS = new Set(["ERF", "ERFC", "ERF.PRECISE", "ERFC.PRECISE", "GESTEP", "DELTA", "NOMINAL", "EFFECT", "DOLLAR", "DOLLARDE", "DOLLARFR",
   "ISODD", "ISEVEN", "EOMONTH", "EDATE", "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "YEARFRAC", "DATEDIF", "DAYS", "NETWORKDAYS", "NETWORKDAYS.INTL",
   "WORKDAY", "WORKDAY.INTL", "DATEVALUE", "TIMEVALUE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX",
   "XNPV", "XIRR", "CUMIPMT", "CUMPRINC"]);
+
+export const NO_LOGICALS_LIST: readonly string[] = [...NO_LOGICALS];
 
 // An argument that is a range where the function takes one value (val()).
 class ScalarWanted extends CellError {

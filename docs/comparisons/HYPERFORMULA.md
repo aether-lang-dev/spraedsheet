@@ -37,10 +37,19 @@ saved, reopened, drawn, all asserted); fuzz and headless-vs-interactive parity
    head: 500 rows 0.2 s (125,250 reads), 1,000 rows 0.9 s (500,500), 2,000 rows
    past the 4 s a page entry gets. The cost is real; whether to change sums
    (prefix sums give a differently rounded result) is a decision for Paul, in TODO.md.
-4. **One function metadata contract.** Arity, coercion, array lifting,
+4. ~~**One function metadata contract.** Arity, coercion, array lifting,
    volatility, help and locale names agreeing across `described.ts` and the
    function tables, rather than parallel lists. (Shared with Gnumeric's
-   maturity labels.)
-5. **A compatibility ledger:** intended Excel/RexxJS differences vs bugs vs
+   maturity labels.)~~ Done 2026-10-24 for arity, kind, volatility, the TRUE/FALSE
+   refusal, the Spanish name and where it differs from Excel: `funcinfo.ts`,
+   `formulas.functionInfo`, `formulas.functionStatus`, `FUNCTIONINFO()`; headless
+   `sheet_funcinfo` checks that the Spanish names, volatile forms, refusals and
+   special forms all name functions that exist and that the declared deviations
+   are the ledger recounted. Not done: coercion and array lifting are still in
+   the function bodies (`lifted()`), not declared; the REXX control functions
+   (`described.ts`) were already checked against `control.ts` (`sheet_described`).
+5. ~~**A compatibility ledger:** intended Excel/RexxJS differences vs bugs vs
    unsupported vs unverified. IronCalc's PROVENANCE.md "Deliberate differences"
-   is the seed.
+   is the seed.~~ Done 2026-10-24: `COMPATIBILITY.md` here (the four classes, the
+   ledger's 388 differing cells counted by kind) and the per-function count in
+   `formulas.functionStatus`.

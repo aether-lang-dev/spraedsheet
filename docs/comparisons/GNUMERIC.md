@@ -8,9 +8,13 @@ Done, so dropped: distributions, financial, regression, analysis tools, Goal
 Seek, and Solver including GRG nonlinear and evolutionary (TODO 6.8b); the
 `sheet` CLI for conversion and inspection (7.3).
 
-1. **Function maturity metadata.** For each function: implemented, known
+1. ~~**Function maturity metadata.** For each function: implemented, known
    deviations, reference examples, boundary tests. Generate status docs from
-   `described.ts` and the function tables. Shares work with HyperFormula 4.
+   `described.ts` and the function tables. Shares work with HyperFormula 4.~~ Done
+   in part 2026-10-24 with HyperFormula 4: each function's record (implemented,
+   arity, volatile, known deviations as a count of cells that differ from Excel's
+   stored values) from `formulas.functionStatus`. Not done: reference examples and
+   boundary tests per function, and a generated status document.
 2. **Numerical acceptance suite.** Extreme tails, inverses near boundaries,
    near-constant data, ill-conditioned regression, financial roots, convergence
    failure. Original fixtures from published datasets or high-precision values;

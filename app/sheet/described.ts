@@ -105,6 +105,7 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   RECORDMACRO: fn([p("name", "text", "a letter, then letters, digits or _")], "Record Macro: each command that changes the workbook a line of a REXX program, until STOPRECORDING", "what it did"),
   STOPRECORDING: fn([], "Stops recording: the macro kept with the workbook", "the macro's REXX"),
   PREVIEWMACRO: fn([p("name", "text"), opt("args", "text", "its parameters, \"CELL=B2;N=5\"")], "What a macro would do, shown without doing it: its commands, the cells each changes, which are refused", "the count, and whether a run would keep what it did before a failure"),
+  FUNCTIONINFO: fn([p("name", "text", "a function: SUM, XLOOKUP, LET")], "What the app knows of one function: its arity, kind, volatility and where it differs from Excel", "the name, its arity, and notes"),
   RUNMACRO: fn([p("name", "text"), opt("args", "text", "its parameters, \"CELL=B2;N=5\": each a variable the macro starts with")], "Runs a macro (one step of undo)", "what it did"),
   ONOPEN: fn([p("macro", "text"), opt("off", "flag", "1: no longer")], "A macro run when the workbook opens (saved with it)", "what it did"),
   ONCHANGE: fn([RANGE, p("macro", "text"), opt("off", "flag", "1: no longer")], "A macro run after each change to a range of the active sheet (saved with it)", "what it did"),

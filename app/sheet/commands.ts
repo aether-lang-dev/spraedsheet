@@ -72,6 +72,7 @@ import { distinctRows, secant, splitText } from "./whatif.ts";
 import { criterion, recordTest } from "./functions.ts";
 import { errorCheck } from "./errorcheck.ts";
 import { PANELS, menuLines } from "./menus.ts";
+import { allFunctions, functionInfo } from "./funcinfo.ts";
 import { complete, cycleRef } from "./complete.ts";
 import { KEYS } from "./keys.ts";
 import { infer, run as runFill } from "./flashfill.ts";
@@ -3914,6 +3915,24 @@ const SPECS: readonly Spec[] = [
     run: async (wb) => {
       const fs = [...wb.sheet.language.functions()].sort();
       return { ok: true, message: `${fs.length} ${wb.sheet.language.name} functions`, changed: [], output: fs };
+    },
+  },
+  {
+    // One function's record: arity, kind, volatility, the TRUE/FALSE
+    // refusal, the Spanish name, where it is known to differ from Excel.
+    id: "formulas.functionInfo", label: "Function Info", params: ["name"], journaled: false, effect: "query",
+    run: async (_wb, p) => {
+      const i = functionInfo(p.name);
+      if (!i) return refuse(`${p.name.trim().toUpperCase()} is not a function`);
+      return { ok: true, message: `${i.name}: ${i.arity || i.kind}${i.volatile ? "; volatile" : ""}${i.deviation ? "; differs from Excel somewhere" : ""}`, changed: [], output: i };
+    },
+  },
+  {
+    // Every function's record, one list.
+    id: "formulas.functionStatus", label: "Function Status", params: [], journaled: false, effect: "query",
+    run: async () => {
+      const all = allFunctions();
+      return { ok: true, message: `${all.length} functions, ${all.filter((f) => f.deviation).length} known to differ from Excel`, changed: [], output: all };
     },
   },
   {
