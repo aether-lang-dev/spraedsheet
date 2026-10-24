@@ -48,5 +48,10 @@ Seek, and Solver including GRG nonlinear and evolutionary (TODO 6.8b); the
    arguments; it now takes several predictors, `const`, and the 5-row statistics
    block, and says "the x columns are collinear" (#NUM!) where Excel would give a
    coefficient made of rounding. `LOGEST` is still missing.
-5. **Machine-readable failures and loss reports from the CLI** (`sheet convert`
-   exists; add the structured errors).
+5. ~~**Machine-readable failures and loss reports from the CLI** (`sheet convert`
+   exists; add the structured errors).~~ Done 2026-10-24: `sheet convert|run --json`:
+   convert prints one JSON object with `read`, `write` and `report` (what the file
+   left out and the writer could not keep), run prints each line and what it gave,
+   and a failure is one JSON object on stderr (`ok`, `command`, `line`, `error`,
+   `refused`) with the same exit status as before (1 refused, 2 no app). Shell test
+   `tests/cli/test_json.sh` (failed first).

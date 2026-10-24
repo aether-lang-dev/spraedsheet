@@ -15,6 +15,12 @@
 //   sheet functions                       the formula functions
 //   sheet mcp [--tools=...]               the MCP server, over stdio (mcp/spreadsheet-mcp.js)
 //
+// --json (after the subcommand) makes the result machine-readable: convert
+// and run print one JSON object on stdout, {"ok":true, ...} (convert with
+// "report", the list of what the file left out or the writer could not
+// keep; run with "results", each {"line","said"}), and a failure is one JSON
+// object on stderr, {"ok":false,"command","error","refused"[,"line"]}.
+//
 // A file goes to the app inside one bus request (an argument to sae-bus),
 // so the system's limit on a command line bounds it: about a megabyte on
 // macOS. Exit status: 0, 1 when a request was refused (said on stderr), 2
@@ -102,8 +108,17 @@ async function save(file) {
 
 const flag = (args, name) => { const i = args.indexOf(name); if (i < 0) return null; const v = args[i + 1]; args.splice(i, 2); return v; };
 
+// What the last file read or written left out (FILEREPORT), as a list.
+async function report() {
+  const r = unstem(await bus('FILEREPORT()'));
+  return Array.isArray(r) ? r.map(String) : [];
+}
+
 async function main(argv) {
   const [sub, ...args] = argv;
+  const jsonAt = args.indexOf('--json'), json = jsonAt >= 0;
+  if (json) args.splice(jsonAt, 1);
+  let current = sub, line = null;
   if (sub === 'mcp') {
     const p = spawn(process.execPath, [path.join(ROOT, 'mcp', 'spreadsheet-mcp.js'), ...args], { stdio: 'inherit' });
     return new Promise((r) => p.on('exit', (c) => r(c ?? 0)));
@@ -134,10 +149,14 @@ async function main(argv) {
     } else if (sub === 'convert') {
       if (args.length !== 2) throw new Refused('sheet convert <in> <out>');
       await open(args[0]);
+      const read = await report();
       await save(args[1]);
-      console.log(`${args[0]} -> ${args[1]}`);
+      const wrote = path.extname(args[1]).toLowerCase() === '.xlsx' ? await report() : [];
+      if (json) console.log(JSON.stringify({ ok: true, command: 'convert', in: args[0], out: args[1], read, write: wrote, report: [...read, ...wrote] }));
+      else console.log(`${args[0]} -> ${args[1]}`);
     } else if (sub === 'run') {
-      for (const line of args) {
+      const results = [];
+      for (line of args) {
         // RUNCOMMAND, the line carried as JSON: nothing in it read as REXX on
         // the way in, and one bus request per line, its answer what it gave.
         let said;
@@ -145,8 +164,10 @@ async function main(argv) {
           if (e instanceof Refused) throw new Refused(`${line}: ${e.message}`);
           throw e;
         }
-        console.log(`${line}: ${said}`);
+        if (json) results.push({ line, said }); else console.log(`${line}: ${said}`);
       }
+      line = null;
+      if (json) console.log(JSON.stringify({ ok: true, command: 'run', results }));
     } else if (sub === 'commands') {
       const list = unstem(await bus('LISTCOMMANDS(1)')).filter((c) => c && typeof c === 'object');
       const one = args[0] ? list.find((c) => String(c.name).toUpperCase() === args[0].toUpperCase()) : null;
@@ -158,7 +179,8 @@ async function main(argv) {
     if (out) { await save(out); console.log(`saved ${out}`); }
     return 0;
   } catch (e) {
-    process.stderr.write(`sheet: ${e.message}\n`);
+    if (json) process.stderr.write(JSON.stringify({ ok: false, command: current, ...(line ? { line } : {}), error: e.message, refused: e instanceof Refused }) + '\n');
+    else process.stderr.write(`sheet: ${e.message}\n`);
     return e instanceof Refused ? 1 : 2;
   } finally {
     stop();
