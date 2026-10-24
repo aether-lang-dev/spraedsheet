@@ -1199,6 +1199,13 @@ const SPECS: readonly Spec[] = [
     run: async () => refuse("a macro runs through the commands' own script runner"),
   },
   {
+    // What a macro would do, shown before it is run: each command it runs,
+    // the cells it changed and whether it was refused. Run for real, then
+    // taken back whole, so the workbook is as it was.
+    id: "macro.preview", label: "Preview Macro", params: ["name"], optional: ["args"], journaled: false, effect: "query",
+    run: async () => refuse("a macro is previewed through the commands' own script runner"),
+  },
+  {
     // A macro run when the workbook opens (on=open), or after a change to a
     // range of the active sheet (on=change range=A1:A9), as Excel's
     // Workbook_Open and Worksheet_Change; off=1 takes it away. Saved with
@@ -4693,6 +4700,7 @@ export class Commands {
       // A macro runs as a script does, one step of undo; what it does is not
       // recorded again (its own run is, while recording).
       if (id === "macro.run") return await this.#runMacro(params.name, params.args ?? "");
+      if (id === "macro.preview") return await this.#previewMacro(params.name, params.args ?? "");
       const tablesBefore = this.#wb.tablesKey();
       const outcome = areas ? await this.#overAreas(spec!, params, areas) : await spec!.run(this.#wb, params, this.#store);
       // A table defined, moved, renamed or deleted: a formula on another sheet may name it.
@@ -4712,6 +4720,7 @@ export class Commands {
         this.#triggering++;
         try { await this.runOnOpen(); } finally { this.#triggering--; }
       }
+      if (this.#trace && !id.startsWith("macro.")) this.#trace.push({ line: lineOf(id, params), ok: outcome.ok, message: outcome.message, cells: [...outcome.changed] });
       // Recording a macro: the command, as its line.
       if (outcome.ok && spec!.journaled && this.#wb.recording && this.#replaying === 0) this.#wb.recording.lines.push(lineOf(id, outcome.resolved ?? params));
       if (outcome.ok && before) this.#wb.changed(before, spec!.label);
@@ -4720,7 +4729,10 @@ export class Commands {
       if (outcome.ok && this.#wb.checks.length) await this.#wb.runChecks();
       return outcome;
     } catch (e) {
-      if (e instanceof Refused || e instanceof RangeError) return { ok: false, message: e.message, changed: [] };
+      if (e instanceof Refused || e instanceof RangeError) {
+        if (this.#trace && !id.startsWith("macro.")) this.#trace.push({ line: lineOf(id, params), ok: false, message: e.message, cells: [] });
+        return { ok: false, message: e.message, changed: [] };
+      }
       throw e;
     }
   }
@@ -4763,6 +4775,35 @@ export class Commands {
     const { name: _n, sheet: _s, notes: _o, ...view } = page;
     return viewText(old.view) !== viewText(view) ? PROTECTED : "";
   }
+  // The commands run while a preview is made: each with what it came to.
+  #trace: { line: string; ok: boolean; message: string; cells: string[] }[] | null = null;
+
+  // A macro run for real inside a group and taken back whole, its commands
+  // traced. A run that fails keeps what it did before the failure (one step
+  // of undo); the preview says so, and keeps nothing.
+  async #previewMacro(name: string, args: string): Promise<Outcome> {
+    if (this.#wb.macros.get(name.trim()) === undefined) return { ok: false, message: `no macro ${name}`, changed: [] };
+    if (this.#trace) return { ok: false, message: "a preview is being made already", changed: [] };
+    const trace: { line: string; ok: boolean; message: string; cells: string[] }[] = [];
+    const recording = this.#wb.recording;
+    this.#wb.recording = null;
+    this.#trace = trace;
+    this.#wb.beginGroup();
+    let stepped = false;
+    try {
+      await this.#runMacro(name, args);
+    } finally {
+      this.#trace = null;
+      stepped = this.#wb.endGroup(true);
+      this.#wb.recording = recording;
+    }
+    if (stepped) await this.#takeBack();
+    const refused = trace.filter((t) => !t.ok).length;
+    const n = trace.length;
+    const message = `${name.trim()} would run ${n} command${n === 1 ? "" : "s"}, ${refused ? `${refused} refused (a run keeps what it did before the failure, as one step of undo)` : "all accepted"}; nothing was changed`;
+    return { ok: true, message, changed: [], output: trace };
+  }
+
   // A macro run: its REXX, its SAY lines kept as its output.
   #replaying = 0;
   async #runMacro(name: string, args = ""): Promise<Outcome> {

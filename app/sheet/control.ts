@@ -385,6 +385,7 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   // running, reading, writing, deleting, listing.
   RECORDMACRO: async (exec, n) => (await must(exec, "macro.record", { name: text(n) })).message,
   STOPRECORDING: async (exec) => String((await must(exec, "macro.stop", {})).output),
+  PREVIEWMACRO: async (exec, n, a) => (await must(exec, "macro.preview", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
   RUNMACRO: async (exec, n, a) => (await must(exec, "macro.run", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
   // A macro run on open, or after a change to a range: ONOPEN("Setup"),
   // ONCHANGE("A1:A9", "Recalc"); off=1 as the last argument takes it away.
