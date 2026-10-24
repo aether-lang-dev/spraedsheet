@@ -7,9 +7,19 @@ Done, so dropped: one command registry reached from panels, REXX, bus and MCP;
 labels, params, journal and grouped undo; `journaled` and `unstepped` flags
 (`commands.ts`); recording as REXX and replay with arguments (TODO 7.1, 7.2).
 
-1. **Classify commands by effect.** Durable edit, view change, external effect,
+1. ~~**Classify commands by effect.** Durable edit, view change, external effect,
    query: one field in the registry, consumed by recording, help and MCP
-   discovery (today `journaled`/`unstepped` only separate two of the four).
+   discovery (today `journaled`/`unstepped` only separate two of the four).~~ Done
+   2026-10-24: every command in `commands.ts` carries `effect: "edit" | "view" |
+   "external" | "query"` (173 edits, 37 view changes, 20 external, 51 queries); the
+   read view refuses exactly the edits (the prefix test `looksOnly` and the list
+   `CHANGES_UNJOURNALED` are gone), and `catalogue()`, which the command bar and
+   menus read, carries the effect and filters by it. Headless `sheet_effects` (it
+   runs every command in the read view). Behaviour that changed with it: copy and
+   cut are view changes, so a read view can copy; `macro.trigger`, `macro.stop` and
+   `macro.run` are edits, so a read view refuses them (a trigger was let through).
+   Not done: recording still records by `journaled`, and MCP discovery lists
+   REXX functions (`described.ts`), not commands, so neither reads the field yet.
 2. ~~**Record resolved context.** A toolbar action on "the selection" should record
    its resolved sheet and range, so a replay does not target whatever is selected
    later. Check `recorder.ts` first; this is a 7.1 follow-up, no step yet.~~ Done

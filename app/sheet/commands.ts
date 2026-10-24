@@ -123,12 +123,21 @@ export interface Outcome {
   readonly resolved?: Params;
 }
 
+// What a command does, the one field help, the command bar and the read view
+// ask: an "edit" changes what the workbook holds (cells, looks, settings,
+// structure, macros); a "view" changes only what is looked at, selected or
+// copied, or moves between sheets and workbooks; "external" reaches outside
+// the workbook (files and the saved versions, the printer, a link, a file
+// opened or imported); a "query" reads and reports, changing nothing.
+export type Effect = "edit" | "view" | "external" | "query";
+
 interface Spec {
   readonly id: string;
   readonly label: string;
   readonly params: readonly string[];       // each required
   readonly optional?: readonly string[];
   readonly journaled: boolean;              // it changes the workbook (or the clipboard)
+  readonly effect: Effect;                  // what it does to the world: see Effect
   // Not a step to undo, though journaled: it changes only what is looked
   // at or copied, is undo itself, or opens a file (where undo stops).
   readonly unstepped?: true;
@@ -155,12 +164,10 @@ const held = new WeakMap<Store, string>();
 const heldOf = (store: Store): string => held.get(store) ?? refuse("nothing is held for review: review.hold first");
 const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
 
-// A read view (view.editMode off): what is let through is what only looks,
-// moves between sheets or workbooks, or opens a file; every other command
-// that changes the workbook is refused.
+// A read view (view.editMode off): only an "edit" (see Effect) is refused;
+// looking, moving between sheets or workbooks, copying, reading and opening
+// a file are let through.
 const READ_VIEW = "read view: switch edit mode on to change the workbook";
-const CHANGES_UNJOURNALED = new Set(["macro.set", "macro.delete", "macro.record", "check.add", "check.remove"]);
-const looksOnly = (id: string) => id.startsWith("view.") || id.startsWith("book.") || id.startsWith("file.") || id === "sheet.activate";
 
 // A json= parameter: an object, or a refusal that says why not.
 function jsonOf(text: string): Record<string, any> {
@@ -1115,7 +1122,7 @@ const FIND_OPTIONS = ["matchCase", "wholeCell", "inFormulas"];
 
 const SPECS: readonly Spec[] = [
   {
-    id: "cell.set", label: "Set a cell", params: ["cell", "input"], journaled: true,
+    id: "cell.set", label: "Set a cell", params: ["cell", "input"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell);
       // Its rule, if it has one: stop refuses what breaks it, warn says so.
@@ -1151,17 +1158,17 @@ const SPECS: readonly Spec[] = [
     // Several workbooks (books.ts answers these): a new one, a saved file
     // or a sample opened beside this one, another made active, one closed,
     // the list.
-    id: "book.new", label: "New Workbook", params: [], optional: ["name"], journaled: false,
+    id: "book.new", label: "New Workbook", params: [], optional: ["name"], journaled: false, effect: "view",
     run: async () => refuse("the workbooks answer this"),
   },
-  { id: "book.open", label: "Open Workbook", params: [], optional: ["name", "sample"], journaled: false, run: async () => refuse("the workbooks answer this") },
-  { id: "book.activate", label: "Switch Windows", params: ["name"], journaled: false, run: async () => refuse("the workbooks answer this") },
-  { id: "book.close", label: "Close Workbook", params: [], optional: ["name"], journaled: false, run: async () => refuse("the workbooks answer this") },
-  { id: "book.list", label: "Workbooks", params: [], journaled: false, run: async () => refuse("the workbooks answer this") },
+  { id: "book.open", label: "Open Workbook", params: [], optional: ["name", "sample"], journaled: false, effect: "view", run: async () => refuse("the workbooks answer this") },
+  { id: "book.activate", label: "Switch Windows", params: ["name"], journaled: false, effect: "view", run: async () => refuse("the workbooks answer this") },
+  { id: "book.close", label: "Close Workbook", params: [], optional: ["name"], journaled: false, effect: "view", run: async () => refuse("the workbooks answer this") },
+  { id: "book.list", label: "Workbooks", params: [], journaled: false, effect: "view", run: async () => refuse("the workbooks answer this") },
   {
     // Record Macro: from now, each command that changes the workbook a line
     // of the macro `name` (recorder.ts); macro.stop ends it.
-    id: "macro.record", label: "Record Macro", params: ["name"], journaled: false,
+    id: "macro.record", label: "Record Macro", params: ["name"], journaled: false, effect: "edit",
     run: async (wb, p) => {
       const name = p.name.trim();
       if (!MACRO_NAME.test(name)) refuse(`${p.name} is not a macro's name (a letter, then letters, digits or _)`);
@@ -1171,7 +1178,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "macro.stop", label: "Stop Recording", params: [], journaled: false,
+    id: "macro.stop", label: "Stop Recording", params: [], journaled: false, effect: "edit",
     run: async (wb) => {
       const r = wb.recording ?? refuse("nothing is being recorded");
       wb.recording = null;
@@ -1188,7 +1195,7 @@ const SPECS: readonly Spec[] = [
     // A macro run (Macros > Run): its REXX, one step of undo.
     // args= its parameters, "CELL=B2;N=5": each a REXX variable the macro
     // starts with (a recorded macro edited to use them).
-    id: "macro.run", label: "Run Macro", params: ["name"], optional: ["args"], journaled: false,
+    id: "macro.run", label: "Run Macro", params: ["name"], optional: ["args"], journaled: false, effect: "edit",
     run: async () => refuse("a macro runs through the commands' own script runner"),
   },
   {
@@ -1196,7 +1203,7 @@ const SPECS: readonly Spec[] = [
     // range of the active sheet (on=change range=A1:A9), as Excel's
     // Workbook_Open and Worksheet_Change; off=1 takes it away. Saved with
     // the workbook.
-    id: "macro.trigger", label: "Macro Trigger", params: ["name", "on"], optional: ["range", "off"], journaled: false,
+    id: "macro.trigger", label: "Macro Trigger", params: ["name", "on"], optional: ["range", "off"], journaled: false, effect: "edit",
     run: async (wb, p) => {
       const name = p.name.trim(), on = p.on.trim().toLowerCase();
       if (on !== "open" && on !== "change") refuse(`${p.on} is not open or change`);
@@ -1213,7 +1220,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "macro.get", label: "Macro", params: ["name"], journaled: false,
+    id: "macro.get", label: "Macro", params: ["name"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const t = wb.macros.get(p.name.trim()) ?? refuse(`no macro ${p.name}`);
       return { ok: true, message: `${p.name.trim()}: ${t.split("\n").length} lines`, changed: [], output: t };
@@ -1221,7 +1228,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A macro written, or edited: its REXX as given.
-    id: "macro.set", label: "Edit Macro", params: ["name", "text"], journaled: false,
+    id: "macro.set", label: "Edit Macro", params: ["name", "text"], journaled: false, effect: "edit",
     run: async (wb, p) => {
       const name = p.name.trim();
       if (!MACRO_NAME.test(name)) refuse(`${p.name} is not a macro's name (a letter, then letters, digits or _)`);
@@ -1230,21 +1237,21 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "macro.delete", label: "Delete Macro", params: ["name"], journaled: false,
+    id: "macro.delete", label: "Delete Macro", params: ["name"], journaled: false, effect: "edit",
     run: async (wb, p) => {
       if (!wb.macros.delete(p.name.trim())) refuse(`no macro ${p.name}`);
       return { ok: true, message: `${p.name.trim()} deleted`, changed: [] };
     },
   },
   {
-    id: "macro.list", label: "Macros", params: [], journaled: false,
+    id: "macro.list", label: "Macros", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const names = [...wb.macros.keys()].sort();
       return { ok: true, message: names.length ? names.join(", ") : "no macros", changed: [], output: names };
     },
   },
   {
-    id: "cell.get", label: "Read a cell", params: ["cell"], journaled: false,
+    id: "cell.get", label: "Read a cell", params: ["cell"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const key = cellOf(p.cell), shown = show(wb.sheet.value(key));
       return { ok: true, message: `${key} = ${shown}`, changed: [], output: shown };
@@ -1253,7 +1260,7 @@ const SPECS: readonly Spec[] = [
   {
     // All a script may ask of a cell (control.ts's GETFORMAT, GETCOMMENT,
     // GETMERGEDRANGE and the rest read it).
-    id: "cell.about", label: "About a cell", params: ["cell"], journaled: false,
+    id: "cell.about", label: "About a cell", params: ["cell"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const key = cellOf(p.cell), note = wb.notes.get(key), at = cellAddr(key)!, link = await linkOf(wb, key);
       const merge = wb.page(wb.active)!.merges.find((m) => overlap(m, [at, at]));
@@ -1271,7 +1278,7 @@ const SPECS: readonly Spec[] = [
     // link, merge, the rules that apply to it, the names and table it is in,
     // and what it reads and what reads it. A part it has not is left out, so
     // a plain cell lists its value alone. CELLINFO("B3") is a stem of it.
-    id: "cell.info", label: "Cell Info", params: ["cell"], journaled: false,
+    id: "cell.info", label: "Cell Info", params: ["cell"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const key = cellOf(p.cell), at = cellAddr(key)!, note = wb.notes.get(key), page = wb.page(wb.active)!;
       const input = wb.sheet.input(key), value = wb.sheet.value(key), shown = wb.textOf(key);
@@ -1313,7 +1320,7 @@ const SPECS: readonly Spec[] = [
   {
     // A cell's editor (editors.ts): a checkbox, a dropdown of options, a
     // date; kind=none takes it away.
-    id: "cell.editor", label: "Cell Editor", params: ["cell", "kind"], optional: ["options", "format"], journaled: true,
+    id: "cell.editor", label: "Cell Editor", params: ["cell", "kind"], optional: ["options", "format"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell);
       if (p.kind.toLowerCase() === "none") {
@@ -1328,7 +1335,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A checkbox ticked, or not.
-    id: "cell.toggle", label: "Toggle", params: ["cell"], journaled: true,
+    id: "cell.toggle", label: "Toggle", params: ["cell"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell);
       if (wb.notes.get(key).editor?.kind !== "checkbox") refuse(`${key} is not a checkbox`);
@@ -1337,7 +1344,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "cell.comment", label: "Comment", params: ["cell", "text"], journaled: true,
+    id: "cell.comment", label: "Comment", params: ["cell", "text"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell);
       wb.notes.set(key, { comment: p.text });
@@ -1349,7 +1356,7 @@ const SPECS: readonly Spec[] = [
     // or a place in the workbook: Sheet2!B3, B3, a name), text= shown in
     // an empty cell (the target itself without), tip= on the pointer; a
     // cell of no style of its own takes the Hyperlink style.
-    id: "cell.hyperlink", label: "Insert Link", params: ["range", "target"], optional: ["text", "tip"], journaled: true,
+    id: "cell.hyperlink", label: "Insert Link", params: ["range", "target"], optional: ["text", "tip"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const target = p.target.trim() || refuse("a link has a target");
       if (!URL_SCHEME.test(target)) placeOf(wb, target);
@@ -1365,7 +1372,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Remove Hyperlinks: the links gone, and their Hyperlink style.
-    id: "cell.removeHyperlink", label: "Remove Hyperlinks", params: ["range"], journaled: true,
+    id: "cell.removeHyperlink", label: "Remove Hyperlinks", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), keys = [...range(r[0], r[1])].filter((k) => wb.notes.get(k).hyperlink);
       for (const k of keys) wb.notes.set(k, { hyperlink: undefined, ...(wb.notes.get(k).cellStyle === "Hyperlink" ? { cellStyle: undefined } : {}) });
@@ -1376,7 +1383,7 @@ const SPECS: readonly Spec[] = [
     // Open Hyperlink: a cell's link (its own, or its HYPERLINK formula's)
     // followed: a place in the workbook selected (its sheet the active
     // one), a URL handed to the system.
-    id: "cell.followHyperlink", label: "Open Hyperlink", params: ["cell"], journaled: false,
+    id: "cell.followHyperlink", label: "Open Hyperlink", params: ["cell"], journaled: false, effect: "external",
     run: async (wb, p) => {
       const key = cellOf(p.cell), target = await linkOf(wb, key) ?? refuse(`${key} has no link`);
       if (URL_SCHEME.test(target)) {
@@ -1394,7 +1401,7 @@ const SPECS: readonly Spec[] = [
   {
     // New Comment: a thread begun at a cell, by author= (the workbook's
     // user name); a cell has one thread, which replies go on.
-    id: "comment.new", label: "New Comment", params: ["cell", "text"], optional: ["author"], journaled: true,
+    id: "comment.new", label: "New Comment", params: ["cell", "text"], optional: ["author"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell), text = p.text.trim() || refuse("a comment says something");
       if (wb.notes.get(key).thread) refuse(`${key} has a comment thread already: reply to it`);
@@ -1403,7 +1410,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "comment.reply", label: "Reply", params: ["cell", "text"], optional: ["author"], journaled: true,
+    id: "comment.reply", label: "Reply", params: ["cell", "text"], optional: ["author"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell), t = wb.notes.get(key).thread ?? refuse(`${key} has no comment thread`), text = p.text.trim() || refuse("a reply says something");
       // A reply reopens a resolved thread, as Excel's does.
@@ -1413,7 +1420,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Resolve Thread (off=1: Reopen Thread).
-    id: "comment.resolve", label: "Resolve Thread", params: ["cell"], optional: ["off"], journaled: true,
+    id: "comment.resolve", label: "Resolve Thread", params: ["cell"], optional: ["off"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell), t = wb.notes.get(key).thread ?? refuse(`${key} has no comment thread`), off = flag(p.off ?? "0");
       const { resolved: _r, ...open } = t;
@@ -1423,7 +1430,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Delete Thread, or (reply=n) one reply.
-    id: "comment.delete", label: "Delete Comment", params: ["cell"], optional: ["reply"], journaled: true,
+    id: "comment.delete", label: "Delete Comment", params: ["cell"], optional: ["reply"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell), t = wb.notes.get(key).thread ?? refuse(`${key} has no comment thread`);
       if (p.reply === undefined) {
@@ -1438,7 +1445,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A cell's thread as one line ("" when it has none).
-    id: "comment.get", label: "Comment thread", params: ["cell"], journaled: false,
+    id: "comment.get", label: "Comment thread", params: ["cell"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const key = cellOf(p.cell), t = wb.notes.get(key).thread;
       return { ok: true, message: t ? `${key}: ${threadLine(t)}` : `${key} has no comment thread`, changed: [], output: t ? threadLine(t) : "" };
@@ -1446,7 +1453,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // The comments pane: every thread on the sheet, in sheet order.
-    id: "comment.list", label: "Show Comments", params: [], journaled: false,
+    id: "comment.list", label: "Show Comments", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const listed = wb.notes.keys().filter((k) => wb.notes.get(k).thread).sort((a, b) => order(cellAddr(a)!) - order(cellAddr(b)!)).map((k) => `${k}: ${threadLine(wb.notes.get(k).thread!)}`);
       return { ok: true, message: listed.length ? listed.join("; ") : "no comments", changed: [], output: listed };
@@ -1455,7 +1462,7 @@ const SPECS: readonly Spec[] = [
   {
     // Convert to Comments: each note (over range=, or the sheet) a thread
     // begun by its author=, the note gone; a cell with a thread keeps both.
-    id: "comment.convertNotes", label: "Convert to Comments", params: [], optional: ["range", "author"], journaled: true,
+    id: "comment.convertNotes", label: "Convert to Comments", params: [], optional: ["range", "author"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = p.range ? rangeOf(p.range) : null, inside = (k: string) => !r || overlap(r, [cellAddr(k)!, cellAddr(k)!]);
       const keys = wb.notes.keys().filter((k) => wb.notes.get(k).comment && !wb.notes.get(k).thread && inside(k));
@@ -1465,7 +1472,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // The name a comment is signed with (File > Options > User name).
-    id: "comment.author", label: "User name", params: ["name"], journaled: true, unstepped: true,
+    id: "comment.author", label: "User name", params: ["name"], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, p) => {
       wb.userName = p.name.trim() || refuse("a user name is not empty");
       return { ok: true, message: `comments by ${wb.userName}`, changed: [], output: wb.userName };
@@ -1474,7 +1481,7 @@ const SPECS: readonly Spec[] = [
   {
     // Format Cells > Protection > Locked (locked=0 to unlock): what Protect
     // Sheet guards. Not while the sheet is protected.
-    id: "protect.lock", label: "Locked", params: ["range"], optional: ["locked"], journaled: true,
+    id: "protect.lock", label: "Locked", params: ["range"], optional: ["locked"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, r = rangeOf(p.range), lock = flag(p.locked ?? "1");
       if (page.protection) refuse(PROTECTED);
@@ -1486,7 +1493,7 @@ const SPECS: readonly Spec[] = [
   {
     // Protect Sheet, with a password and what it still allows (formatCells,
     // insertRows, sort ...); off=1 Unprotect Sheet, by its password.
-    id: "protect.sheet", label: "Protect Sheet", params: [], optional: ["password", "allow", "off"], journaled: true,
+    id: "protect.sheet", label: "Protect Sheet", params: [], optional: ["password", "allow", "off"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!;
       if (flag(p.off ?? "0")) {
@@ -1505,7 +1512,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Protect Workbook (its structure); off=1 to unprotect, by its password.
-    id: "protect.workbook", label: "Protect Workbook", params: [], optional: ["password", "off"], journaled: true,
+    id: "protect.workbook", label: "Protect Workbook", params: [], optional: ["password", "off"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       if (flag(p.off ?? "0")) {
         if (!wb.bookProtection) refuse("the workbook is not protected");
@@ -1522,7 +1529,7 @@ const SPECS: readonly Spec[] = [
   {
     // Allow Edit Ranges: a range whose cells may be changed on the
     // protected sheet, at once or (password=) once its password is given.
-    id: "protect.allowRange", label: "Allow Edit Ranges", params: ["title", "range"], optional: ["password"], journaled: true,
+    id: "protect.allowRange", label: "Allow Edit Ranges", params: ["title", "range"], optional: ["password"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, title = p.title.trim() || refuse("an edit range has a title"), r = rangeOf(p.range);
       if (page.protection) refuse(PROTECTED);
@@ -1533,7 +1540,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "protect.removeRange", label: "Delete Edit Range", params: ["title"], journaled: true,
+    id: "protect.removeRange", label: "Delete Edit Range", params: ["title"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, ranges = page.editRanges;
       if (page.protection) refuse(PROTECTED);
@@ -1545,7 +1552,7 @@ const SPECS: readonly Spec[] = [
   {
     // An edit range's password given, as Excel asks for it on the first
     // change: its cells may be changed until the workbook is closed.
-    id: "protect.openRange", label: "Unlock Range", params: ["title", "password"], journaled: false,
+    id: "protect.openRange", label: "Unlock Range", params: ["title", "password"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, er = page.editRanges.find((x) => x.title.toLowerCase() === p.title.trim().toLowerCase()) ?? refuse(`no edit range ${p.title}`);
       if (!opens(er.hash, p.password)) refuse("The password you supplied is not correct.");
@@ -1556,7 +1563,7 @@ const SPECS: readonly Spec[] = [
   {
     // What is protected: the sheet (and what it allows), its edit ranges,
     // the workbook's structure; and whether a cell is locked.
-    id: "protect.state", label: "Protection", params: [], optional: ["cell"], journaled: false,
+    id: "protect.state", label: "Protection", params: [], optional: ["cell"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, pr = page.protection;
       const ranges = page.editRanges.map((r) => `${r.title}=${rangeName(r.range)}${r.hash ? " (password)" : ""}`);
@@ -1565,7 +1572,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "cell.format", label: "Number format or style", params: ["cell", "format"], journaled: true,
+    id: "cell.format", label: "Number format or style", params: ["cell", "format"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell);
       wb.notes.set(key, { format: p.format });
@@ -1573,7 +1580,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "range.clear", label: "Clear contents", params: ["range"], journaled: true,
+    id: "range.clear", label: "Clear contents", params: ["range"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const r = rangeOf(p.range);
       return setting(wb, [...range(r[0], r[1])].map((k) => [k, ""] as const), `cleared ${named(r)}`);
@@ -1584,7 +1591,7 @@ const SPECS: readonly Spec[] = [
     // and max= as written or as serials), custom (formula= for the
     // range's top-left), pattern (pattern= a regular expression); mode=
     // stop, warn or info; prompt= the input message, error= its own.
-    id: "validation.set", label: "Data Validation", params: ["range", "kind"], optional: ["values", "min", "max", "formula", "pattern", "mode", "when", "prompt", "error"], journaled: true,
+    id: "validation.set", label: "Data Validation", params: ["range", "kind"], optional: ["values", "min", "max", "formula", "pattern", "mode", "when", "prompt", "error"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), keys = [...range(r[0], r[1])];
       let rule = ruleOf(p);
@@ -1598,7 +1605,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "validation.clear", label: "Clear Validation", params: ["range"], journaled: true,
+    id: "validation.clear", label: "Clear Validation", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), keys = [...range(r[0], r[1])];
       for (const k of keys) wb.notes.set(k, { validation: undefined });
@@ -1606,7 +1613,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "validation.circle", label: "Circle Invalid Data", params: [], optional: ["off"], journaled: true, unstepped: true,
+    id: "validation.circle", label: "Circle Invalid Data", params: [], optional: ["off"], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, p) => {
       wb.circling = !flag(p.off);
       const invalid = wb.invalid();
@@ -1615,7 +1622,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "range.clearFormats", label: "Clear Formats", params: ["range"], journaled: true,
+    id: "range.clearFormats", label: "Clear Formats", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), keys = [...range(r[0], r[1])];
       for (const k of keys) wb.notes.set(k, { format: "", style: "", styleExpression: "", look: undefined });
@@ -1623,7 +1630,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "range.clearComments", label: "Clear Comments", params: ["range"], journaled: true,
+    id: "range.clearComments", label: "Clear Comments", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), keys = [...range(r[0], r[1])];
       for (const k of keys) wb.notes.set(k, { comment: "" });
@@ -1631,7 +1638,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "range.clearAll", label: "Clear All", params: ["range"], journaled: true,
+    id: "range.clearAll", label: "Clear All", params: ["range"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const r = rangeOf(p.range), keys = [...range(r[0], r[1])];
       for (const k of keys) wb.notes.set(k, { comment: "", format: "", style: "", styleExpression: "", look: undefined });
@@ -1639,14 +1646,14 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "sheet.clear", label: "Clear all", params: [], journaled: true,
+    id: "sheet.clear", label: "Clear all", params: [], journaled: true, effect: "edit",
     run: (wb) => {
       wb.notes.clear();
       return setting(wb, wb.sheet.keys().map((k) => [k, ""] as const), "cleared");
     },
   },
   {
-    id: "edit.copy", label: "Copy", params: ["range"], journaled: true, unstepped: true,
+    id: "edit.copy", label: "Copy", params: ["range"], journaled: true, effect: "view", unstepped: true,
     run: async (wb, p) => {
       const r = rangeOf(p.range);
       wb.clip = clipOf(wb, r);
@@ -1656,7 +1663,7 @@ const SPECS: readonly Spec[] = [
   {
     // Cut: copied, and marked to be moved by the next paste (on the same
     // sheet), as a spreadsheet's cut is.
-    id: "edit.cut", label: "Cut", params: ["range"], journaled: true, unstepped: true,
+    id: "edit.cut", label: "Cut", params: ["range"], journaled: true, effect: "view", unstepped: true,
     run: async (wb, p) => {
       const r = rangeOf(p.range);
       wb.clip = { ...clipOf(wb, r), cut: { page: wb.page(wb.active)!, range: r } };
@@ -1669,7 +1676,7 @@ const SPECS: readonly Spec[] = [
     // cell copied into every cell). What was cut is moved instead: its
     // cells, notes and what reads them (here or on another sheet) go to
     // `at`'s first cell, what was under them is gone, and the cut is used up.
-    id: "edit.paste", label: "Paste", params: ["at"], journaled: true,
+    id: "edit.paste", label: "Paste", params: ["at"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.at), at = topLeft(r);
       const clip = wb.clip ?? refuse("nothing copied");
@@ -1715,7 +1722,7 @@ const SPECS: readonly Spec[] = [
     // Text from another app (the system clipboard): tab-separated rows
     // placed at `at`'s first cell, taken as written (its formulas are not
     // moved: they were never this sheet's).
-    id: "edit.pasteText", label: "Paste text", params: ["at", "text"], journaled: true,
+    id: "edit.pasteText", label: "Paste text", params: ["at", "text"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const at = topLeft(rangeOf(p.at));
       return setting(wb, pasted(p.text, at), `pasted text at ${keyOf(at)}`);
@@ -1727,7 +1734,7 @@ const SPECS: readonly Spec[] = [
     // multiply, divide: numbers worked, a formula there wrapped as
     // =(formula)+n), skip blanks (an empty copied cell leaves its target),
     // and transpose.
-    id: "edit.pasteSpecial", label: "Paste Special", params: ["at", "what"], optional: ["transpose", "operation", "skipBlanks"], journaled: true,
+    id: "edit.pasteSpecial", label: "Paste Special", params: ["at", "what"], optional: ["transpose", "operation", "skipBlanks"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const at = rangeOf(p.at)[0];
       const clip = wb.clip ?? refuse("nothing copied");
@@ -1771,7 +1778,7 @@ const SPECS: readonly Spec[] = [
     // Flash Fill: a column's empty cells filled by the pattern its filled
     // ones show (flashfill.ts), from the columns to its left that hold
     // something on the first example's row.
-    id: "data.flashFill", label: "Flash Fill", params: ["range"], journaled: true,
+    id: "data.flashFill", label: "Flash Fill", params: ["range"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const r = rangeOf(p.range), tl = topLeft(r);
       if (r[0].col !== r[1].col) refuse("Flash Fill fills one column");
@@ -1794,7 +1801,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "edit.fillSeries", label: "Series", params: ["range"], journaled: true,
+    id: "edit.fillSeries", label: "Series", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), tl = topLeft(r);
       const rows = Math.abs(r[0].row - r[1].row) + 1, cols = Math.abs(r[0].col - r[1].col) + 1;
@@ -1820,7 +1827,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "formulas.autoSum", label: "AutoSum", params: ["cell"], journaled: true,
+    id: "formulas.autoSum", label: "AutoSum", params: ["cell"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell), a = parseRange(key)![0];
       const isNumber = (col: number, row: number) => col >= 0 && row >= 0 && typeof wb.sheet.value(keyOf({ col, row })) === "number";
@@ -1842,12 +1849,12 @@ const SPECS: readonly Spec[] = [
       return changedBy(wb, changed, `${key} = ${show(wb.sheet.value(key))}`);
     },
   },
-  { id: "edit.fillDown", label: "Fill Down", params: ["range"], optional: ["source"], journaled: true, run: fill("down") },
-  { id: "edit.fillRight", label: "Fill Right", params: ["range"], optional: ["source"], journaled: true, run: fill("right") },
-  { id: "edit.fillUp", label: "Fill Up", params: ["range"], optional: ["source"], journaled: true, run: fill("up") },
-  { id: "edit.fillLeft", label: "Fill Left", params: ["range"], optional: ["source"], journaled: true, run: fill("left") },
+  { id: "edit.fillDown", label: "Fill Down", params: ["range"], optional: ["source"], journaled: true, effect: "edit", run: fill("down") },
+  { id: "edit.fillRight", label: "Fill Right", params: ["range"], optional: ["source"], journaled: true, effect: "edit", run: fill("right") },
+  { id: "edit.fillUp", label: "Fill Up", params: ["range"], optional: ["source"], journaled: true, effect: "edit", run: fill("up") },
+  { id: "edit.fillLeft", label: "Fill Left", params: ["range"], optional: ["source"], journaled: true, effect: "edit", run: fill("left") },
   {
-    id: "edit.undo", label: "Undo", params: [], journaled: true, unstepped: true,
+    id: "edit.undo", label: "Undo", params: [], journaled: true, effect: "edit", unstepped: true,
     run: async (wb) => {
       const label = wb.undoLabel;
       if (label === null) return changedBy(wb, [], "nothing to undo");
@@ -1856,7 +1863,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "edit.redo", label: "Redo", params: [], journaled: true, unstepped: true,
+    id: "edit.redo", label: "Redo", params: [], journaled: true, effect: "edit", unstepped: true,
     run: async (wb) => {
       const label = wb.redoLabel;
       if (label === null) return changedBy(wb, [], "nothing to redo");
@@ -1865,14 +1872,14 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "edit.find", label: "Find", params: ["text"], optional: FIND_OPTIONS, journaled: false,
+    id: "edit.find", label: "Find", params: ["text"], optional: FIND_OPTIONS, journaled: false, effect: "query",
     run: async (wb, p) => {
       const keys = found(wb.sheet, p.text, findOptions(p));
       return { ok: true, message: `find ${p.text}: ${keys.join(" ") || "none"}`, changed: [], output: keys };
     },
   },
   {
-    id: "edit.replace", label: "Replace All", params: ["text", "with"], optional: FIND_OPTIONS, journaled: true,
+    id: "edit.replace", label: "Replace All", params: ["text", "with"], optional: FIND_OPTIONS, journaled: true, effect: "edit",
     run: async (wb, p) => {
       const entries = replaced(wb.sheet, p.text, p.with, findOptions(p));
       return { ...await setting(wb, entries, `replaced ${p.text}`), output: entries.length };
@@ -1881,7 +1888,7 @@ const SPECS: readonly Spec[] = [
   {
     // The Tauri app's auto IDs: a column each inserted row is given the
     // next ID in (the prefix, then a number from `start`); no column, none.
-    id: "ids.configure", label: "Auto IDs", params: [], optional: ["column", "start", "prefix"], journaled: true,
+    id: "ids.configure", label: "Auto IDs", params: [], optional: ["column", "start", "prefix"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!;
       if (!p.column) {
@@ -1896,7 +1903,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // The row (from 1) whose auto-ID cell shows the ID; "" for none.
-    id: "ids.find", label: "Find by ID", params: ["id"], journaled: false,
+    id: "ids.find", label: "Find by ID", params: ["id"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const auto = wb.page(wb.active)!.autoId ?? refuse("no auto-ID column on this sheet");
       for (const k of within({ col: auto.column, row: 0 }, { col: auto.column, row: ROWS - 1 }, wb.sheet.keys())) {
@@ -1905,14 +1912,14 @@ const SPECS: readonly Spec[] = [
       return { ok: true, message: `no row ${p.id}`, changed: [], output: "" };
     },
   },
-  { id: "rows.insert", label: "Insert Sheet Rows", params: ["at"], optional: ["count"], journaled: true, run: restructure("insert", "row") },
-  { id: "rows.delete", label: "Delete Sheet Rows", params: ["at"], optional: ["count"], journaled: true, run: restructure("delete", "row") },
-  { id: "columns.insert", label: "Insert Sheet Columns", params: ["at"], optional: ["count"], journaled: true, run: restructure("insert", "col") },
-  { id: "columns.delete", label: "Delete Sheet Columns", params: ["at"], optional: ["count"], journaled: true, run: restructure("delete", "col") },
+  { id: "rows.insert", label: "Insert Sheet Rows", params: ["at"], optional: ["count"], journaled: true, effect: "edit", run: restructure("insert", "row") },
+  { id: "rows.delete", label: "Delete Sheet Rows", params: ["at"], optional: ["count"], journaled: true, effect: "edit", run: restructure("delete", "row") },
+  { id: "columns.insert", label: "Insert Sheet Columns", params: ["at"], optional: ["count"], journaled: true, effect: "edit", run: restructure("insert", "col") },
+  { id: "columns.delete", label: "Delete Sheet Columns", params: ["at"], optional: ["count"], journaled: true, effect: "edit", run: restructure("delete", "col") },
   {
     // A column swapped with the one beside it, as the Tauri app moves one:
     // its cells, what reads them, and its notes, width and the rest go too.
-    id: "columns.move", label: "Move Column", params: ["at", "way"], journaled: true,
+    id: "columns.move", label: "Move Column", params: ["at", "way"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const at = columnOf(p.at), way = p.way.toLowerCase();
       if (way !== "left" && way !== "right") refuse(`${p.way} is not left or right`);
@@ -1927,7 +1934,7 @@ const SPECS: readonly Spec[] = [
     // "C fill=#ffff00": that cell colour on top; "C font=#ff0000": that
     // text colour), each deciding where the ones before tie; headers=1
     // keeps the first row where it is.
-    id: "data.sort", label: "Custom Sort", params: ["range", "keys"], optional: ["headers"], journaled: true,
+    id: "data.sort", label: "Custom Sort", params: ["range", "keys"], optional: ["headers"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), left = Math.min(r[0].col, r[1].col), right = Math.max(r[0].col, r[1].col);
       const keys = p.keys.split(",").map((k) => k.trim()).filter((k) => k).map((k): SortKey => {
@@ -1954,7 +1961,7 @@ const SPECS: readonly Spec[] = [
     // row's conditions all hold, any row will do), shown in place (the rest
     // hidden, as a filter's) or copied to copyTo= with their header row,
     // unique=1 each record once.
-    id: "data.advancedFilter", label: "Advanced Filter", params: ["range", "criteria"], optional: ["copyTo", "unique"], journaled: true,
+    id: "data.advancedFilter", label: "Advanced Filter", params: ["range", "criteria"], optional: ["copyTo", "unique"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), c = rangeOf(p.criteria), page = wb.page(wb.active)!;
       const rowOf = (row: number, [a, b]: [Addr, Addr]) => Array.from({ length: Math.abs(a.col - b.col) + 1 }, (_, i) => wb.sheet.value(keyOf({ col: Math.min(a.col, b.col) + i, row })));
@@ -1995,14 +2002,14 @@ const SPECS: readonly Spec[] = [
   {
     // Group: the rows (columns) of a range a level deeper in the outline,
     // up to 8; axis=columns for columns ("B:D" is columns of itself).
-    id: "outline.group", label: "Group", params: ["range"], optional: ["axis"], journaled: true,
+    id: "outline.group", label: "Group", params: ["range"], optional: ["axis"], journaled: true, effect: "edit",
     run: (wb, p) => outlined(wb, p, 1),
   },
-  { id: "outline.ungroup", label: "Ungroup", params: ["range"], optional: ["axis"], journaled: true, run: (wb, p) => outlined(wb, p, -1) },
+  { id: "outline.ungroup", label: "Ungroup", params: ["range"], optional: ["axis"], journaled: true, effect: "edit", run: (wb, p) => outlined(wb, p, -1) },
   {
     // The outline's buttons: show levels 1 to n, the deeper rows (columns)
     // hidden; a level past the deepest shows them all.
-    id: "outline.level", label: "Show Outline Level", params: ["level"], optional: ["axis"], journaled: true,
+    id: "outline.level", label: "Show Outline Level", params: ["level"], optional: ["axis"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const rows = axisOf(p), page = wb.page(wb.active)!, levels = rows ? page.rowLevels : page.colLevels, n = Number(p.level);
       if (!Number.isInteger(n) || n < 1 || n > MOST_LEVELS) refuse(`${p.level} is not an outline level (1 to ${MOST_LEVELS})`);
@@ -2015,12 +2022,12 @@ const SPECS: readonly Spec[] = [
   {
     // Hide Detail and Show Detail: the group the range's first row (column)
     // is in, at its own level.
-    id: "outline.hideDetail", label: "Hide Detail", params: ["range"], optional: ["axis"], journaled: true, run: (wb, p) => detail(wb, p, true),
+    id: "outline.hideDetail", label: "Hide Detail", params: ["range"], optional: ["axis"], journaled: true, effect: "edit", run: (wb, p) => detail(wb, p, true),
   },
-  { id: "outline.showDetail", label: "Show Detail", params: ["range"], optional: ["axis"], journaled: true, run: (wb, p) => detail(wb, p, false) },
+  { id: "outline.showDetail", label: "Show Detail", params: ["range"], optional: ["axis"], journaled: true, effect: "edit", run: (wb, p) => detail(wb, p, false) },
   {
     // Clear Outline: no levels left, what they hid shown.
-    id: "outline.clear", label: "Clear Outline", params: [], optional: ["axis"], journaled: true,
+    id: "outline.clear", label: "Clear Outline", params: [], optional: ["axis"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const rows = axisOf(p), page = wb.page(wb.active)!, levels = rows ? page.rowLevels : page.colLevels, set = rows ? page.hiddenRows : page.hiddenCols;
       for (const i of levels.keys()) set.delete(i);
@@ -2034,7 +2041,7 @@ const SPECS: readonly Spec[] = [
     // row under each run of one value in by=, "<value> Total" and
     // SUBTOTAL(function, the run) in each of columns=, then a Grand Total;
     // the outline in three levels (show level 2: the totals only).
-    id: "data.subtotal", label: "Subtotal", params: ["range", "by", "columns"], optional: ["function"], journaled: true,
+    id: "data.subtotal", label: "Subtotal", params: ["range", "by", "columns"], optional: ["function"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       if (wb.sheet.language.name !== "Excel") refuse("Subtotal writes SUBTOTAL formulas: Excel formulas only");
       const r = rangeOf(p.range), page = wb.page(wb.active)!;
@@ -2073,7 +2080,7 @@ const SPECS: readonly Spec[] = [
     // default), by position or by the labels in their top row and left
     // column (labels=top, left or both); links=1 writes each number as a
     // formula over the cells it came from, so it follows them.
-    id: "data.consolidate", label: "Consolidate", params: ["to", "sources"], optional: ["function", "labels", "links"], journaled: true,
+    id: "data.consolidate", label: "Consolidate", params: ["to", "sources"], optional: ["function", "labels", "links"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const fn = (p.function ?? "sum").trim().toLowerCase();
       if (!(fn in CONSOLIDATE_FUNCTIONS)) refuse(`${p.function} is not a consolidation function (${Object.keys(CONSOLIDATE_FUNCTIONS).join(", ")})`);
@@ -2100,15 +2107,15 @@ const SPECS: readonly Spec[] = [
       return setting(wb, entries, `consolidated ${parts.length} range${parts.length === 1 ? "" : "s"} at ${keyOf(to)} by ${fn}${top || left ? `, by the labels in the ${top && left ? "top row and left column" : top ? "top row" : "left column"}` : ""}${flag(p.links) ? ", linked" : ""}`);
     },
   },
-  { id: "data.sortAscending", label: "Sort A to Z", params: ["range", "by"], journaled: true, run: sort(true) },
-  { id: "data.sortDescending", label: "Sort Z to A", params: ["range", "by"], journaled: true, run: sort(false) },
+  { id: "data.sortAscending", label: "Sort A to Z", params: ["range", "by"], journaled: true, effect: "edit", run: sort(true) },
+  { id: "data.sortDescending", label: "Sort Z to A", params: ["range", "by"], journaled: true, effect: "edit", run: sort(false) },
   {
     // A name for a range, or for a formula (a named LAMBDA:
     // formula="=LAMBDA(x, x*2)", then =DOUBLE(4) in any formula). Its scope
     // is the workbook, as in Excel (a range of any sheet: range=Costs!B1:B3),
     // or scope=sheet: the active sheet's own, which hides a workbook name of
     // the same spelling there.
-    id: "names.define", label: "Define Name", params: ["name"], optional: ["range", "formula", "scope"], journaled: true,
+    id: "names.define", label: "Define Name", params: ["name"], optional: ["range", "formula", "scope"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const n = nameOf(p.name), own = scopeOf(p.scope) === "sheet";
       if ((p.range === undefined) === (p.formula === undefined)) refuse("names.define needs a range or a formula");
@@ -2129,7 +2136,7 @@ const SPECS: readonly Spec[] = [
   {
     // The active sheet's own name of that spelling, or else the workbook's
     // (scope says which).
-    id: "names.delete", label: "Delete Name", params: ["name"], optional: ["scope"], journaled: true,
+    id: "names.delete", label: "Delete Name", params: ["name"], optional: ["scope"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const n = p.name.toUpperCase();
       const mine = wb.sheet.name(n) !== null || wb.sheet.formula(n) !== null;
@@ -2145,31 +2152,31 @@ const SPECS: readonly Spec[] = [
   },
   {
     // The workbook's names, then each sheet's own (Costs!RATE).
-    id: "names.list", label: "Name Manager", params: [], journaled: false,
+    id: "names.list", label: "Name Manager", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const names = [...wb.names().map(([n, r]) => `${n} ${r}`),
         ...wb.pages().flatMap((page) => page.sheet.names().map(([n, r]) => `${sheetPrefix(page.name)}${n} ${r}`))];
       return { ok: true, message: names.length ? names.join(", ") : "no names", changed: [], output: names };
     },
   },
-  { id: "formulas.tracePrecedents", label: "Trace Precedents", params: ["cell"], journaled: false, run: trace("precedents") },
-  { id: "formulas.traceDependents", label: "Trace Dependents", params: ["cell"], journaled: false, run: trace("dependents") },
+  { id: "formulas.tracePrecedents", label: "Trace Precedents", params: ["cell"], journaled: false, effect: "view", run: trace("precedents") },
+  { id: "formulas.traceDependents", label: "Trace Dependents", params: ["cell"], journaled: false, effect: "view", run: trace("dependents") },
   {
-    id: "formulas.removeArrows", label: "Remove Arrows", params: [], journaled: false,
+    id: "formulas.removeArrows", label: "Remove Arrows", params: [], journaled: false, effect: "view",
     run: async (wb) => {
       wb.clearTraces();
       return changedBy(wb, wb.sheet.keys(), "arrows removed");
     },
   },
   {
-    id: "formulas.showFormulas", label: "Show Formulas", params: [], optional: ["off"], journaled: false,
+    id: "formulas.showFormulas", label: "Show Formulas", params: [], optional: ["off"], journaled: false, effect: "view",
     run: async (wb, p) => {
       wb.showFormulas = !flag(p.off);
       return changedBy(wb, wb.sheet.keys(), wb.showFormulas ? "showing formulas" : "showing values");
     },
   },
   {
-    id: "formulas.evaluate", label: "Evaluate Formula", params: ["cell"], journaled: false,
+    id: "formulas.evaluate", label: "Evaluate Formula", params: ["cell"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const key = cellOf(p.cell), input = wb.sheet.input(key);
       if (!input.startsWith("=")) refuse(`${key} is not a formula`);
@@ -2185,14 +2192,14 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "formulas.watch", label: "Add Watch", params: ["cell"], journaled: false,
+    id: "formulas.watch", label: "Add Watch", params: ["cell"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const [page, cell] = watchedOf(wb, p.cell);
       return { ok: true, message: `${wb.watch(page, cell) ? "watching" : "already watching"} ${page.name}!${cell}`, changed: [] };
     },
   },
   {
-    id: "formulas.unwatch", label: "Delete Watch", params: ["cell"], journaled: false,
+    id: "formulas.unwatch", label: "Delete Watch", params: ["cell"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const [page, cell] = watchedOf(wb, p.cell);
       if (!wb.unwatch(page, cell)) refuse(`not watching ${page.name}!${cell}`);
@@ -2200,7 +2207,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "format.highlight", label: "Highlight Cells Rules", params: ["range", "op", "value"], optional: ["stop", "value2", "style"], journaled: true,
+    id: "format.highlight", label: "Highlight Cells Rules", params: ["range", "op", "value"], optional: ["stop", "value2", "style"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const op = COMPARISONS[p.op.toLowerCase()] ?? refuse(`${p.op} is not a comparison (greater, less, between, notBetween, equal, notEqual, greaterOrEqual, lessOrEqual, contains, notContains, beginsWith, endsWith)`);
       if ((op === "between" || op === "notBetween") && p.value2 === undefined) refuse(`${p.op} needs value2`);
@@ -2208,19 +2215,19 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "format.topBottom", label: "Top/Bottom Rules", params: ["range"], optional: ["stop", "n", "bottom", "percent", "style"], journaled: true,
+    id: "format.topBottom", label: "Top/Bottom Rules", params: ["range"], optional: ["stop", "n", "bottom", "percent", "style"], journaled: true, effect: "edit",
     run: (wb, p) => addRule(wb, { kind: "top", range: rangeOf(p.range), n: countOf(p.n ?? "10"), bottom: flag(p.bottom), percent: flag(p.percent), style: styleParam(p) }, p),
   },
   {
-    id: "format.aboveAverage", label: "Above Average", params: ["range"], optional: ["stop", "below", "style"], journaled: true,
+    id: "format.aboveAverage", label: "Above Average", params: ["range"], optional: ["stop", "below", "style"], journaled: true, effect: "edit",
     run: (wb, p) => addRule(wb, { kind: "average", range: rangeOf(p.range), below: flag(p.below), style: styleParam(p) }, p),
   },
   {
-    id: "format.duplicates", label: "Duplicate Values", params: ["range"], optional: ["stop", "unique", "style"], journaled: true,
+    id: "format.duplicates", label: "Duplicate Values", params: ["range"], optional: ["stop", "unique", "style"], journaled: true, effect: "edit",
     run: (wb, p) => addRule(wb, { kind: "duplicates", range: rangeOf(p.range), unique: flag(p.unique), style: styleParam(p) }, p),
   },
   {
-    id: "format.colorScale", label: "Color Scales", params: ["range"], optional: ["colors"], journaled: true,
+    id: "format.colorScale", label: "Color Scales", params: ["range"], optional: ["colors"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const colors = (p.colors ?? "#f8696b,#ffeb84,#63be7b").split(",").map((c) => c.trim().toLowerCase());
       if (colors.length < 2 || colors.length > 3 || colors.some((c) => !/^#[0-9a-f]{6}$/.test(c))) refuse("a colour scale takes 2 or 3 colours (#rrggbb)");
@@ -2232,7 +2239,7 @@ const SPECS: readonly Spec[] = [
     // the way from lowest to highest, 67 and 33, by Excel's default) and
     // how they read (by= percent, percentile or number), reversed, icons
     // only (showValue=0).
-    id: "format.iconSet", label: "Icon Sets", params: ["range"], optional: ["icons", "thresholds", "by", "reverse", "showValue", "stop"], journaled: true,
+    id: "format.iconSet", label: "Icon Sets", params: ["range"], optional: ["icons", "thresholds", "by", "reverse", "showValue", "stop"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const icons = (p.icons ?? "arrows").toLowerCase();
       if (!(icons in ICONS)) refuse(`${p.icons} is not an icon set (${Object.keys(ICONS).join(", ")})`);
@@ -2248,7 +2255,7 @@ const SPECS: readonly Spec[] = [
     // A formula's rule (Use a formula to determine which cells to format):
     // written for the range's top-left, moved for each cell as a copy is,
     // in the sheet's language; the cells it is true (or not 0) for.
-    id: "format.formulaRule", label: "Formula Rule", params: ["range", "formula"], optional: ["style", "stop"], journaled: true,
+    id: "format.formulaRule", label: "Formula Rule", params: ["range", "formula"], optional: ["style", "stop"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const formula = p.formula.trim().replace(/^=/, "");
       if (!formula) refuse("a formula rule needs a formula");
@@ -2260,17 +2267,17 @@ const SPECS: readonly Spec[] = [
   {
     // Format only cells that are blank (or, not=1, that are not); that
     // hold an error (or not).
-    id: "format.blanks", label: "Blanks Rule", params: ["range"], optional: ["not", "style", "stop"], journaled: true,
+    id: "format.blanks", label: "Blanks Rule", params: ["range"], optional: ["not", "style", "stop"], journaled: true, effect: "edit",
     run: (wb, p) => addRule(wb, { kind: "blanks", range: rangeOf(p.range), not: flag(p.not), style: styleParam(p) }, p),
   },
   {
-    id: "format.errors", label: "Errors Rule", params: ["range"], optional: ["not", "style", "stop"], journaled: true,
+    id: "format.errors", label: "Errors Rule", params: ["range"], optional: ["not", "style", "stop"], journaled: true, effect: "edit",
     run: (wb, p) => addRule(wb, { kind: "errors", range: rangeOf(p.range), not: flag(p.not), style: styleParam(p) }, p),
   },
   {
     // A Date Occurring: yesterday, today, tomorrow, last7days, lastWeek,
     // thisWeek, nextWeek, lastMonth, thisMonth, nextMonth.
-    id: "format.datePeriod", label: "A Date Occurring", params: ["range", "period"], optional: ["style", "stop"], journaled: true,
+    id: "format.datePeriod", label: "A Date Occurring", params: ["range", "period"], optional: ["style", "stop"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const period = PERIODS.find((x) => x.toLowerCase() === p.period.trim().toLowerCase()) ?? refuse(`${p.period} is not a period (${PERIODS.join(", ")})`);
       return addRule(wb, { kind: "date", range: rangeOf(p.range), period, style: styleParam(p) }, p);
@@ -2279,7 +2286,7 @@ const SPECS: readonly Spec[] = [
   {
     // Manage Rules' Move Up and Move Down: rule `index` (from 1) to place
     // `to`, the first winning.
-    id: "format.moveRule", label: "Move Rule", params: ["index", "to"], journaled: true,
+    id: "format.moveRule", label: "Move Rule", params: ["index", "to"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const rules = wb.page(wb.active)!.rules, i = Number(p.index) - 1, j = Number(p.to) - 1;
       if (!Number.isInteger(i) || !rules[i]) refuse(`no rule ${p.index}`);
@@ -2291,7 +2298,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Stop If True on rule `index` (off=1 takes it off).
-    id: "format.stopIfTrue", label: "Stop If True", params: ["index"], optional: ["off"], journaled: true,
+    id: "format.stopIfTrue", label: "Stop If True", params: ["index"], optional: ["off"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const rules = wb.page(wb.active)!.rules, i = Number(p.index) - 1;
       if (!Number.isInteger(i) || !rules[i]) refuse(`no rule ${p.index}`);
@@ -2301,14 +2308,14 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "format.rules", label: "Manage Rules", params: [], journaled: false,
+    id: "format.rules", label: "Manage Rules", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const listed = wb.page(wb.active)!.rules.map((r, i) => `${i + 1}. ${describeCf(r)}`);
       return { ok: true, message: listed.length ? listed.join("; ") : "no rules", changed: [], output: listed };
     },
   },
   {
-    id: "format.deleteRule", label: "Delete Rule", params: ["index"], journaled: true,
+    id: "format.deleteRule", label: "Delete Rule", params: ["index"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const rules = wb.page(wb.active)!.rules, i = Number(p.index) - 1;
       if (!Number.isInteger(i) || !rules[i]) refuse(`no rule ${p.index}`);
@@ -2317,7 +2324,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "format.clearRules", label: "Clear Rules", params: ["range"], journaled: true,
+    id: "format.clearRules", label: "Clear Rules", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const [a, b] = rangeOf(p.range), page = wb.page(wb.active)!;
       const over = (r: CfRule) => {
@@ -2331,7 +2338,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "format.font", label: "Font", params: ["range"], optional: ["bold", "italic", "underline", "strike", "size", "family", "script"], journaled: true,
+    id: "format.font", label: "Font", params: ["range"], optional: ["bold", "italic", "underline", "strike", "size", "family", "script"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range);
       const size = p.size === undefined ? undefined : Number(p.size) > 0 ? Number(p.size) : refuse(`${p.size} is not a size`);
@@ -2355,7 +2362,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "format.border", label: "Borders", params: ["range", "edge"], optional: ["color", "style"], journaled: true,
+    id: "format.border", label: "Borders", params: ["range", "edge"], optional: ["color", "style"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), edge = p.edge.toLowerCase(), color = colour(p.color ?? "#000000") ?? refuse(`${p.color} is not a colour (a name such as red, or #rrggbb)`);
       const style = (p.style ?? "thin").trim().toLowerCase();
@@ -2390,7 +2397,7 @@ const SPECS: readonly Spec[] = [
   {
     // Format Painter: a cell's look, number format and style (not its
     // value, comment or rule) onto a range; a range's, tiled over it.
-    id: "format.painter", label: "Format Painter", params: ["from", "to"], journaled: true,
+    id: "format.painter", label: "Format Painter", params: ["from", "to"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const f = rangeOf(p.from), t = rangeOf(p.to), ftl = topLeft(f), ttl = topLeft(t);
       const fr = Math.abs(f[0].row - f[1].row) + 1, fc = Math.abs(f[0].col - f[1].col) + 1;
@@ -2406,7 +2413,7 @@ const SPECS: readonly Spec[] = [
   {
     // Align Left, Center and Right, as the toolbar's; general: by the value
     // (numbers to the right), as Excel's default.
-    id: "format.align", label: "Alignment", params: ["range"], optional: ["align", "vertical", "indent", "rotation"], journaled: true,
+    id: "format.align", label: "Alignment", params: ["range"], optional: ["align", "vertical", "indent", "rotation"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range);
       const align = ({ left: "start", center: "center", centre: "center", right: "end", general: undefined } as Record<string, "start" | "center" | "end" | undefined>);
@@ -2434,18 +2441,18 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Fill Color and Font Color: a colour's name or #rrggbb; none takes it off.
-    id: "format.fill", label: "Fill Color", params: ["range", "color"], journaled: true,
+    id: "format.fill", label: "Fill Color", params: ["range", "color"], journaled: true, effect: "edit",
     run: async (wb, p) => coloured(wb, p, "fill"),
   },
   {
-    id: "format.color", label: "Font Color", params: ["range", "color"], journaled: true,
+    id: "format.color", label: "Font Color", params: ["range", "color"], journaled: true, effect: "edit",
     run: async (wb, p) => coloured(wb, p, "color"),
   },
   {
     // Number format over the selection, as the toolbar's Comma, Currency
     // and Percent Style: number, currency, percent, an Excel pattern, or
     // general (none).
-    id: "format.number", label: "Number Format", params: ["range", "format"], journaled: true,
+    id: "format.number", label: "Number Format", params: ["range", "format"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), f = p.format.trim();
       const pattern = ({ general: "", number: "#,##0.00", comma: "#,##0.00", currency: "$#,##0.00", percent: "0%" } as Record<string, string>)[f.toLowerCase()] ?? CATEGORIES[f.toLowerCase()] ?? f;
@@ -2457,7 +2464,7 @@ const SPECS: readonly Spec[] = [
     // A value in a number format, as a cell in it would show it, and as
     // TEXT() gives it: a category's name (accounting, fraction ...) or a
     // code. Text that reads as a number is the number.
-    id: "format.preview", label: "Format a value", params: ["value", "format"], journaled: false,
+    id: "format.preview", label: "Format a value", params: ["value", "format"], journaled: false, effect: "query",
     run: async (_wb, p) => {
       const code = CATEGORIES[p.format.trim().toLowerCase()] ?? p.format;
       const v: Value = NUMERIC_TEXT.test(p.value) || /^\s*[-+]?\d*\.?\d+[eE][-+]?\d+\s*$/.test(p.value) ? Number(p.value) : p.value;
@@ -2467,7 +2474,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "format.wrap", label: "Wrap Text", params: ["range"], optional: ["off"], journaled: true,
+    id: "format.wrap", label: "Wrap Text", params: ["range"], optional: ["off"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), on = !flag(p.off);
       return changedBy(wb, relook(wb, r, (look) => ({ ...look, wrap: on || undefined })), `${rangeName(r)}: ${on ? "wrapped" : "not wrapped"}`);
@@ -2477,7 +2484,7 @@ const SPECS: readonly Spec[] = [
     // Data bars: a colour, a solid fill (fill=solid) or Excel's gradient
     // (the grid draws both solid), the bar only (showValue=0), and the
     // shortest and longest bar's numbers (min=, max=; automatic otherwise).
-    id: "format.dataBar", label: "Data Bars", params: ["range"], optional: ["color", "fill", "showValue", "min", "max", "stop"], journaled: true,
+    id: "format.dataBar", label: "Data Bars", params: ["range"], optional: ["color", "fill", "showValue", "min", "max", "stop"], journaled: true, effect: "edit",
     run: (wb, p) => {
       const color = (p.color ?? "#638ec6").toLowerCase();
       if (!/^#[0-9a-f]{6}$/.test(color)) refuse(`${p.color} is not a colour (#rrggbb)`);
@@ -2490,12 +2497,12 @@ const SPECS: readonly Spec[] = [
         ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) }, p);
     },
   },
-  { id: "rows.hide", label: "Hide Rows", params: ["range"], journaled: true, run: hiding(true, true) },
-  { id: "rows.unhide", label: "Unhide Rows", params: ["range"], journaled: true, run: hiding(true, false) },
-  { id: "columns.hide", label: "Hide Columns", params: ["range"], journaled: true, run: hiding(false, true) },
-  { id: "columns.unhide", label: "Unhide Columns", params: ["range"], journaled: true, run: hiding(false, false) },
+  { id: "rows.hide", label: "Hide Rows", params: ["range"], journaled: true, effect: "edit", run: hiding(true, true) },
+  { id: "rows.unhide", label: "Unhide Rows", params: ["range"], journaled: true, effect: "edit", run: hiding(true, false) },
+  { id: "columns.hide", label: "Hide Columns", params: ["range"], journaled: true, effect: "edit", run: hiding(false, true) },
+  { id: "columns.unhide", label: "Unhide Columns", params: ["range"], journaled: true, effect: "edit", run: hiding(false, false) },
   {
-    id: "data.filter", label: "AutoFilter", params: ["range", "column", "criterion"], journaled: true,
+    id: "data.filter", label: "AutoFilter", params: ["range", "column", "criterion"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), col = columnOf(p.column);
       if (col < Math.min(r[0].col, r[1].col) || col > Math.max(r[0].col, r[1].col)) refuse(`${p.column} is not a column of ${named(r)}`);
@@ -2505,7 +2512,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "data.clearFilter", label: "Clear Filter", params: [], journaled: true,
+    id: "data.clearFilter", label: "Clear Filter", params: [], journaled: true, effect: "edit",
     run: async (wb) => {
       const page = wb.page(wb.active)!;
       if (!page.filtered) refuse("no filter");
@@ -2517,7 +2524,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "view.freezeRows", label: "Freeze Top Rows", params: ["count"], journaled: true,
+    id: "view.freezeRows", label: "Freeze Top Rows", params: ["count"], journaled: true, effect: "view",
     run: async (wb, p) => {
       const n = Number(p.count);
       if (!Number.isInteger(n) || n < 0 || n >= ROWS) refuse(`${p.count} is not a number of rows to freeze`);
@@ -2528,7 +2535,7 @@ const SPECS: readonly Spec[] = [
   {
     // Split: a second pane over the sheet under the first, each scrolling
     // on its own (Excel's View > Split); off=1 removes it. A view.
-    id: "view.split", label: "Split", params: [], optional: ["off"], journaled: false,
+    id: "view.split", label: "Split", params: [], optional: ["off"], journaled: false, effect: "view",
     run: async (wb, p) => {
       wb.split = !flag(p.off);
       return { ok: true, message: wb.split ? "split in two panes" : "one pane", changed: [], output: wb.split ? 1 : 0 };
@@ -2537,7 +2544,7 @@ const SPECS: readonly Spec[] = [
   {
     // Freeze the first columns (Freeze First Column, Freeze Panes' columns);
     // 0 frees them.
-    id: "view.freezeCols", label: "Freeze Columns", params: ["count"], journaled: true,
+    id: "view.freezeCols", label: "Freeze Columns", params: ["count"], journaled: true, effect: "view",
     run: async (wb, p) => {
       const n = Number(p.count);
       if (!Number.isInteger(n) || n < 0 || n >= 9) refuse(`${p.count} is not a number of columns to freeze (0 to 8: the grid shows ten)`);
@@ -2548,7 +2555,7 @@ const SPECS: readonly Spec[] = [
   {
     // Freeze Panes at a cell, as Excel's: the rows above it and the columns
     // left of it; at A1 everything unfrozen.
-    id: "view.freezePanes", label: "Freeze Panes", params: ["cell"], journaled: true,
+    id: "view.freezePanes", label: "Freeze Panes", params: ["cell"], journaled: true, effect: "view",
     run: async (wb, p) => {
       const a = rangeOf(p.cell)[0], page = wb.page(wb.active)!;
       if (a.col >= 9) refuse(`${p.cell}: at most 8 columns freeze (the grid shows ten)`);
@@ -2558,7 +2565,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "cells.merge", label: "Merge Cells", params: ["range"], optional: ["center"], journaled: true,
+    id: "cells.merge", label: "Merge Cells", params: ["range"], optional: ["center"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), tl = topLeft(r), page = wb.page(wb.active)!;
       if (keyOf(r[0]) === keyOf(r[1])) refuse(`${keyOf(r[0])} is one cell: nothing to merge`);
@@ -2572,7 +2579,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "cells.unmerge", label: "Unmerge Cells", params: ["range"], journaled: true,
+    id: "cells.unmerge", label: "Unmerge Cells", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), page = wb.page(wb.active)!;
       const gone = page.merges.filter((m) => overlap(m, r));
@@ -2582,7 +2589,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "rows.height", label: "Row Height", params: ["range", "height"], journaled: true,
+    id: "rows.height", label: "Row Height", params: ["range", "height"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const h = Number(p.height);
       if (!Number.isInteger(h) || h < 0) refuse(`${p.height} is not a height (0 for the grid's)`);
@@ -2592,7 +2599,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "columns.width", label: "Column Width", params: ["range", "width"], journaled: true,
+    id: "columns.width", label: "Column Width", params: ["range", "width"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const w = Number(p.width);
       if (!Number.isInteger(w) || w < 0) refuse(`${p.width} is not a width (0 for the grid's)`);
@@ -2605,7 +2612,7 @@ const SPECS: readonly Spec[] = [
     // AutoFit Column Width: each column as wide as its widest shown text,
     // by an estimate of the grid's font (7.5 px a character at 13 px, more
     // for a larger size) and its padding; an empty column the grid's.
-    id: "columns.autofit", label: "AutoFit Column Width", params: ["range"], journaled: true,
+    id: "columns.autofit", label: "AutoFit Column Width", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, { at, said } = spanOf(rangeOf(p.range), false), widths: number[] = [];
       for (const col of at) {
@@ -2625,7 +2632,7 @@ const SPECS: readonly Spec[] = [
   {
     // AutoFit Row Height: each row as tall as its tallest text, by its
     // lines and font size; a row of one line at the grid's size the grid's.
-    id: "rows.autofit", label: "AutoFit Row Height", params: ["range"], journaled: true,
+    id: "rows.autofit", label: "AutoFit Row Height", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, { at, said } = spanOf(rangeOf(p.range), true), heights: number[] = [];
       for (const row of at) {
@@ -2643,7 +2650,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "table.define", label: "Define Table", params: ["name", "range"], optional: ["headers", "columns", "types", "descriptions"], journaled: true,
+    id: "table.define", label: "Define Table", params: ["name", "range"], optional: ["headers", "columns", "types", "descriptions"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const name = p.name.trim();
       if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) refuse(`${p.name} is not a table name: a letter first, then letters, digits or _`);
@@ -2657,7 +2664,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "table.delete", label: "Delete Table", params: ["name"], journaled: true,
+    id: "table.delete", label: "Delete Table", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.name) ?? refuse(`no table ${p.name}`);
       const changed = await wb.sheet.defineTable(t.name, null);
@@ -2669,7 +2676,7 @@ const SPECS: readonly Spec[] = [
     // taken in, which must be empty, each column's aggregate by its name
     // (functions="Qty=sum,Price=average"; the first column "Total" and the
     // last a sum by default, as Excel's); on=0 takes it off, clearing it.
-    id: "table.totals", label: "Total Row", params: ["name"], optional: ["on", "functions"], journaled: true,
+    id: "table.totals", label: "Total Row", params: ["name"], optional: ["on", "functions"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.name) ?? refuse(`no table ${p.name}`), cols = tableColumns(wb, t);
       const left = Math.min(t.range[0].col, t.range[1].col), right = Math.max(t.range[0].col, t.range[1].col), bottom = Math.max(t.range[0].row, t.range[1].row);
@@ -2708,7 +2715,7 @@ const SPECS: readonly Spec[] = [
     // A calculated column: one formula in every data row of a column,
     // written for the first and moved down as a fill is ([@Qty] reads each
     // row's own).
-    id: "table.calculatedColumn", label: "Calculated Column", params: ["name", "column", "formula"], journaled: true,
+    id: "table.calculatedColumn", label: "Calculated Column", params: ["name", "column", "formula"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.name) ?? refuse(`no table ${p.name}`), cols = tableColumns(wb, t);
       const i = cols.findIndex((c) => c.toUpperCase() === p.column.trim().toUpperCase());
@@ -2724,7 +2731,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Banded Rows: every other data row shaded (rows=0 takes it off).
-    id: "table.banding", label: "Banded Rows", params: ["name"], optional: ["rows"], journaled: true,
+    id: "table.banding", label: "Banded Rows", params: ["name"], optional: ["rows"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.name) ?? refuse(`no table ${p.name}`), on = p.rows === undefined || flag(p.rows);
       const { banded: _was, ...rest } = t;
@@ -2736,7 +2743,7 @@ const SPECS: readonly Spec[] = [
     // Convert to Range: the table gone, its cells and looks kept (its
     // banding as the cells' fill), each structured reference to it on the
     // sheet written as the cells it came to ($B$2:$B$4; [@Qty] as $B2).
-    id: "table.toRange", label: "Convert to Range", params: ["name"], journaled: true,
+    id: "table.toRange", label: "Convert to Range", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.name) ?? refuse(`no table ${p.name}`);
       const header = (a: Addr) => show(wb.sheet.value(keyOf(a)));
@@ -2763,7 +2770,7 @@ const SPECS: readonly Spec[] = [
     // A table style (styles.ts's gallery: Light, Medium, Dark, Green,
     // Orange, Grey; none for plain) and Table Style Options: banded rows
     // and columns, first and last column bold.
-    id: "table.style", label: "Table Style", params: ["name"], optional: ["style", "bandedRows", "bandedColumns", "firstColumn", "lastColumn"], journaled: true,
+    id: "table.style", label: "Table Style", params: ["name"], optional: ["style", "bandedRows", "bandedColumns", "firstColumn", "lastColumn"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.name) ?? refuse(`no table ${p.name}`);
       const style = p.style === undefined ? t.style : /^none$/i.test(p.style.trim()) ? undefined : styleNamed(TABLE_STYLE_NAMES, p.style) ?? refuse(`${p.style} is not a table style (${TABLE_STYLE_NAMES.join(", ")}, none)`);
@@ -2780,7 +2787,7 @@ const SPECS: readonly Spec[] = [
     // Page Layout's Themes: a theme by name (Office, Greyscale, Harbour,
     // Ember), its colour roles and fonts; whatever names a role (a look's
     // fill=accent1, a cell style's, a table style's) re-coloured.
-    id: "theme.set", label: "Themes", params: ["name"], journaled: true,
+    id: "theme.set", label: "Themes", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const name = styleNamed(Object.keys(THEMES), p.name) ?? refuse(`${p.name} is not a theme (${Object.keys(THEMES).join(", ")})`);
       wb.theme = THEMES[name];
@@ -2790,7 +2797,7 @@ const SPECS: readonly Spec[] = [
   {
     // Customize Colors: one role's colour (a #rrggbb), the theme renamed
     // Custom; and Customize Fonts: its major (headings) and minor (body).
-    id: "theme.color", label: "Theme Colors", params: ["role", "color"], journaled: true,
+    id: "theme.color", label: "Theme Colors", params: ["role", "color"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const role = (ROLES as readonly string[]).find((r) => r === p.role.trim().toLowerCase()) ?? refuse(`${p.role} is not a theme colour (${ROLES.join(", ")})`);
       const c = colour(p.color);
@@ -2800,7 +2807,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "theme.fonts", label: "Theme Fonts", params: [], optional: ["major", "minor"], journaled: true,
+    id: "theme.fonts", label: "Theme Fonts", params: [], optional: ["major", "minor"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const font = (f: string | undefined, was: string) => (f === undefined ? was : f.trim() || refuse("a font has a name"));
       wb.theme = { ...wb.theme, name: wb.theme.name === "Custom" || p.major !== undefined || p.minor !== undefined ? "Custom" : wb.theme.name, fonts: { major: font(p.major, wb.theme.fonts.major), minor: font(p.minor, wb.theme.fonts.minor) } };
@@ -2808,14 +2815,14 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "theme.get", label: "About the Theme", params: [], journaled: false,
+    id: "theme.get", label: "About the Theme", params: [], journaled: false, effect: "query",
     run: async (wb) => ({ ok: true, message: `theme ${wb.theme.name}: ${themeSaid(wb.theme)}`, changed: [], output: wb.theme }),
   },
   {
     // A slicer for a table's column (Insert Slicer): its values as tiles;
     // picking some shows only the table's rows holding one (the table's
     // filter, as the sheet's AutoFilter is), none picked shows them all.
-    id: "slicer.add", label: "Insert Slicer", params: ["table", "column"], optional: ["name"], journaled: true,
+    id: "slicer.add", label: "Insert Slicer", params: ["table", "column"], optional: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.table) ?? refuse(`no table ${p.table}`), page = wb.page(wb.active)!;
       const column = tableColumns(wb, t).find((c) => c.toLowerCase() === p.column.trim().toLowerCase()) ?? refuse(`${t.name} has no column ${p.column}`);
@@ -2828,7 +2835,7 @@ const SPECS: readonly Spec[] = [
   {
     // Its tiles picked: values= (comma-separated) picks them alone; add=1
     // adds them (Multi-Select), toggle=1 picks or unpicks each.
-    id: "slicer.select", label: "Slicer", params: ["name", "values"], optional: ["add", "toggle"], journaled: true,
+    id: "slicer.select", label: "Slicer", params: ["name", "values"], optional: ["add", "toggle"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, i = page.slicers.findIndex((x) => x.name.toLowerCase() === p.name.trim().toLowerCase());
       if (i < 0) refuse(`no slicer ${p.name}`);
@@ -2842,7 +2849,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Clear Filter: every tile picked again, the rows shown.
-    id: "slicer.clear", label: "Clear Slicer", params: ["name"], journaled: true,
+    id: "slicer.clear", label: "Clear Slicer", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, sl = page.slicers.find((x) => x.name.toLowerCase() === p.name.trim().toLowerCase()) ?? refuse(`no slicer ${p.name}`);
       page.slicers = page.slicers.map((x) => (x === sl ? { ...x, picked: [] } : x));
@@ -2850,7 +2857,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "slicer.delete", label: "Delete Slicer", params: ["name"], journaled: true,
+    id: "slicer.delete", label: "Delete Slicer", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, sl = page.slicers.find((x) => x.name.toLowerCase() === p.name.trim().toLowerCase()) ?? refuse(`no slicer ${p.name}`);
       page.slicers = page.slicers.filter((x) => x !== sl);
@@ -2858,7 +2865,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "slicer.list", label: "Slicers", params: [], journaled: false,
+    id: "slicer.list", label: "Slicers", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const views = wb.slicerViews(), listed = views.map((x) => `${x.caption}: ${x.tiles.map((t) => (t.picked ? `[${t.value}]` : t.value)).join(" ")}`);
       return { ok: true, message: listed.length ? listed.join("; ") : "no slicers", changed: [], output: listed };
@@ -2875,7 +2882,7 @@ const SPECS: readonly Spec[] = [
     // Report on a sheet of its own.
     // method=: simplex (Simplex LP, the default), grg (GRG Nonlinear) or
     // evolutionary (nlp.ts).
-    id: "solver.solve", label: "Solver", params: ["objective", "changing"], optional: ["goal", "value", "constraints", "nonneg", "restore", "report", "method"], journaled: true,
+    id: "solver.solve", label: "Solver", params: ["objective", "changing"], optional: ["goal", "value", "constraints", "nonneg", "restore", "report", "method"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const obj = cellOf(p.objective), goal = (p.goal ?? "max").trim().toLowerCase();
       if (!["max", "min", "value"].includes(goal)) refuse(`${p.goal} is not max, min or value`);
@@ -2969,7 +2976,7 @@ const SPECS: readonly Spec[] = [
     // input= (a column a variable; labels=1 when its first row names them),
     // the report's values written at output=; alpha=, interval=, damping=,
     // bins= (a range), difference= as each tool takes.
-    id: "data.analyze", label: "Data Analysis", params: ["tool", "input", "output"], optional: ["labels", "alpha", "interval", "damping", "bins", "difference", "confidence"], journaled: true,
+    id: "data.analyze", label: "Data Analysis", params: ["tool", "input", "output"], optional: ["labels", "alpha", "interval", "damping", "bins", "difference", "confidence"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const tool = TOOLS.find((t) => t.toLowerCase() === p.tool.trim().toLowerCase()) ?? refuse(`${p.tool} is not a tool (${TOOLS.join(", ")})`);
       const [a, b] = rangeOf(p.input), labels = flag(p.labels);
@@ -3000,7 +3007,7 @@ const SPECS: readonly Spec[] = [
     // sheet: the timeline, the values, then the forecast and its lower and
     // upper bounds as FORECAST.ETS formulas (so they follow the data), and
     // a line chart of them. confidence= (0.95) and seasonality= (found).
-    id: "data.forecastSheet", label: "Forecast Sheet", params: ["timeline", "values", "end"], optional: ["confidence", "seasonality", "to"], journaled: true,
+    id: "data.forecastSheet", label: "Forecast Sheet", params: ["timeline", "values", "end"], optional: ["confidence", "seasonality", "to"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       if (wb.sheet.language.name !== "Excel") refuse("Forecast Sheet writes FORECAST.ETS formulas: Excel formulas only");
       const tl = [...range(...rangeOf(p.timeline))], vs = [...range(...rangeOf(p.values))];
@@ -3038,7 +3045,7 @@ const SPECS: readonly Spec[] = [
     // Scenario Manager's Add: a name, its changing cells ("B1,B2" or
     // "B1:B3"), their values (comma-separated; the cells' own when left
     // out); the same name again edits it.
-    id: "scenario.add", label: "Add Scenario", params: ["name", "cells"], optional: ["values", "comment"], journaled: true,
+    id: "scenario.add", label: "Add Scenario", params: ["name", "cells"], optional: ["values", "comment"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, name = p.name.trim() || refuse("a scenario has a name");
       const cells = p.cells.split(",").flatMap((x) => [...range(...rangeOf(x.trim()))]);
@@ -3053,14 +3060,14 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Show: its values put in its cells (one step of undo).
-    id: "scenario.show", label: "Show Scenario", params: ["name"], journaled: true,
+    id: "scenario.show", label: "Show Scenario", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const sc = scenarioNamed(wb, p.name);
       return setting(wb, sc.cells.map((k, i): [string, string] => [k, sc.values[i]]), `showed scenario ${sc.name}`);
     },
   },
   {
-    id: "scenario.delete", label: "Delete Scenario", params: ["name"], journaled: true,
+    id: "scenario.delete", label: "Delete Scenario", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, sc = scenarioNamed(wb, p.name);
       page.scenarios = page.scenarios.filter((x) => x !== sc);
@@ -3068,7 +3075,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "scenario.list", label: "Scenarios", params: [], journaled: false,
+    id: "scenario.list", label: "Scenarios", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const listed = wb.page(wb.active)!.scenarios.map((x) => `${x.name}: ${x.cells.map((k, j) => `${k}=${x.values[j]}`).join(", ")}`);
       return { ok: true, message: listed.length ? listed.join("; ") : "no scenarios", changed: [], output: listed };
@@ -3079,7 +3086,7 @@ const SPECS: readonly Spec[] = [
     // and a result cell (results=), a column for the current values and
     // one a scenario, each scenario's results worked out with its values
     // in, the sheet as it was after.
-    id: "scenario.summary", label: "Scenario Summary", params: ["results"], optional: ["to"], journaled: true,
+    id: "scenario.summary", label: "Scenario Summary", params: ["results"], optional: ["to"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, scs = page.scenarios;
       if (!scs.length) refuse("no scenarios");
@@ -3114,7 +3121,7 @@ const SPECS: readonly Spec[] = [
     // Excel's New Cell Style by example), or another style's (basedOn=),
     // and these parts over it: bold, italic, underline, strike (1 or 0),
     // size, fill, color, number. Every cell of it is drawn anew.
-    id: "style.define", label: "New Cell Style", params: ["name"], optional: ["from", "basedOn", "bold", "italic", "underline", "strike", "size", "fill", "color", "number"], journaled: true,
+    id: "style.define", label: "New Cell Style", params: ["name"], optional: ["from", "basedOn", "bold", "italic", "underline", "strike", "size", "fill", "color", "number"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const name = p.name.trim();
       if (!name || name.length > 60) refuse(`${p.name} is not a style name`);
@@ -3137,7 +3144,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A cell style on cells (Normal takes it off).
-    id: "style.apply", label: "Cell Styles", params: ["range", "name"], journaled: true,
+    id: "style.apply", label: "Cell Styles", params: ["range", "name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), name = styleNamed(wb.styles.keys(), p.name) ?? refuse(`no cell style ${p.name} (${[...wb.styles.keys()].join(", ")})`);
       const keys = [...range(r[0], r[1])];
@@ -3147,7 +3154,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A style deleted: its cells Normal again (Normal itself stays).
-    id: "style.delete", label: "Delete Cell Style", params: ["name"], journaled: true,
+    id: "style.delete", label: "Delete Cell Style", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const name = styleNamed(wb.styles.keys(), p.name) ?? refuse(`no cell style ${p.name}`);
       if (name === "Normal") refuse("Normal cannot be deleted");
@@ -3158,7 +3165,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "style.list", label: "Cell Style Gallery", params: [], journaled: false,
+    id: "style.list", label: "Cell Style Gallery", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const listed = [...wb.styles].map(([n, l]) => `${n}: ${describeLook(l)}`);
       return { ok: true, message: [...wb.styles.keys()].join(", "), changed: [], output: listed };
@@ -3166,7 +3173,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A table as the app's metadata has it (GETTABLE, GET_TABLE_METADATA).
-    id: "table.get", label: "About a table", params: ["name"], journaled: false,
+    id: "table.get", label: "About a table", params: ["name"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.name) ?? refuse(`no table ${p.name}`);
       const about = {
@@ -3180,7 +3187,7 @@ const SPECS: readonly Spec[] = [
   {
     // The app's sort cycle: by a new column ascending; by the same one,
     // descending, then the rows as they were before the first sort.
-    id: "table.sort", label: "Sort Table", params: ["name", "column"], journaled: true,
+    id: "table.sort", label: "Sort Table", params: ["name", "column"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const t = wb.sheet.table(p.name) ?? refuse(`no table ${p.name}`), col = columnOf(p.column);
       const left = Math.min(t.range[0].col, t.range[1].col), right = Math.max(t.range[0].col, t.range[1].col);
@@ -3201,7 +3208,7 @@ const SPECS: readonly Spec[] = [
     // the fields grouped down and across (comma-separated), value= the one
     // aggregated by agg=, filters= a JSON object of a field's value a row
     // must have. The same id again replaces it.
-    id: "pivot.create", label: "PivotTable", params: ["id", "source", "value", "agg", "output"], optional: ["rows", "cols", "filters"], journaled: true,
+    id: "pivot.create", label: "PivotTable", params: ["id", "source", "value", "agg", "output"], optional: ["rows", "cols", "filters"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, agg = p.agg.toUpperCase() as Aggregate;
       if (!AGGREGATES.includes(agg)) refuse(`${p.agg} is not ${AGGREGATES.join(", ")}`);
@@ -3224,7 +3231,7 @@ const SPECS: readonly Spec[] = [
     // (group=none takes it off); calculated="Tax=amount*0.2" (adds or
     // replaces one; "Tax=" removes it); collapse= and expand= an outer row
     // group.
-    id: "pivot.options", label: "PivotTable Options", params: ["id"], optional: ["layout", "subtotals", "grandTotals", "sort", "showAs", "group", "by", "calculated", "collapse", "expand"], journaled: true,
+    id: "pivot.options", label: "PivotTable Options", params: ["id"], optional: ["layout", "subtotals", "grandTotals", "sort", "showAs", "group", "by", "calculated", "collapse", "expand"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, pv = page.pivots.get(p.id) ?? refuse(`no pivot ${p.id}`);
       const o: Record<string, unknown> = { ...pv.options };
@@ -3256,7 +3263,7 @@ const SPECS: readonly Spec[] = [
   {
     // A PivotChart: a chart of a pivot, following it as it is written
     // again (its grand totals left out).
-    id: "chart.pivot", label: "PivotChart", params: ["id"], optional: ["kind", "title"], journaled: true,
+    id: "chart.pivot", label: "PivotChart", params: ["id"], optional: ["kind", "title"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, pv = page.pivots.get(p.id) ?? refuse(`no pivot ${p.id}`);
       const kind = CHART_KINDS.find((k) => k.toLowerCase() === (p.kind ?? "bar").trim().toLowerCase()) ?? refuse(`${p.kind} is not a chart (${CHART_KINDS.join(", ")})`);
@@ -3266,40 +3273,40 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Written again from its source (the app's UPDATEPIVOT).
-    id: "pivot.update", label: "Refresh PivotTable", params: ["id"], journaled: true,
+    id: "pivot.update", label: "Refresh PivotTable", params: ["id"], journaled: true, effect: "edit",
     run: async (wb, p) => writePivot(wb, p.id, wb.page(wb.active)!.pivots.get(p.id) ?? refuse(`no pivot ${p.id}`)),
   },
   {
     // Forgotten; the cells it wrote stay, as the app leaves them.
-    id: "pivot.delete", label: "Delete PivotTable", params: ["id"], journaled: true,
+    id: "pivot.delete", label: "Delete PivotTable", params: ["id"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       if (!wb.page(wb.active)!.pivots.delete(p.id)) refuse(`no pivot ${p.id}`);
       return { ok: true, message: `deleted pivot ${p.id}`, changed: [] };
     },
   },
   {
-    id: "pivot.get", label: "About a PivotTable", params: ["id"], journaled: false,
+    id: "pivot.get", label: "About a PivotTable", params: ["id"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const config = pivotConfig(wb.page(wb.active)!.pivots.get(p.id) ?? refuse(`no pivot ${p.id}`));
       return { ok: true, message: JSON.stringify(config), changed: [], output: config };
     },
   },
   {
-    id: "pivot.list", label: "PivotTables", params: [], journaled: false,
+    id: "pivot.list", label: "PivotTables", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const all = [...wb.page(wb.active)!.pivots].map(([id, pv]) => ({ id, config: pivotConfig(pv) }));
       return { ok: true, message: all.length ? all.map((x) => x.id).join(", ") : "no pivots", changed: [], output: all };
     },
   },
   {
-    id: "table.list", label: "Tables", params: [], journaled: false,
+    id: "table.list", label: "Tables", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const listed = wb.sheet.tables().map((t) => `${t.name} ${rangeName(t.range)} (${tableColumns(wb, t).join(", ")})`);
       return { ok: true, message: listed.length ? listed.join("; ") : "no tables", changed: [], output: listed };
     },
   },
   {
-    id: "chart.insert", label: "Insert Chart", params: ["kind", "range"], optional: ["title", "at"], journaled: true,
+    id: "chart.insert", label: "Insert Chart", params: ["kind", "range"], optional: ["title", "at"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const kind = CHART_KINDS.find((k) => k.toLowerCase() === p.kind.trim().toLowerCase()) ?? refuse(`${p.kind} is not a chart (${CHART_KINDS.join(", ")})`);
       const page = wb.page(wb.active)!, r = rangeOf(p.range);
@@ -3314,7 +3321,7 @@ const SPECS: readonly Spec[] = [
     // gridlines=, byRows= (Switch Row/Column): each 1 or 0.
     // secondary= the series (numbers from 1, comma-separated; none) a
     // combo draws on its secondary axis.
-    id: "chart.option", label: "Chart Elements", params: ["index"], optional: ["title", "xTitle", "yTitle", "legend", "labels", "gridlines", "byRows", "secondary"], journaled: true,
+    id: "chart.option", label: "Chart Elements", params: ["index"], optional: ["title", "xTitle", "yTitle", "legend", "labels", "gridlines", "byRows", "secondary"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, i = Number(p.index) - 1, c = page.charts[i] ?? refuse(`no chart ${p.index}`);
       const o: Record<string, unknown> = { ...c.options };
@@ -3342,7 +3349,7 @@ const SPECS: readonly Spec[] = [
     // linear, exponential, logarithmic, polynomial (order= 2 to 6), power,
     // movingAverage (period=), or none to take it off; equation=1, r2=1
     // label it.
-    id: "chart.trendline", label: "Trendline", params: ["index", "series", "type"], optional: ["order", "period", "equation", "r2"], journaled: true,
+    id: "chart.trendline", label: "Trendline", params: ["index", "series", "type"], optional: ["order", "period", "equation", "r2"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, i = Number(p.index) - 1, c = page.charts[i] ?? refuse(`no chart ${p.index}`);
       const names = wb.charts()[i].data.series.map((x) => x.name);
@@ -3366,7 +3373,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Select Data: the chart's range; and Change Chart Type: its kind.
-    id: "chart.data", label: "Select Data", params: ["index"], optional: ["range", "kind"], journaled: true,
+    id: "chart.data", label: "Select Data", params: ["index"], optional: ["range", "kind"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, i = Number(p.index) - 1, c = page.charts[i] ?? refuse(`no chart ${p.index}`);
       const kind = p.kind === undefined ? c.kind : CHART_KINDS.find((k) => k.toLowerCase() === p.kind!.trim().toLowerCase()) ?? refuse(`${p.kind} is not a chart (${CHART_KINDS.join(", ")})`);
@@ -3376,7 +3383,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "chart.list", label: "Charts", params: [], journaled: false,
+    id: "chart.list", label: "Charts", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const listed = wb.charts().map((c, i) => `${i + 1}. ${c.title}: ${c.kind} chart of ${c.range}`);
       return { ok: true, message: listed.length ? listed.join("; ") : "no charts", changed: [], output: listed };
@@ -3384,7 +3391,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Move Chart: where it floats over the grid, its top-left cell.
-    id: "chart.move", label: "Move Chart", params: ["index", "at"], journaled: true,
+    id: "chart.move", label: "Move Chart", params: ["index", "at"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, i = Number(p.index) - 1, c = page.charts[i] ?? refuse(`no chart ${p.index}`);
       const at = cellAddr(cellOf(p.at))!;
@@ -3393,7 +3400,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "chart.delete", label: "Delete Chart", params: ["index"], journaled: true,
+    id: "chart.delete", label: "Delete Chart", params: ["index"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const charts = wb.page(wb.active)!.charts, i = Number(p.index) - 1;
       if (!Number.isInteger(i) || !charts[i]) refuse(`no chart ${p.index}`);
@@ -3405,7 +3412,7 @@ const SPECS: readonly Spec[] = [
     // Insert Pictures: base64= bytes (PNG, JPEG, GIF or BMP), at= a cell
     // (the selection's top-left), w= and h= (its own size, made at most
     // 400 wide), alt= its alternative text, name= ("Picture n").
-    id: "insert.picture", label: "Pictures", params: ["base64"], optional: ["at", "w", "h", "alt", "name"], journaled: true,
+    id: "insert.picture", label: "Pictures", params: ["base64"], optional: ["at", "w", "h", "alt", "name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const bytes = fromBase64(p.base64), pic = pictureOf(bytes) ?? refuse("not a picture (PNG, JPEG, GIF or BMP)");
       const scale = Math.min(1, 400 / Math.max(1, pic.w));
@@ -3416,7 +3423,7 @@ const SPECS: readonly Spec[] = [
     // Place in Cell: a picture into a cell (base64= its bytes, alt= its
     // alternative text), drawn over it fitted to it, its value left as it
     // is; or (name=) a floating picture placed in the cell it sits on.
-    id: "insert.cellPicture", label: "Place in Cell", params: [], optional: ["cell", "base64", "alt", "name"], journaled: true,
+    id: "insert.cellPicture", label: "Place in Cell", params: [], optional: ["cell", "base64", "alt", "name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       if (p.name !== undefined) {
         const page = wb.page(wb.active)!, d = drawingNamed(wb, p.name);
@@ -3434,7 +3441,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "cell.removePicture", label: "Delete Picture in Cell", params: ["range"], journaled: true,
+    id: "cell.removePicture", label: "Delete Picture in Cell", params: ["range"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), keys = [...range(r[0], r[1])].filter((k) => wb.notes.get(k).picture);
       for (const k of keys) wb.notes.set(k, { picture: undefined });
@@ -3445,7 +3452,7 @@ const SPECS: readonly Spec[] = [
     // Insert Shapes: shape= (rectangle, roundedRectangle, oval, triangle,
     // rightArrow, line), at=, w= and h= (96 x 64), fill= and line= colours
     // (a theme's accent1 and its darker line), text= inside it.
-    id: "insert.shape", label: "Shapes", params: ["shape"], optional: ["at", "w", "h", "fill", "line", "text", "name"], journaled: true,
+    id: "insert.shape", label: "Shapes", params: ["shape"], optional: ["at", "w", "h", "fill", "line", "text", "name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const shape = SHAPES.find((x) => x.toLowerCase() === p.shape.trim().toLowerCase()) ?? refuse(`no shape ${p.shape} (${SHAPES.join(", ")})`);
       return drawn(wb, p, { kind: "shape", shape, ...colours(p), ...(p.text ? { text: p.text } : {}) }, SHAPE_TITLES[shape], 96, 64);
@@ -3453,13 +3460,13 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Text Box: text= (lines split at \n), at=, w= and h= (160 x 60).
-    id: "insert.textbox", label: "Text Box", params: ["text"], optional: ["at", "w", "h", "fill", "line", "name"], journaled: true,
+    id: "insert.textbox", label: "Text Box", params: ["text"], optional: ["at", "w", "h", "fill", "line", "name"], journaled: true, effect: "edit",
     run: async (wb, p) => drawn(wb, p, { kind: "textbox", text: p.text.replace(/\\n/g, "\n"), ...colours(p) }, "TextBox", 160, 60),
   },
   {
     // A drawing moved (at=), sized (w=, h=), recoloured (fill=, line=),
     // its text or alternative text changed, or renamed (to=).
-    id: "drawing.edit", label: "Format Shape", params: ["name"], optional: ["at", "w", "h", "fill", "line", "text", "alt", "to"], journaled: true,
+    id: "drawing.edit", label: "Format Shape", params: ["name"], optional: ["at", "w", "h", "fill", "line", "text", "alt", "to"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, d = drawingNamed(wb, p.name);
       const to = p.to?.trim();
@@ -3472,7 +3479,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "drawing.delete", label: "Delete drawing", params: ["name"], journaled: true,
+    id: "drawing.delete", label: "Delete drawing", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, d = drawingNamed(wb, p.name);
       page.drawings = page.drawings.filter((x) => x !== d);
@@ -3481,7 +3488,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // The Selection Pane's list: each drawing, front to back last.
-    id: "drawing.list", label: "Selection Pane", params: [], journaled: false,
+    id: "drawing.list", label: "Selection Pane", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const listed = wb.page(wb.active)!.drawings.map((d) => `${d.name}: ${describeDrawing(d)}`);
       return { ok: true, message: listed.length ? listed.join("; ") : "no drawings", changed: [], output: listed };
@@ -3489,7 +3496,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Bring to Front and Send to Back: its place in the drawing order.
-    id: "drawing.order", label: "Arrange", params: ["name", "to"], journaled: true,
+    id: "drawing.order", label: "Arrange", params: ["name", "to"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, d = drawingNamed(wb, p.name), rest = page.drawings.filter((x) => x !== d);
       const to = p.to.trim().toLowerCase();
@@ -3501,7 +3508,7 @@ const SPECS: readonly Spec[] = [
   {
     // A sparkline at a cell over a range: line, column or winloss, with
     // Excel's Show options (high, low, first, last; axis), as a formula.
-    id: "insert.sparkline", label: "Sparkline", params: ["range", "at"], optional: ["type", "options"], journaled: true,
+    id: "insert.sparkline", label: "Sparkline", params: ["range", "at"], optional: ["type", "options"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), key = cellOf(p.at), type = (p.type ?? "line").trim().toLowerCase(), options = (p.options ?? "").trim();
       if (!(SPARKLINE_TYPES as readonly string[]).includes(type)) refuse(`${p.type} is not a sparkline type (${SPARKLINE_TYPES.join(", ")})`);
@@ -3513,7 +3520,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "data.goalSeek", label: "Goal Seek", params: ["set", "to", "by"], journaled: true,
+    id: "data.goalSeek", label: "Goal Seek", params: ["set", "to", "by"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const target = cellOf(p.set), by = cellOf(p.by), to = numberOf(p.to);
       if (!wb.sheet.input(target).startsWith("=")) refuse(`${target} is not a formula`);
@@ -3535,7 +3542,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "data.table", label: "Data Table", params: ["range"], optional: ["row", "column"], journaled: true,
+    id: "data.table", label: "Data Table", params: ["range"], optional: ["row", "column"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), tl = topLeft(r);
       const rows = Math.abs(r[0].row - r[1].row) + 1, cols = Math.abs(r[0].col - r[1].col) + 1;
@@ -3567,7 +3574,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "data.removeDuplicates", label: "Remove Duplicates", params: ["range"], optional: ["columns", "headers"], journaled: true,
+    id: "data.removeDuplicates", label: "Remove Duplicates", params: ["range"], optional: ["columns", "headers"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range), tl = topLeft(r);
       const first = flag(p.headers) ? 1 : 0;
@@ -3594,7 +3601,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "data.textToColumns", label: "Text to Columns", params: ["range"], optional: ["delimiter", "replace"], journaled: true,
+    id: "data.textToColumns", label: "Text to Columns", params: ["range"], optional: ["delimiter", "replace"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const r = rangeOf(p.range);
       if (r[0].col !== r[1].col) refuse("Text to Columns splits one column");
@@ -3620,7 +3627,7 @@ const SPECS: readonly Spec[] = [
   {
     // A formula worked out against the sheet without a cell to hold it: the
     // app's EVALUATE.
-    id: "formulas.calculate", label: "Calculate", params: ["formula"], journaled: false,
+    id: "formulas.calculate", label: "Calculate", params: ["formula"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const text = p.formula.trim().replace(/^=/, "");
       const v = await wb.sheet.evaluate(text);
@@ -3629,7 +3636,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Every sheet compiled and worked out again; how many formulas it took.
-    id: "formulas.recalculate", label: "Calculate Now", params: [], journaled: false,
+    id: "formulas.recalculate", label: "Calculate Now", params: [], journaled: false, effect: "view",
     run: async (wb) => {
       const changed = await recalculated(wb);
       const n = wb.pages().reduce((t, page) => t + page.sheet.keys().filter((k) => page.sheet.input(k).startsWith("=")).length, 0);
@@ -3640,7 +3647,7 @@ const SPECS: readonly Spec[] = [
     // The 1904 date system (Excel's "Use 1904 date system"), or 1900: the
     // serials stay, so a date typed as a number shows four years and a day
     // on; what DATE and the other date functions give follows it.
-    id: "workbook.dateSystem", label: "Date System", params: ["system"], journaled: true, unstepped: true,
+    id: "workbook.dateSystem", label: "Date System", params: ["system"], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, p) => {
       const sys = Number(p.system);
       if (sys !== 1900 && sys !== 1904) refuse(`${p.system} is not a date system (1900, 1904)`);
@@ -3652,7 +3659,7 @@ const SPECS: readonly Spec[] = [
     // An injectable clock (IronCalc action 6): at= "2026-10-21 09:30", a date,
     // or a serial pins TODAY() and NOW(); none is the host's clock again. A
     // session's setting, not saved. The volatile cells are worked out at once.
-    id: "workbook.clock", label: "Clock", params: [], optional: ["at"], journaled: false,
+    id: "workbook.clock", label: "Clock", params: [], optional: ["at"], journaled: false, effect: "view",
     run: async (wb, p) => {
       if (p.at === undefined || p.at.trim() === "") {
         setClock(null);
@@ -3667,13 +3674,13 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "workbook.clockState", label: "Clock State", params: [], journaled: false,
+    id: "workbook.clockState", label: "Clock State", params: [], journaled: false, effect: "query",
     run: async () => ({ ok: true, message: clockIsFixed() ? `the clock is fixed at ${instantText(clockNow())}` : "the clock is the host's", changed: [], output: clockNow() }),
   },
   {
     // View > Animations: on (as it starts) the selection's outline glides
     // to a new cell, off it jumps. A view, not saved.
-    id: "view.animations", label: "Animations", params: [], optional: ["off", "ms"], journaled: false,
+    id: "view.animations", label: "Animations", params: [], optional: ["off", "ms"], journaled: false, effect: "view",
     run: async (wb, p) => {
       if (p.ms !== undefined) {
         const ms = Number(p.ms);
@@ -3688,7 +3695,7 @@ const SPECS: readonly Spec[] = [
     // Light or dark: the system's (system, as it starts), or light or dark
     // whatever the system shows; the chrome changes, the sheet stays white.
     // A view, not saved.
-    id: "view.appearance", label: "Dark Mode", params: ["mode"], journaled: false,
+    id: "view.appearance", label: "Dark Mode", params: ["mode"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const m = p.mode.trim().toLowerCase();
       if (m !== "system" && m !== "light" && m !== "dark") refuse(`${p.mode} is not system, light or dark`);
@@ -3701,7 +3708,7 @@ const SPECS: readonly Spec[] = [
     // its row and its column; at A1 nothing, in row 1 or column A that one
     // alone, as Excel's), Remove Page Break there, Reset All; one step of
     // undo, saved with the sheet.
-    id: "page.break", label: "Insert Page Break", params: ["cell"], optional: ["off"], journaled: true,
+    id: "page.break", label: "Insert Page Break", params: ["cell"], optional: ["off"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const a = cellAddr(cellOf(p.cell))!, page = wb.page(wb.active)!, off = flag(p.off ?? "0");
       const rows = new Set(page.breaks.rows), cols = new Set(page.breaks.cols);
@@ -3711,7 +3718,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "page.resetBreaks", label: "Reset All Page Breaks", params: [], journaled: true,
+    id: "page.resetBreaks", label: "Reset All Page Breaks", params: [], journaled: true, effect: "edit",
     run: async (wb) => {
       const page = wb.page(wb.active)!;
       page.breaks = { rows: [], cols: [] };
@@ -3722,7 +3729,7 @@ const SPECS: readonly Spec[] = [
     // The pages the sheet prints as (the used range, A4 portrait, as
     // file.exportPdf's defaults, or its paper= landscape=): each page's
     // range, and where the breaks fall; the manual ones listed apart.
-    id: "page.breaks", label: "Page Breaks", params: [], optional: ["paper", "landscape"], journaled: false,
+    id: "page.breaks", label: "Page Breaks", params: [], optional: ["paper", "landscape"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const pages = printedPages(wb, wb.page(wb.active)!, (p.paper ?? "a4").trim().toLowerCase(), flag(p.landscape));
       return { ok: true, message: `${pages.length} page${pages.length === 1 ? "" : "s"}: ${pages.join(", ")}; manual breaks: ${breaksSaid(wb.page(wb.active)!)}`, changed: [], output: pages };
@@ -3731,7 +3738,7 @@ const SPECS: readonly Spec[] = [
   {
     // View > Page Break Preview (on=0 back to Normal): where each printed
     // page ends drawn on the sheet, a manual break heavier.
-    id: "view.pageBreakPreview", label: "Page Break Preview", params: [], optional: ["off"], journaled: false,
+    id: "view.pageBreakPreview", label: "Page Break Preview", params: [], optional: ["off"], journaled: false, effect: "view",
     run: async (wb, p) => {
       wb.breakPreview = !flag(p.off ?? "0");
       return { ok: true, message: wb.breakPreview ? "Page Break Preview" : "Normal view", changed: wb.sheet.keys(), output: wb.breakPreview ? 1 : 0 };
@@ -3741,7 +3748,7 @@ const SPECS: readonly Spec[] = [
     // View > Show: the sheet's gridlines and its headings (the column
     // letters and row numbers), saved with it; the formula bar, the
     // window's. on=0 hides it, on=1 (or left out) shows it.
-    id: "view.show", label: "Show", params: ["what"], optional: ["on"], journaled: false,
+    id: "view.show", label: "Show", params: ["what"], optional: ["on"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const what = p.what.trim().toLowerCase().replace(/[\s_-]+/g, ""), on = p.on === undefined || flag(p.on), page = wb.page(wb.active)!;
       if (what === "gridlines") page.gridlines = on;
@@ -3756,7 +3763,7 @@ const SPECS: readonly Spec[] = [
     // panels' tabs and their panels) shown, or only the sheet tabs and the
     // status bar, as the app starts. on=1 or 0; none toggles. A view setting,
     // not a step to undo, saved with the workbook.
-    id: "view.extraControls", label: "Extra controls", params: [], optional: ["on"], journaled: false,
+    id: "view.extraControls", label: "Extra controls", params: [], optional: ["on"], journaled: false, effect: "view",
     run: async (wb, p) => {
       wb.extraControls = p.on === undefined ? !wb.extraControls : flag(p.on);
       return { ok: true, message: `extra controls ${wb.extraControls ? "shown" : "hidden"}`, changed: [], output: wb.extraControls ? 1 : 0 };
@@ -3766,7 +3773,7 @@ const SPECS: readonly Spec[] = [
     // The locale (locale.ts): the interface's words and how formulas are
     // typed and shown in a cell and the formula bar (Spanish: SUMA, ';', a
     // decimal comma); stored, scripted and saved canonical. A view.
-    id: "view.locale", label: "Language", params: ["lang"], journaled: false,
+    id: "view.locale", label: "Language", params: ["lang"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const l = p.lang.trim().toLowerCase();
       if (!(LOCALES as readonly string[]).includes(l)) refuse(`${p.lang} is not a locale here (${LOCALES.join(", ")})`);
@@ -3776,7 +3783,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A formula as the locale types it, and as it is stored (canonical).
-    id: "formulas.localize", label: "Localize Formula", params: ["formula"], optional: ["lang", "to"], journaled: false,
+    id: "formulas.localize", label: "Localize Formula", params: ["formula"], optional: ["lang", "to"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const l = (p.lang ?? wb.locale).trim().toLowerCase() as Locale;
       if (!(LOCALES as readonly string[]).includes(l)) refuse(`${p.lang} is not a locale here (${LOCALES.join(", ")})`);
@@ -3788,7 +3795,7 @@ const SPECS: readonly Spec[] = [
     // Zoom: the sheet drawn at a percentage, 10 to 400, as Excel's; or in
     // or out a step (Excel's 10, 25, 50, 75, 100, 125, 150, 200, 400). A
     // view, not a step to undo, not saved.
-    id: "view.zoom", label: "Zoom", params: [], optional: ["percent", "by"], journaled: false,
+    id: "view.zoom", label: "Zoom", params: [], optional: ["percent", "by"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const steps = [10, 25, 50, 75, 100, 125, 150, 200, 400];
       let z = wb.zoom;
@@ -3803,13 +3810,13 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "view.selection", label: "Selection", params: [], journaled: false,
+    id: "view.selection", label: "Selection", params: [], journaled: false, effect: "view",
     run: async (wb) => ({ ok: true, message: wb.selection, changed: [], output: wb.selection }),
   },
   {
     // Select a range: a cell, a rectangle, whole columns ("B:B") or rows
     // ("3:5"), or all ("all"); the page selects it. A view, not a step.
-    id: "view.select", label: "Select", params: ["range"], journaled: false,
+    id: "view.select", label: "Select", params: ["range"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const rs = /^\s*all\s*$/i.test(p.range) ? [[{ col: 0, row: 0 }, { col: COLS - 1, row: ROWS - 1 }] as [Addr, Addr]] : p.range.split(",").map((a) => rangeOf(a.trim()));
       wb.selection = rs.map(rangeName).join(",");
@@ -3822,7 +3829,7 @@ const SPECS: readonly Spec[] = [
     // the used range (A1 to Ctrl+End's cell): formulas, constants (either
     // narrowed by type=numbers|text|logicals|errors), blanks, errors,
     // comments, validation, conditional formats.
-    id: "edit.goToSpecial", label: "Go To Special", params: ["what"], optional: ["range", "type"], journaled: false,
+    id: "edit.goToSpecial", label: "Go To Special", params: ["what"], optional: ["range", "type"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const kinds = ["formulas", "constants", "blanks", "errors", "comments", "validation", "conditional"];
       const what = p.what.trim().toLowerCase().replace(/^conditional formats?$/, "conditional");
@@ -3853,7 +3860,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Ctrl+End's cell: the last row used and the last column used.
-    id: "sheet.lastCell", label: "Last Cell", params: [], journaled: false,
+    id: "sheet.lastCell", label: "Last Cell", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const at = wb.sheet.keys().map((k) => cellAddr(k)!);
       const last = keyOf({ col: Math.max(0, ...at.map((a) => a.col)), row: Math.max(0, ...at.map((a) => a.row)) });
@@ -3862,13 +3869,13 @@ const SPECS: readonly Spec[] = [
   },
   {
     // The keyboard map (keys.ts), for a script to read.
-    id: "keys.list", label: "Keyboard Shortcuts", params: [], journaled: false,
+    id: "keys.list", label: "Keyboard Shortcuts", params: [], journaled: false, effect: "query",
     run: async () => ({ ok: true, message: `${KEYS.length} keys`, changed: [], output: KEYS.map((k) => `${k.combo} | ${k.does} | ${k.id}`) }),
   },
   {
     // The status bar's figures for a range: average, count, numerical
     // count, min, max, sum.
-    id: "range.stats", label: "Status Bar figures", params: ["range"], journaled: false,
+    id: "range.stats", label: "Status Bar figures", params: ["range"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const st = wb.stats(p.range.split(",").map((a) => rangeOf(a.trim())));
       return { ok: true, message: statsLine(st), changed: [], output: st };
@@ -3877,7 +3884,7 @@ const SPECS: readonly Spec[] = [
   {
     // The panel open under the grid, one at a time (Edit, Looks ... Lists:
     // menus.ts's PANELS), or none. A view, not a step.
-    id: "view.panel", label: "Show Panel", params: ["name"], journaled: false,
+    id: "view.panel", label: "Show Panel", params: ["name"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const n = p.name.trim().toLowerCase();
       const panel = n === "none" ? null : PANELS.find((x) => x.name === n || x.label.toLowerCase() === n)?.name ?? refuse(`${p.name} is not a panel (${PANELS.map((x) => x.name).join(", ")}, none)`);
@@ -3888,7 +3895,7 @@ const SPECS: readonly Spec[] = [
   {
     // F4 on a formula being typed: the reference at the caret (the end by
     // default) to its next form, A1, $A$1, A$1, $A1.
-    id: "formulas.cycleRef", label: "Cycle Reference", params: ["text"], optional: ["caret"], journaled: false,
+    id: "formulas.cycleRef", label: "Cycle Reference", params: ["text"], optional: ["caret"], journaled: false, effect: "query",
     run: async (_wb, p) => {
       const r = cycleRef(p.text, p.caret === undefined ? p.text.length : Number(p.caret));
       return { ok: true, message: r.text, changed: [], output: r.text };
@@ -3896,7 +3903,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // The functions a formula may call, in the sheet's language, sorted.
-    id: "formulas.functions", label: "Functions", params: [], journaled: false,
+    id: "formulas.functions", label: "Functions", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const fs = [...wb.sheet.language.functions()].sort();
       return { ok: true, message: `${fs.length} ${wb.sheet.language.name} functions`, changed: [], output: fs };
@@ -3905,7 +3912,7 @@ const SPECS: readonly Spec[] = [
   {
     // The function names that complete a formula typed so far, and the
     // call its end is in (Formula AutoComplete and the argument hint).
-    id: "formulas.complete", label: "Formula AutoComplete", params: ["text"], journaled: false,
+    id: "formulas.complete", label: "Formula AutoComplete", params: ["text"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const c = complete(p.text, wb.sheet.language.functions());
       const hint = c.call ? `${c.call}: argument ${c.arg}` : "";
@@ -3915,7 +3922,7 @@ const SPECS: readonly Spec[] = [
   {
     // The menu bar's items, each "File > Save | file.save | Ctrl+S": for a
     // script to find a command by where it is on the menus.
-    id: "menus.list", label: "Menus", params: [], journaled: false,
+    id: "menus.list", label: "Menus", params: [], journaled: false, effect: "query",
     run: async () => {
       const lines = menuLines();
       return { ok: true, message: `${lines.length} menu items`, changed: [], output: lines };
@@ -3926,7 +3933,7 @@ const SPECS: readonly Spec[] = [
     // inconsistent with those beside them, omitting a number next to their
     // range, and numbers stored as text (errorcheck.ts); a cell ignored is
     // passed over.
-    id: "formulas.errorCheck", label: "Error Checking", params: [], journaled: false,
+    id: "formulas.errorCheck", label: "Error Checking", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const found = errorCheck(wb.sheet, new Set(wb.notes.keys().filter((k) => wb.notes.get(k).ignoreError)));
       const message = found.length ? `${found.length} to check: ${found.map((f) => `${f.cell} ${f.check}`).join(", ")}` : "no errors found";
@@ -3936,7 +3943,7 @@ const SPECS: readonly Spec[] = [
   {
     // Ignore Error: Error Checking passes over the cell from now on; off,
     // it checks it again.
-    id: "formulas.ignoreError", label: "Ignore Error", params: ["cell"], optional: ["off"], journaled: true,
+    id: "formulas.ignoreError", label: "Ignore Error", params: ["cell"], optional: ["off"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell);
       wb.notes.set(key, { ignoreError: flag(p.off) ? undefined : true });
@@ -3946,7 +3953,7 @@ const SPECS: readonly Spec[] = [
   {
     // Calculate Sheet (Shift+F9): the active sheet worked out again; under
     // manual calculation, what reads it on other sheets is stale then.
-    id: "formulas.calculateSheet", label: "Calculate Sheet", params: [], journaled: false,
+    id: "formulas.calculateSheet", label: "Calculate Sheet", params: [], journaled: false, effect: "view",
     run: async (wb) => {
       const changed = await wb.sheet.recalculate();
       const n = wb.sheet.keys().filter((k) => wb.sheet.input(k).startsWith("=")).length;
@@ -3957,7 +3964,7 @@ const SPECS: readonly Spec[] = [
     // Calculation Options: automatic, or manual (a change works out only
     // the cells set; Calculate Now or Sheet the rest). Back to automatic,
     // everything is worked out. Saved with the file, not a step to undo.
-    id: "formulas.calculation", label: "Calculation Options", params: ["mode"], journaled: true, unstepped: true,
+    id: "formulas.calculation", label: "Calculation Options", params: ["mode"], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, p) => {
       const manual = ({ automatic: false, manual: true } as Record<string, boolean>)[p.mode.toLowerCase()] ?? refuse(`${p.mode} is not a calculation mode (automatic, manual)`);
       wb.calculation = { ...wb.calculation, manual };
@@ -3969,7 +3976,7 @@ const SPECS: readonly Spec[] = [
     // Enable iterative calculation: a circular reference worked round, up
     // to `max` times (100) or until no cell of it moves by more than
     // `change` (0.001), instead of #CYCLE!; off, it is #CYCLE! again.
-    id: "formulas.iteration", label: "Iterative Calculation", params: [], optional: ["off", "max", "change"], journaled: true, unstepped: true,
+    id: "formulas.iteration", label: "Iterative Calculation", params: [], optional: ["off", "max", "change"], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, p) => {
       const max = Number(p.max ?? wb.calculation.iterate?.max ?? 100), change = Number(p.change ?? wb.calculation.iterate?.change ?? 0.001);
       if (!flag(p.off) && !(Number.isInteger(max) && max >= 1 && max <= 32767)) refuse(`${p.max} is not a number of iterations (1 to 32767)`);
@@ -3982,18 +3989,18 @@ const SPECS: readonly Spec[] = [
   {
     // The setup script (RexxJS: what it LETs, every formula reads), as the
     // file keeps it; set, and run (everything is then worked out again).
-    id: "setup.get", label: "Setup script", params: [], journaled: false,
+    id: "setup.get", label: "Setup script", params: [], journaled: false, effect: "query",
     run: async (wb) => ({ ok: true, message: wb.setupScript || "no setup script", changed: [], output: wb.setupScript }),
   },
   {
-    id: "setup.set", label: "Set the setup script", params: ["text"], journaled: true,
+    id: "setup.set", label: "Set the setup script", params: ["text"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       wb.setupScript = p.text;
       return { ok: true, message: `setup script: ${p.text.split("\n").length} line${p.text.split("\n").length === 1 ? "" : "s"}`, changed: [] };
     },
   },
   {
-    id: "setup.run", label: "Run the setup script", params: [], journaled: true, unstepped: true,
+    id: "setup.run", label: "Run the setup script", params: [], journaled: true, effect: "edit", unstepped: true,
     run: async (wb) => {
       const failed = await wb.rexx.setup(wb.setupScript);
       if (failed) refuse(`the setup script failed: ${failed.split("\n").pop()}`);
@@ -4002,7 +4009,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "formulas.use", label: "Formula language", params: ["language"], journaled: true,
+    id: "formulas.use", label: "Formula language", params: ["language"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const name = ({ excel: "Excel", rexxjs: "RexxJS" } as Record<string, LanguageName>)[p.language.toLowerCase()]
         ?? refuse(`${p.language} is not a formula language (Excel, RexxJS)`);
@@ -4013,7 +4020,7 @@ const SPECS: readonly Spec[] = [
   {
     // How Excel formulas are shown and typed on the page: A1 or R1C1. A
     // view of them: what is stored, and what cell.set takes, stays A1.
-    id: "formulas.style", label: "Reference style", params: ["style"], journaled: false,
+    id: "formulas.style", label: "Reference style", params: ["style"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const style = ({ a1: "A1", r1c1: "R1C1" } as Record<string, "A1" | "R1C1">)[p.style.toLowerCase()] ?? refuse(`${p.style} is not a reference style (A1, R1C1)`);
       wb.referenceStyle = style;
@@ -4021,7 +4028,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "sheet.add", label: "Insert Sheet", params: [], optional: ["name"], journaled: true,
+    id: "sheet.add", label: "Insert Sheet", params: [], optional: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       let name = p.name;
       if (name === undefined) for (let i = wb.pages().length + 1; !name || wb.page(name); i++) name = `Sheet${i}`;
@@ -4036,7 +4043,7 @@ const SPECS: readonly Spec[] = [
     // The workbook at a glance, for a program to read: its name, each
     // sheet (its used range, cells, whether hidden, its own names, its
     // tables, charts, pivots and drawings), the workbook's names.
-    id: "workbook.inspect", label: "Inspect Workbook", params: [], journaled: false,
+    id: "workbook.inspect", label: "Inspect Workbook", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const out = {
         name: wb.name, active: wb.active, language: wb.sheet.language.name,
@@ -4057,7 +4064,7 @@ const SPECS: readonly Spec[] = [
   {
     // A range's cells as they are compared (INSPECTCELLS): each with an
     // input, a look or a format, its input, what it shows, its look.
-    id: "range.inspect", label: "Inspect Range", params: ["range"], journaled: false,
+    id: "range.inspect", label: "Inspect Range", params: ["range"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const r = rangeOf(p.range);
       const cells = [...range(r[0], r[1])].filter((k) => wb.sheet.input(k) !== "" || Object.keys(wb.notes.get(k)).length)
@@ -4068,7 +4075,7 @@ const SPECS: readonly Spec[] = [
   {
     // All a script may ask of the active sheet, rows counted from 1 and
     // columns by letter (control.ts's ISROWHIDDEN, GETSHEETNAMES, CANUNDO ...).
-    id: "sheet.state", label: "About the sheet", params: [], journaled: false,
+    id: "sheet.state", label: "About the sheet", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const hidden = wb.hidden(), page = wb.page(wb.active)!;
       const state = {
@@ -4085,7 +4092,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "sheet.activate", label: "Go to a sheet", params: ["name"], journaled: true, unstepped: true,
+    id: "sheet.activate", label: "Go to a sheet", params: ["name"], journaled: true, effect: "view", unstepped: true,
     run: async (wb, p) => {
       const page = pageOf(wb, p.name), before = wb.sheet.keys();
       wb.activate(page.name);
@@ -4094,7 +4101,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // What read the sheet by its old name reads it by the new one.
-    id: "sheet.rename", label: "Rename Sheet", params: ["name", "to"], journaled: true,
+    id: "sheet.rename", label: "Rename Sheet", params: ["name", "to"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = pageOf(wb, p.name), to = sheetNameOf(p.to);
       if (wb.page(to) && wb.page(to) !== page) refuse(`${to} is a sheet already`);
@@ -4105,7 +4112,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A sheet moved among the tabs: to=N (1 is first), or way=left/right.
-    id: "sheet.move", label: "Move Sheet", params: ["name"], optional: ["to", "way"], journaled: true,
+    id: "sheet.move", label: "Move Sheet", params: ["name"], optional: ["to", "way"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = pageOf(wb, p.name), from = wb.pages().indexOf(page), last = wb.pages().length - 1;
       if ((p.to === undefined) === (p.way === undefined)) refuse("sheet.move needs to or way");
@@ -4118,7 +4125,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // A sheet's tab colour: a colour's name or #rrggbb; none takes it off.
-    id: "sheet.color", label: "Tab Color", params: ["name", "color"], journaled: true,
+    id: "sheet.color", label: "Tab Color", params: ["name", "color"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = pageOf(wb, p.name), off = /^(none|auto|automatic)$/i.test(p.color.trim());
       page.tabColor = off ? null : resolvedColour(colour(p.color)) ?? refuse(`${p.color} is not a colour (a name such as red, or #rrggbb)`);
@@ -4128,7 +4135,7 @@ const SPECS: readonly Spec[] = [
   {
     // Hide a sheet (never the last one shown; the active one hidden, the
     // next one shown is made active), or unhide it.
-    id: "sheet.hide", label: "Hide Sheet", params: ["name"], optional: ["off"], journaled: true,
+    id: "sheet.hide", label: "Hide Sheet", params: ["name"], optional: ["off"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = pageOf(wb, p.name), hide = !flag(p.off), before = wb.sheet.keys();
       if (hide && !page.hiddenSheet && wb.pages().filter((x) => !x.hiddenSheet).length === 1) refuse(`${page.name} is the only sheet shown`);
@@ -4144,7 +4151,7 @@ const SPECS: readonly Spec[] = [
     // Move or Copy's "create a copy": the sheet with its cells and looks,
     // after it, named "Name copy" unless named (a sheet name has no
     // brackets here, so not Excel's "Name (2)"); the copy made active.
-    id: "sheet.copy", label: "Copy Sheet", params: ["name"], optional: ["to"], journaled: true,
+    id: "sheet.copy", label: "Copy Sheet", params: ["name"], optional: ["to"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = pageOf(wb, p.name), before = wb.sheet.keys();
       let to = p.to;
@@ -4156,7 +4163,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "sheet.delete", label: "Delete Sheet", params: ["name"], journaled: true,
+    id: "sheet.delete", label: "Delete Sheet", params: ["name"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = pageOf(wb, p.name);
       if (wb.pages().length === 1) refuse(`${page.name} is the only sheet`);
@@ -4166,7 +4173,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "file.open", label: "Open", params: [], optional: ["name", "sample"], journaled: true, unstepped: true,
+    id: "file.open", label: "Open", params: [], optional: ["name", "sample"], journaled: true, effect: "external", unstepped: true,
     run: (wb, p, store) => {
       if (p.name !== undefined) return open(wb, readSheetFile(JSON.parse(store.get(fileKey(savedName(store, p.name)))!)));
       if (p.sample !== undefined) return open(wb, readSheetFile(SAMPLES[p.sample.toLowerCase()] ?? refuse(`no sample ${p.sample} (budget, test, formatted)`)));
@@ -4176,14 +4183,14 @@ const SPECS: readonly Spec[] = [
   {
     // The workbook as the file's JSON (what file.save keeps), and a file's
     // JSON opened: the app's EXPORT and IMPORT.
-    id: "file.export", label: "Export the file", params: [], journaled: false,
+    id: "file.export", label: "Export the file", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const text = JSON.stringify(writeSheetFile(wb));
       return { ok: true, message: `${text.length} characters`, changed: [], output: text };
     },
   },
   {
-    id: "file.import", label: "Import a file", params: ["text"], journaled: true, unstepped: true,
+    id: "file.import", label: "Import a file", params: ["text"], journaled: true, effect: "external", unstepped: true,
     run: (wb, p) => {
       let data: unknown;
       try {
@@ -4199,14 +4206,14 @@ const SPECS: readonly Spec[] = [
     // WORKBOOKSCRIPT(). Run in a new workbook, it gives the same one. Its
     // lines are file.begin, sheet.begin, SETCELL and cell.note, sheet.parts
     // and file.end: open() in phases.
-    id: "file.script", label: "The file as a REXX program", params: [], journaled: false,
+    id: "file.script", label: "The file as a REXX program", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const text = bookScript(writeSheetFile(wb));
       return { ok: true, message: `${text.split("\n").length - 1} lines`, changed: [], output: text };
     },
   },
   {
-    id: "file.begin", label: "Begin a workbook", params: ["json"], journaled: true, unstepped: true,
+    id: "file.begin", label: "Begin a workbook", params: ["json"], journaled: true, effect: "external", unstepped: true,
     run: async (wb, p) => {
       const failed = await openHead(wb, readSheetFile(jsonOf(p.json)));
       await wb.settle();
@@ -4216,7 +4223,7 @@ const SPECS: readonly Spec[] = [
   {
     // A sheet of the workbook begun: added if it is not there (the first
     // is), made the active one, its names defined.
-    id: "sheet.begin", label: "Begin a sheet", params: ["name", "json"], journaled: true, unstepped: true,
+    id: "sheet.begin", label: "Begin a sheet", params: ["name", "json"], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, p) => {
       if (!wb.page(p.name)) await wb.add(p.name);
       wb.activate(p.name);
@@ -4228,7 +4235,7 @@ const SPECS: readonly Spec[] = [
   {
     // What a cell has beside its input, as the file has it: comment, format,
     // look, validation and so on (json=).
-    id: "cell.note", label: "Cell Notes", params: ["cell", "json"], journaled: true,
+    id: "cell.note", label: "Cell Notes", params: ["cell", "json"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const key = cellOf(p.cell);
       wb.notes.set(key, noteOf({ ...jsonOf(p.json) }));
@@ -4238,7 +4245,7 @@ const SPECS: readonly Spec[] = [
   {
     // A sheet's parts but its names and cells: rules, charts, view, merges,
     // tables, drawings and the rest (json= in the file's shapes).
-    id: "sheet.parts", label: "Sheet Parts", params: ["name", "json"], journaled: true, unstepped: true,
+    id: "sheet.parts", label: "Sheet Parts", params: ["name", "json"], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, p) => {
       const page = wb.page(p.name) ?? refuse(`no sheet ${p.name}`);
       await openParts(wb, readSheetFile({ sheetName: page.name, ...jsonOf(p.json) }).sheets[0]);
@@ -4247,7 +4254,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "file.end", label: "End a workbook", params: ["json"], journaled: true, unstepped: true,
+    id: "file.end", label: "End a workbook", params: ["json"], journaled: true, effect: "external", unstepped: true,
     run: async (wb, p) => {
       const file = readSheetFile(jsonOf(p.json));
       await openEnd(wb, file);
@@ -4258,7 +4265,7 @@ const SPECS: readonly Spec[] = [
     // Edit mode (B.7): on= 1 is edit mode, 0 the read view, none toggles. In
     // the read view the grid opens no editor and every command that changes
     // the workbook is refused (Commands.execute).
-    id: "view.editMode", label: "Edit Mode", params: [], optional: ["on"], journaled: false,
+    id: "view.editMode", label: "Edit Mode", params: [], optional: ["on"], journaled: false, effect: "view",
     run: async (wb, p) => {
       const on = p.on === undefined || p.on.trim() === "" ? !wb.editMode : p.on.trim() === "1" ? true : p.on.trim() === "0" ? false : refuse(`on= is 1 (edit mode) or 0 (the read view), not ${p.on}`);
       wb.editMode = on;
@@ -4266,7 +4273,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "view.editModeState", label: "Edit Mode State", params: [], journaled: false,
+    id: "view.editModeState", label: "Edit Mode State", params: [], journaled: false, effect: "view",
     run: async (wb) => ({ ok: true, message: wb.editMode ? "edit mode is on" : "read view: edit mode is off", changed: [], output: wb.editMode ? 1 : 0 }),
   },
   {
@@ -4274,7 +4281,7 @@ const SPECS: readonly Spec[] = [
     // with a message, kept in the workbook and worked out after every
     // command; a failing one is named in the status bar and the Audit
     // panel. Added by a name again, in any case, it replaces that check.
-    id: "check.add", label: "Add a Check", params: ["name", "formula", "message"], journaled: false,
+    id: "check.add", label: "Add a Check", params: ["name", "formula", "message"], journaled: false, effect: "edit",
     run: async (wb, p) => {
       const name = p.name.trim(), formula = p.formula.trim().replace(/^=/, "").trim(), message = p.message.trim();
       if (!name) refuse("a check needs a name");
@@ -4287,7 +4294,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "check.remove", label: "Remove a Check", params: ["name"], journaled: false,
+    id: "check.remove", label: "Remove a Check", params: ["name"], journaled: false, effect: "edit",
     run: async (wb, p) => {
       const name = p.name.trim();
       if (!wb.checks.some((c) => c.name.toUpperCase() === name.toUpperCase())) refuse(`no check named ${name}`);
@@ -4298,7 +4305,7 @@ const SPECS: readonly Spec[] = [
   },
   {
     // Every check with its state now.
-    id: "check.list", label: "Checks", params: [], journaled: false,
+    id: "check.list", label: "Checks", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const results = await wb.runChecks();
       const list = wb.checks.map((c, i) => ({ name: c.name, formula: c.formula, message: c.message, sheet: c.sheet, ok: results[i].ok, shown: results[i].shown }));
@@ -4311,7 +4318,7 @@ const SPECS: readonly Spec[] = [
     // each save a commit of the workbook's text, with a message; a log; the
     // difference of two versions, or of the last and the workbook now, cell
     // by cell, before a change is kept; a version brought back.
-    id: "version.save", label: "Save a version", params: ["message"], journaled: false,
+    id: "version.save", label: "Save a version", params: ["message"], journaled: false, effect: "external",
     run: async (wb, p, store) => {
       const repo = repoOf(store), text = textOfFile(writeSheetFile(wb)), last = headOf(repo);
       if (last && textAt(repo, last) === text) return { ok: true, message: `nothing changed since ${last.slice(0, 7)}`, changed: [], output: last };
@@ -4321,7 +4328,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "version.list", label: "Versions", params: [], optional: ["limit"], journaled: false,
+    id: "version.list", label: "Versions", params: [], optional: ["limit"], journaled: false, effect: "query",
     run: async (_wb, p, store) => {
       const list = versions(repoOf(store), p.limit === undefined ? 1000 : countOf(p.limit));
       return { ok: true, message: list.length ? list.map((v) => `${v.id.slice(0, 7)} ${v.message.split("\n")[0]}`).join("; ") : "no versions", changed: [], output: list };
@@ -4330,7 +4337,7 @@ const SPECS: readonly Spec[] = [
   {
     // a= and b= are versions (an id's start, HEAD, HEAD~2) or "current", the
     // workbook as it is now: a defaults to HEAD, b to current.
-    id: "version.diff", label: "Diff Versions", params: [], optional: ["a", "b"], journaled: false,
+    id: "version.diff", label: "Diff Versions", params: [], optional: ["a", "b"], journaled: false, effect: "query",
     run: async (wb, p, store) => {
       const repo = repoOf(store), side = (name: string | undefined, fallback: string) => {
         const n = (name ?? fallback).trim();
@@ -4342,7 +4349,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "version.restore", label: "Restore a Version", params: ["id"], journaled: true, unstepped: true,
+    id: "version.restore", label: "Restore a Version", params: ["id"], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, p, store) => {
       const repo = repoOf(store);
       try {
@@ -4359,7 +4366,7 @@ const SPECS: readonly Spec[] = [
     // kept whole or taken back whole. The MCP server's spreadsheet_review
     // holds before a request and shows the diff after it. A hold lives with
     // the page (no repository needed); strict= refuses a second hold.
-    id: "review.hold", label: "Hold for Review", params: [], optional: ["strict"], journaled: false,
+    id: "review.hold", label: "Hold for Review", params: [], optional: ["strict"], journaled: false, effect: "external",
     run: async (wb, p, store) => {
       const was = held.get(store);
       if (was !== undefined) {
@@ -4372,14 +4379,14 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "review.diff", label: "Review the Changes", params: [], journaled: false,
+    id: "review.diff", label: "Review the Changes", params: [], journaled: false, effect: "query",
     run: async (wb, _p, store) => {
       const changes = diffText(heldOf(store), textOfFile(writeSheetFile(wb)));
       return { ok: true, message: changes.length ? `${plural(changes.length, "change")}: ${changes.map(changeLine).join("; ")}` : "no changes", changed: [], output: changes };
     },
   },
   {
-    id: "review.keep", label: "Keep the Changes", params: [], journaled: false,
+    id: "review.keep", label: "Keep the Changes", params: [], journaled: false, effect: "external",
     run: async (wb, _p, store) => {
       const n = diffText(heldOf(store), textOfFile(writeSheetFile(wb))).length;
       held.delete(store);
@@ -4387,7 +4394,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "review.takeback", label: "Take the Changes Back", params: [], journaled: true, unstepped: true,
+    id: "review.takeback", label: "Take the Changes Back", params: [], journaled: true, effect: "edit", unstepped: true,
     run: async (wb, _p, store) => {
       const was = heldOf(store), n = diffText(was, textOfFile(writeSheetFile(wb))).length;
       await open(wb, readSheetFile(fileOfText(was)));
@@ -4399,14 +4406,14 @@ const SPECS: readonly Spec[] = [
     // The workbook as its canonical text (textform.ts): a cell a line, in a
     // stable order, so a diff of two saves names what changed; and a text
     // opened: EXPORTTEXT() and IMPORTTEXT(text).
-    id: "file.exportText", label: "Export the file as text", params: [], journaled: false,
+    id: "file.exportText", label: "Export the file as text", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const text = textOfFile(writeSheetFile(wb));
       return { ok: true, message: `${text.split("\n").length - 1} lines`, changed: [], output: text };
     },
   },
   {
-    id: "file.importText", label: "Import a file as text", params: ["text"], journaled: true, unstepped: true,
+    id: "file.importText", label: "Import a file as text", params: ["text"], journaled: true, effect: "external", unstepped: true,
     run: (wb, p) => {
       let data: Record<string, unknown>;
       try {
@@ -4419,7 +4426,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "file.save", label: "Save", params: [], optional: ["name"], journaled: false,
+    id: "file.save", label: "Save", params: [], optional: ["name"], journaled: false, effect: "external",
     run: async (wb, p, store) => {
       const name = (p.name ?? wb.name).trim() || refuse("a file needs a name");
       const file = writeSheetFile(wb);
@@ -4432,14 +4439,14 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "file.list", label: "Saved files", params: [], journaled: false,
+    id: "file.list", label: "Saved files", params: [], journaled: false, effect: "external",
     run: async (_wb, _p, store) => {
       const names = savedNames(store);
       return { ok: true, message: names.length ? `saved: ${names.join(", ")}` : "no saved files", changed: [], output: names };
     },
   },
   {
-    id: "file.delete", label: "Delete a saved file", params: ["name"], journaled: false,
+    id: "file.delete", label: "Delete a saved file", params: ["name"], journaled: false, effect: "external",
     run: async (_wb, p, store) => {
       const name = savedName(store, p.name);
       store.remove(fileKey(name));
@@ -4448,7 +4455,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "file.new", label: "New", params: [], journaled: true, unstepped: true,
+    id: "file.new", label: "New", params: [], journaled: true, effect: "external", unstepped: true,
     run: async (wb) => {
       const before = wb.sheet.keys();
       wb.reset();
@@ -4461,7 +4468,7 @@ const SPECS: readonly Spec[] = [
   {
     // What cells show, as CSV: delimiter= comma (the default), tab (TSV),
     // semicolon or bar, a field holding it quoted.
-    id: "file.exportCsv", label: "Export CSV", params: [], optional: ["range", "delimiter"], journaled: false,
+    id: "file.exportCsv", label: "Export CSV", params: [], optional: ["range", "delimiter"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const r = p.range === undefined ? usedRange(wb) : rangeOf(p.range), tl = topLeft(r);
       const d = delimiterOf(p.delimiter ?? "comma");
@@ -4475,7 +4482,7 @@ const SPECS: readonly Spec[] = [
     // CSV or TSV in at a cell: text=, or base64= bytes in encoding= (auto:
     // a byte-order mark, else UTF-8, else Windows-1252); delimiter= comma,
     // tab, semicolon, bar, space or auto (the default: detected).
-    id: "file.importCsv", label: "Import CSV", params: ["at"], optional: ["text", "base64", "encoding", "delimiter"], journaled: true,
+    id: "file.importCsv", label: "Import CSV", params: ["at"], optional: ["text", "base64", "encoding", "delimiter"], journaled: true, effect: "external",
     run: (wb, p) => {
       if ((p.text === undefined) === (p.base64 === undefined)) refuse("Import CSV takes text= or base64=");
       let text: string;
@@ -4498,7 +4505,7 @@ const SPECS: readonly Spec[] = [
     // number formats, merges, sizes, frozen panes and names (xlsx.ts), as
     // a workbook opened is; what it held that the app does not, reported.
     // An encrypted one (Agile or Standard AES) is opened by its password=.
-    id: "file.importXlsx", label: "Open XLSX", params: ["base64"], optional: ["name", "password"], journaled: true, unstepped: true,
+    id: "file.importXlsx", label: "Open XLSX", params: ["base64"], optional: ["name", "password"], journaled: true, effect: "external", unstepped: true,
     run: async (wb, p) => {
       let read: XlsxRead;
       try {
@@ -4521,7 +4528,7 @@ const SPECS: readonly Spec[] = [
   {
     // An ODS file opened (base64= its bytes): its tables, their cells'
     // cached values (ods.ts); what was left out, reported.
-    id: "file.importOds", label: "Open ODS", params: ["base64"], optional: ["name"], journaled: true, unstepped: true,
+    id: "file.importOds", label: "Open ODS", params: ["base64"], optional: ["name"], journaled: true, effect: "external", unstepped: true,
     run: async (wb, p) => {
       let read: { file: Record<string, unknown>; report: string[] };
       try {
@@ -4538,7 +4545,7 @@ const SPECS: readonly Spec[] = [
   {
     // An XLS file (Excel 97 to 2003, BIFF8) opened (base64= its bytes):
     // its sheets, cells and formulas (xls.ts); what was left out, reported.
-    id: "file.importXls", label: "Open XLS", params: ["base64"], optional: ["name"], journaled: true, unstepped: true,
+    id: "file.importXls", label: "Open XLS", params: ["base64"], optional: ["name"], journaled: true, effect: "external", unstepped: true,
     run: async (wb, p) => {
       let read: { file: Record<string, unknown>; report: string[] };
       try {
@@ -4556,7 +4563,7 @@ const SPECS: readonly Spec[] = [
     // File > Print: the sheet as file.exportPdf lays it out (range=, paper=,
     // landscape=, gridlines=, headings=, margin=, sheets=all), handed to the
     // system's print dialog, the job named for the workbook.
-    id: "file.print", label: "Print", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin"], journaled: false,
+    id: "file.print", label: "Print", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin"], journaled: false, effect: "external",
     run: async (wb, p) => {
       const pdf = await BY_ID.get("file.exportPdf")!.run(wb, p, memoryStore());
       if (!pdf.ok) return pdf;
@@ -4569,7 +4576,7 @@ const SPECS: readonly Spec[] = [
     // The sheet (or every sheet shown, sheets=all) as a PDF (pdf.ts): its
     // used range or range=, on paper= a4 or letter, landscape=1, with
     // gridlines=1 and headings=1 when asked; the bytes as base64.
-    id: "file.exportPdf", label: "Export PDF", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin"], journaled: false,
+    id: "file.exportPdf", label: "Export PDF", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const paper = (p.paper ?? "a4").trim().toLowerCase();
       if (!(paper in PAPER)) refuse(`${p.paper} is not a paper size (${Object.keys(PAPER).join(", ")})`);
@@ -4586,7 +4593,7 @@ const SPECS: readonly Spec[] = [
   {
     // The workbook as an XLSX file (xlsxwrite.ts): its bytes as base64 in
     // the output; what it could not write, reported.
-    id: "file.exportXlsx", label: "Save as XLSX", params: [], journaled: false,
+    id: "file.exportXlsx", label: "Save as XLSX", params: [], journaled: false, effect: "query",
     run: async (wb) => {
       const { bytes, report } = writeXlsx(wb);
       wb.fileReport = report;
@@ -4595,25 +4602,25 @@ const SPECS: readonly Spec[] = [
   },
   {
     // What the last file opened held that the app left out (FILEREPORT).
-    id: "file.report", label: "File Report", params: [], journaled: false,
+    id: "file.report", label: "File Report", params: [], journaled: false, effect: "query",
     run: async (wb) => ({ ok: true, message: wb.fileReport.length ? wb.fileReport.join("; ") : "nothing left out", changed: [], output: wb.fileReport }),
   },
   {
     // JSON rows in at a cell: an array of objects (their keys the header
     // row), or of arrays.
-    id: "file.importJson", label: "Import JSON", params: ["at", "text"], journaled: true,
+    id: "file.importJson", label: "Import JSON", params: ["at", "text"], journaled: true, effect: "external",
     run: (wb, p) => placed(wb, rangeOf(p.at)[0], fromJson(p.text), "JSON"),
   },
   {
     // An HTML page's table (table= its number, the first by default) in at
     // a cell.
-    id: "file.importHtml", label: "Import HTML", params: ["at", "text"], optional: ["table"], journaled: true,
+    id: "file.importHtml", label: "Import HTML", params: ["at", "text"], optional: ["table"], journaled: true, effect: "external",
     run: (wb, p) => placed(wb, rangeOf(p.at)[0], fromHtml(p.text, countOf(p.table ?? "1")), "HTML"),
   },
   {
     // The cells as an HTML table, as they show, their looks inline;
     // header=1 makes the first row th.
-    id: "file.exportHtml", label: "Export HTML", params: [], optional: ["range", "header"], journaled: false,
+    id: "file.exportHtml", label: "Export HTML", params: [], optional: ["range", "header"], journaled: false, effect: "query",
     run: async (wb, p) => {
       const r = p.range === undefined ? usedRange(wb) : rangeOf(p.range), tl = topLeft(r);
       const rows = Math.abs(r[0].row - r[1].row) + 1, cols = Math.abs(r[0].col - r[1].col) + 1;
@@ -4625,7 +4632,7 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
-    id: "example.paste", label: "Paste the Excel example", params: [], journaled: true,
+    id: "example.paste", label: "Paste the Excel example", params: [], journaled: true, effect: "edit",
     run: async (wb) => {
       if (wb.sheet.language.name !== "Excel") await wb.setLanguage(wb.language("Excel"));
       return setting(wb, pasted(EXAMPLE, { col: 0, row: 0 }), "pasted the example");
@@ -4651,11 +4658,12 @@ export class Commands {
     this.#store = store;
   }
 
-  // Every command whose id or label holds `search` (any case).
-  catalogue(search = ""): { id: string; label: string; params: string }[] {
+  // Every command whose id or label holds `search` (any case), only those
+  // of one effect when `effect` is given.
+  catalogue(search = "", effect?: Effect): { id: string; label: string; params: string; effect: Effect }[] {
     const s = search.toLowerCase();
-    return SPECS.filter((c) => c.id.toLowerCase().includes(s) || c.label.toLowerCase().includes(s))
-      .map((c) => ({ id: c.id, label: c.label, params: [...c.params, ...(c.optional ?? []).map((o) => `${o}?`)].join(", ") }));
+    return SPECS.filter((c) => (c.id.toLowerCase().includes(s) || c.label.toLowerCase().includes(s)) && (effect === undefined || c.effect === effect))
+      .map((c) => ({ id: c.id, label: c.label, params: [...c.params, ...(c.optional ?? []).map((o) => `${o}?`)].join(", "), effect: c.effect }));
   }
 
   async execute(id: string, params: Params = {}): Promise<Outcome> {
@@ -4666,7 +4674,7 @@ export class Commands {
       if (!spec) refuse(`no command ${id}`);
       for (const name of spec!.params) if (params[name] === undefined) refuse(`${id} needs ${name}`);
       // The read view: nothing that changes the workbook runs.
-      if (!this.#wb.editMode && ((spec!.journaled && !looksOnly(id)) || CHANGES_UNJOURNALED.has(id))) refuse(READ_VIEW);
+      if (!this.#wb.editMode && spec!.effect === "edit") refuse(READ_VIEW);
       // Several workbooks: theirs to answer (books.ts).
       if (id.startsWith("book.")) return this.books ? await this.books.run(id, params) : refuse("one workbook here: no others to open beside it");
       // The workbook as it was, kept as a step to undo once the command has
@@ -4856,6 +4864,9 @@ export class Commands {
   // still running at the bus's 10 s, so it is cancelled: its next command
   // fails, and it is taken back as any failed request is.
   async stopped(reason: string): Promise<string> {
+    // An interrupted job never comes back: the turn it held fails, so the
+    // changes behind it are not left waiting for it.
+    if (reason === "interrupted") this.#wb.interruptTurns("the page's time limit");
     const request = this.#request;
     if (!request) return "";
     request.cancelled = true;
@@ -4864,9 +4875,6 @@ export class Commands {
     return this.#wb.endStoppedGroup(true) ? `taken back${await this.#takeBack()}` : "nothing to take back";
   }
 
-    // An interrupted job never comes back: the turn it held fails, so the
-    // changes behind it are not left waiting for it.
-    if (reason === "interrupted") this.#wb.interruptTurns("the page's time limit");
   #request: { cancelled: boolean } | null = null;
 
   // The step a failed request folded into, undone, with nothing to redo.
