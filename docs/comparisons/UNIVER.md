@@ -49,7 +49,13 @@ labels, params, journal and grouped undo; `journaled` and `unstepped` flags
    runs whenever a workbook becomes the active one (`books.ts`). Headless
    `sheet_booksglobals`. The new clock (`workbook.clock`) is the page's by design.
 5. **Mutation journal (later).** Could cut snapshot cost and give blog-entry-todo
-   B.4/B.5 their diff; do after the history-cost measurement (see IronCalc).
+   B.4/B.5 their diff; do after the history-cost measurement (see IronCalc). Not
+   done 2026-10-24. The measurement is in (IronCalc 4): a step costs about the sheet's
+   cells, and a 100,000-cell sheet ran out of memory at the 47th edit, now bounded
+   by `HISTORY_ENTRIES`. B.5's diff is already built (`review.*`). A journal would
+   replace `Saved` for every kind of state (cells, notes, views, names, styles,
+   pivots, charts ...), so it is a change to every command's undo, not one step;
+   `sheet_historycost` is its yardstick.
 
 Proof: record a panel command, replay it over the bus with another selection;
 it hits the original target. Undo and reopen restore everything attached.
