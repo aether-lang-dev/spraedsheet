@@ -64,6 +64,12 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    gives. ODS stays cached-value import (read only).
 6. **Native usability gaps:** improve datagrid and sae services in aether-ui/sae
    (tested there), then consume: keyboard-only and screen-reader passes over every
-   panel, print/layout integration, larger-grid interaction.
+   panel, print/layout integration, larger-grid interaction. Done in part
+   2026-10-24: a screen-reader pass over the toolbar and all fifteen panels (spec_sheet
+   "every control ... has an accessible name": no visible button, field, slider or
+   toggle lacks an accessible name, and the audit sees at least five controls in each
+   panel); it found nothing to fix. Not done: a keyboard-only pass (focus order
+   and reaching every panel control by Tab), print/layout, larger-grid
+   interaction; each is aether-ui/sae work on four backends.
 7. **Stable record identity, relations, saved views** (the object/table
    contract): see Grist.md and Airtable.md.

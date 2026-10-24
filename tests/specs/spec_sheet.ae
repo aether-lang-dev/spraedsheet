@@ -181,10 +181,28 @@ unnamed_controls() -> string {
     return string.trim(out)
 }
 
+// How many of those controls are shown: the audit is no good if it sees none.
+shown_controls() -> int {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return 0 }
+    n = 0
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        t = uidriver.field_str(w, "type")
+        cls = uidriver.field_str(w, "classes")
+        if (string.equals(t, "button") == 1 || string.equals(t, "textfield") == 1 || string.equals(t, "slider") == 1 || string.equals(t, "toggle") == 1 || string.equals(t, "checkbox") == 1) && shown_(w) == 1 && string.contains(cls, "aui-grid") == 0 { n = n + 1 }
+        i = i + 1
+    }
+    json.json_free(v)
+    return n
+}
+
 // Asserts there is no control without a name, printing the ones there are.
 named_controls(what: string) {
     bad = unnamed_controls()
     if string.length(bad) > 0 { println("  unnamed controls, ${what}: ${bad}") }
+    spec.assert_true(shown_controls() >= 5, "${what}: the audit sees its controls (${shown_controls()})")
     spec.assert_true(string.length(bad) == 0, "${what}: every control has an accessible name")
 }
 
