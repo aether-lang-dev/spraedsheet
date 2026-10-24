@@ -15,9 +15,10 @@ What came before (demo 18's To do 1 to 15) is in
 
 ## Paused here (2026-10-24)
 
-Resumed 2026-10-23's pause while the GPU side was idle (quote work blocked on Nic). Everything below is
-on spraedsheet main, each step test first, the full `./run-tests.sh` green on macOS and the aether-linux lane
-before the push. Toolchain: the 0.841 dev tree at `/Volumes/Mini2/claude-scratch/aether-v0841` first on PATH
+Resumed 2026-10-23's pause while the GPU side was idle (quote work blocked on Nic); paused again at Paul's
+request. **NOT pushed to main**: the work is on origin branch `resume-2026-10-24` (local main is ahead of origin/main by
+the same commits). The full `./run-tests.sh` is green on macOS (8 passed, 0 failed) but RED on the aether-linux lane:
+only spec_sheet's new case "every control ... has an accessible name" (see Resume point). Each step was test first. Toolchain: the 0.841 dev tree at `/Volumes/Mini2/claude-scratch/aether-v0841` first on PATH
 with `sae/target/toolchain` (aeb v0.333), `AETHER_HOME` unset (`/Volumes/Mini2/claude-scratch/env841.sh`).
 
 **Done:**
@@ -56,7 +57,12 @@ with `sae/target/toolchain` (aeb v0.333), `AETHER_HOME` unset (`/Volumes/Mini2/c
   reads; 2,000 rows passes the 4 s a page entry gets). Prefix sums fix it but round differently from a plain
   sum (floating-point regrouping): accept a stated tolerance, or keep Excel's order and the cost?
 
-**Resume point:** the rest of `docs/comparisons/` as listed in its README; `git pull --ff-only` spraedsheet, sae
+**Resume point:** on aether-linux (GTK 4.6) the accessible-name audit finds 5 unnamed `toggle` widgets (ids 1015, 1228,
+1292-1294 in the run; log in `/work/spraedsheet/target/run-tests/spec_sheet.log` in the container) in every panel state, which macOS
+does not. Find what they are (the driver's /widgets, `GET /widget/{id}/a11y`) and fix at the root (a11y_label on the page's toggle, or
+GTK naming in aether-ui), rerun `./run-tests.sh` on macOS and the lane (lane build: sync with `aelane aether-linux -C ~/scm/spraedsheet
+-w sae,aether-ui,mquickjs-ae,RexxJS`, env AETHER_HOME/SAE_AETHER_HOME=/work/aether-0841-m6, PATH with /work/aeb), then
+`git checkout main && git merge --ff-only resume-2026-10-24`, push main, delete the branch locally and on origin. Then the rest of `docs/comparisons/` as listed in its README; `git pull --ff-only` spraedsheet, sae
 and aether-ui first. `touch sae/target/build/bin/sae*` after an aether-ui change that is Android-only.
 
 ## Earlier pause (2026-10-21)
