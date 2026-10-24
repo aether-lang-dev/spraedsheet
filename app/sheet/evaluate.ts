@@ -22,7 +22,7 @@ import type { Expr } from "./parser.ts";
 import { call, single } from "./functions.ts";
 import { groupBy, pivotBy } from "./groupby.ts";
 import type { Arg } from "./functions.ts";
-import { CellError, array, collapsed, compare, fail, finite, isArray, toNumber, toText, trimmed } from "./values.ts";
+import { CellError, array, collapsed, compare, fail, finite, isArray, power, toNumber, toText, trimmed } from "./values.ts";
 import type { ArrayValue, Result, Value } from "./values.ts";
 import type { Op } from "./lexer.ts";
 
@@ -122,7 +122,7 @@ function operate(op: Op, a: Value, b: Value): Value {
     case "-": return finite(toNumber(a) - toNumber(b));
     case "*": return finite(toNumber(a) * toNumber(b));
     case "/": return toNumber(b) === 0 ? fail("#DIV/0!", "divide by zero") : finite(toNumber(a) / toNumber(b));
-    case "^": return finite(toNumber(a) ** toNumber(b));
+    case "^": return power(toNumber(a), toNumber(b));
     case "&": return toText(a) + toText(b);
     default: return compare(op, a, b);
   }

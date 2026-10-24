@@ -35,7 +35,7 @@ const message = async (line: string) => (await cmds.run(line)).message;
 eq("cell.editor: a checkbox drawn ☐, then ☑ when toggled", [await message("cell.editor cell=B2 kind=checkbox"), wb.textOf("B2"), await message("cell.toggle cell=B2"), wb.textOf("B2"), wb.sheet.input("B2")],
   ["B2 is a checkbox", "☐", "B2 = TRUE", "☑", "TRUE"]);
 eq("what is typed into one is held to it", [await message("cell.set cell=B2 input=maybe"), await message("cell.set cell=B2 input=false"), wb.textOf("B2")],
-  ["B2 is a checkbox: TRUE or FALSE", "B2 = false", "☐"]);
+  ["B2 is a checkbox: TRUE or FALSE", "B2 = FALSE", "☐"]);
 await cmds.run("cell.editor cell=C2 kind=dropdown options=Red,Green");
 await cmds.run("cell.editor cell=D2 kind=date");
 eq("a dropdown's options, a date", [await message("cell.set cell=C2 input=Blue"), await message("cell.set cell=C2 input=Red"), await message("cell.set cell=D2 input=2026-13-01"), await message("cell.set cell=D2 input=2026-10-13")],

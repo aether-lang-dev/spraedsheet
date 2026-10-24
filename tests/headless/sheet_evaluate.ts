@@ -55,7 +55,7 @@ const lifted = (src: string) => {
 eq("a range where one value goes is worked out a cell at a time; ranges for two are paired; an error stays in its cell",
   [lifted("ROUND(A1:A2/3, 1)"), lifted("LEFT(A4, SEQUENCE(1, 3))"), lifted("REPT(\"x\", A1:A2)"), lifted("ABS(A1:B1)")],
   [[2, 1, ["0.7", "1"]], [1, 3, ["p", "pe", "pea"]], [2, 1, ["xx", "xxx"]], [1, 2, ["2", "#DIV/0!"]]]);
-eq("an overflow is not a number", why("10^400"), "#VALUE! the result is not a finite number");
+eq("an overflow is not a number", why("10^400"), "#NUM! the result is too big or not a number");
 eq("AVERAGE of nothing", why("AVERAGE(C1:C2)"), "#DIV/0! AVERAGE of no numbers");
 
 eq("coercions", [toNumber(null), toNumber(" 5 "), toText(true), toText(1e21)], [0, 5, "TRUE", "1e+21"]);

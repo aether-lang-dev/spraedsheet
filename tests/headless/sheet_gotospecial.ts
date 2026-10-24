@@ -17,8 +17,8 @@ const go = async (p: Record<string, string>) => (await cmds.execute("edit.goToSp
 eq("each category over the used range (A1:C3)", [await go({ what: "formulas" }), await go({ what: "constants" }), await go({ what: "blanks" }), await go({ what: "errors" }),
   await go({ what: "comments" }), await go({ what: "validation" }), await go({ what: "conditional" })],
   [["A2", "B2", "C3"], ["A1", "B1", "A3"], ["C1", "C2", "B3"], ["B2"], ["B1"], ["A3"], ["B1", "B2"]]);
-eq("formulas and constants by type", [await go({ what: "formulas", type: "numbers" }), await go({ what: "formulas", type: "errors" }), await go({ what: "formulas", type: "text" }), await go({ what: "constants", type: "text" })],
-  [["A2"], ["B2"], ["C3"], ["A1", "A3"]]);
+eq("formulas and constants by type", [await go({ what: "formulas", type: "numbers" }), await go({ what: "formulas", type: "errors" }), await go({ what: "formulas", type: "text" }), await go({ what: "constants", type: "text" }), await go({ what: "constants", type: "logicals" })],
+  [["A2"], ["B2"], ["C3"], ["A1"], ["A3"]]);
 eq("over a range given", await go({ what: "blanks", range: "C1:D2" }), ["C1", "D1", "C2", "D2"]);
 eq("the message, and refusals", [(await cmds.execute("edit.goToSpecial", { what: "errors" })).message, (await cmds.execute("edit.goToSpecial", { what: "objects" })).message, (await cmds.execute("edit.goToSpecial", { what: "formulas", type: "dates" })).message],
   ["1 errors: B2", "objects is not one of formulas, constants, blanks, errors, comments, validation, conditional", "dates is not a type (numbers, text, logicals, errors)"]);
