@@ -13,49 +13,51 @@ What came before (demo 18's To do 1 to 15) is in
 `docs/spreadsheet_demo_done_and_todo.md`.
 
 
-## Paused here (2026-10-23)
+## Paused here (2026-10-24)
 
-Resumed 2026-10-21's pause; the GPU work (ae3d bump to Aether 0.837.0) paused it again.
+Resumed 2026-10-23's pause while the GPU side was idle (quote work blocked on Nic). Everything below is
+on spraedsheet main, each step test first, the full `./run-tests.sh` green on macOS and the aether-linux lane
+before the push. Toolchain: the 0.841 dev tree at `/Volumes/Mini2/claude-scratch/aether-v0841` first on PATH
+with `sae/target/toolchain` (aeb v0.333), `AETHER_HOME` unset (`/Volumes/Mini2/claude-scratch/env841.sh`).
 
-**Done since 2026-10-21, pushed** (spraedsheet main, head eecbf99; aether-ui main 426748a4):
-- Backend parity for `datagrid_set_view_only` and `datagrid_on_edit_cancel`: both live
-  in the shared `ui/module.ae` (no per-backend ABI), so nothing was missing. The datagrid_demo
-  spec ran for real: macOS and aether-linux (87 passing), iOS simulator (87), win11 MSYS2 (87),
-  Android emulator (86 + 2 failing, fixed: aether-ui 426748a4, the Android driver now lays the
-  UI out after an action, as the other three backends do; then 87).
-- Cross-sheet table references (`=SUM(Sales[Amount])`) ef8af39; IronCalc 1, editing scenarios
-  (Paste carries look/validation/comment, merges under paste/cut, fill carries the look) 5bb2192;
-  IronCalc 2 first part (`_xlfn.` read and written, spilled cells, 59 Excel-authored workbooks as an
-  oracle) ab6dd75; whole-column and whole-row references d49b29a; spec_sheet values-paste fix eecbf99.
+**Done:**
+- aether-ui `./ci.sh` at c8bf9018 (the autorelease-pool fix): all phases passed on macOS and on aether-linux
+  (arm64 22.04); nothing needed fixing. Two transitions specs SKIP on both (Pillow/numpy absent for their
+  pixel reads), unchanged.
+- The wedged Turns queue (sheet.ts): an interrupted job (page time limit) fails its turn with
+  "interrupted: why" and the queue goes on; `Commands.stopped("interrupted")` does it. Headless `sheet_turns`.
+- `ironcalc2-wip` merged (it had fallen behind main by three commits, so a merge commit) and deleted.
+- docs/comparisons/ actions (each struck in its doc): Univer 1 (every command's `effect`; read view refuses
+  exactly the edits), IronCalc 4 (history cost; `HISTORY_ENTRIES` bound, a 100,000-cell sheet ran out of memory
+  at the 47th edit) and 5 (corpus round trip; two bugs: array formulas saved as arrays, volatile formulas
+  settled on open), HyperFormula 1 (work counters; the dependents walk was recursive and overran the call stack
+  at a 1,000-row running total), 4 and 5 (one function record, `COMPATIBILITY.md`), Gnumeric 1 to 5 (the normal's
+  and chi-square's far tails were 0, `NORM.S.INV` good to 5e-9, `LINEST` took one predictor only; `sheet --json`),
+  VisiData 2 (`macro.preview`), LibreOffice 2 (counters), 3 (validation policy per entry path), 4 in part
+  (`formulas.profile`), 5 (`file.interchange`), 6 in part (an accessible-name audit of the toolbar and every
+  panel).
 
-**Done, NOT pushed (local branch `ironcalc2-wip`, f893dcf and 5082ff7):** IronCalc 2 second part:
-173 of IronCalc's calc_tests workbooks (4,033 of 71,000 cells still differ, listed in
-`tests/headless/lib/ironcalc_calc_known.ts`), 25 missing functions, typed TRUE/FALSE logical,
-overflow `#NUM!`, `0^0`, fast huge binomial/Poisson; headless is green on it (all groups, sheet_mathmore).
-It was held back because the full `./run-tests.sh` was red on macOS: `spec_sheet` failed from "Page Break
-Preview" on and the app grew to 4-6 GB. That was NOT load, and NOT ironcalc2-wip (eecbf99 on main failed the
-same way, quiet machine, either toolchain). Cause, found 2026-10-24 with `heap` and `malloc_history` on the
-running app: aether-ui's test server answers GET /widgets on its own pthread, which has no autorelease pool, so
-every accessibility getter it called (NSSets, NSArrays, NSStrings per widget) was leaked; spec_sheet polls
-/widgets constantly. By Page Break Preview the machine was swapping, a sae page entry ran past its 5 s time
-limit ("InternalError: interrupted" in a promise job), the Turns queue (sheet.ts) was left waiting on a promise
-that never settled, and `sheet.add` / `cell.set` never finished (A50 never set, so no page edge at A9), the
-cases after it cascading. Fixed in aether-ui c8bf9018 (a pool per request; ci.sh Phase 3c bounds RSS while
-polling /widgets). Left as it is: an interrupted promise job still wedges the Turns queue for good.
-
-**Resume point:** `git checkout main && git merge ironcalc2-wip` (fast-forward), full
-`./run-tests.sh` green, push. Then the rest of `docs/comparisons/` in README order, none started:
-IronCalc 4, 5 (history cost; corpus round trip); VisiData 2; Univer 1, 5; HyperFormula 1, 3, 4, 5;
-Gnumeric; LibreOffice 2 to 7. Toolchain: ../aether dev tree 0.835.0 first on PATH, sae/target/toolchain
-(aeb v0.328); `touch sae/target/build/bin/sae*` after an aether-ui change that is Android-only.
+**Not done, and why:**
+- Univer 5 (mutation journal): replaces `Saved` for every kind of state, one change to every undo; the
+  measurement and `sheet_historycost` are in for it. Recording and MCP discovery do not read `effect` yet.
+- LibreOffice 4 (row lineage, grouping explanations: wait on VisiData 3's typed group keys), 6 (keyboard-only
+  pass, print/layout, larger-grid interaction: aether-ui/sae work on four backends).
+- Gnumeric 1: reference examples and boundary tests per function; `LOGEST` is missing.
+- IronCalc: the 48 calc_tests workbooks with more differences (`COMPATIBILITY.md`'s ledger).
 
 **Decisions needed from Paul (not built):**
-- Grist 1 to 4, Airtable 1 to 3, VisiData 1 and 4, LibreOffice 7: a record model (stable record IDs
-  independent of row position, reference fields, saved views, keyed reconcile). Wanted, and how far
-  (an ID column plus references on tables, or a full relations layer)?
+- Grist 1 to 4, Airtable 1 to 3, VisiData 1 and 4, LibreOffice 7 (and the record form and batch-wide unique keys
+  of LibreOffice 3): a record model (stable record IDs independent of row position, reference fields, saved
+  views, keyed reconcile). Wanted, and how far (an ID column plus references on tables, or a full relations layer)?
 - Importer: a formula Excel stored with no array flag is intersected implicitly; this app spills it
   (38 cells in the ledger). Insert `@` as Excel's loader does?
 - Charts on aether-ui's `vg/chart` (as before).
+- HyperFormula 3: a cumulative `SUM($A$1:An)` down 1,000 rows costs 0.9 s per edit at its head (n squared
+  reads; 2,000 rows passes the 4 s a page entry gets). Prefix sums fix it but round differently from a plain
+  sum (floating-point regrouping): accept a stated tolerance, or keep Excel's order and the cost?
+
+**Resume point:** the rest of `docs/comparisons/` as listed in its README; `git pull --ff-only` spraedsheet, sae
+and aether-ui first. `touch sae/target/build/bin/sae*` after an aether-ui change that is Android-only.
 
 ## Earlier pause (2026-10-21)
 
