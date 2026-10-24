@@ -54,9 +54,14 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    (headless `sheet_profile`; the clock is `Date.now`, so a page's coarse clock
    limits it). Not done: row lineage and grouping explanations wait on VisiData 3
    (typed group keys first); stepwise REXX is RexxJS's.
-5. **Interchange honesty:** publish supported semantics and known losses; an
+5. ~~**Interchange honesty:** publish supported semantics and known losses; an
    exported RexxJS workbook needs a formula/results policy for apps that cannot
-   run RexxJS. ODS stays cached-value import.
+   run RexxJS. ODS stays cached-value import.~~ Done 2026-10-24: `file.interchange`
+   lists each format (xlsx, xls, ods, csv, json, html, pdf) as read or written
+   with what it keeps and what it loses, and states the RexxJS policy: written to
+   XLSX as its values, not its formulas, said in the file report. Headless
+   `sheet_interchange` checks the stated losses against the reports the writer
+   gives. ODS stays cached-value import (read only).
 6. **Native usability gaps:** improve datagrid and sae services in aether-ui/sae
    (tested there), then consume: keyboard-only and screen-reader passes over every
    panel, print/layout integration, larger-grid interaction.

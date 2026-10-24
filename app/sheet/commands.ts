@@ -186,6 +186,20 @@ const ENTRY_PATHS: readonly { path: string; commands: string; checked: boolean }
   { path: "a fill", commands: "edit.fillDown, edit.fillRight, edit.fillUp, edit.fillLeft, edit.fillSeries", checked: false },
 ];
 
+// What each file format keeps and loses (file.interchange); the losses are the
+// reports the readers and writers give (sheet_interchange checks two).
+const INTERCHANGE: readonly { format: string; read: boolean; write: boolean; keeps: string; loses: string[] }[] = [
+  { format: "xlsx", read: true, write: true, keeps: "cells and Excel formulas, number formats and looks, merges, widths and heights, panes, names, tables, validation, conditional formats, charts and drawings, comments, protection",
+    loses: ["pivot tables are written as their cells, not as pivots", "slicers are not written", "a sparkline is written as its text (Excel has no SPARKLINE function)", "RexxJS formulas are not Excel's: their values are written, not the formulas",
+      "on reading: cells past the sheet's edge, validation kinds this app has no rule for, hashed protection passwords, print settings and unmodelled parts are left out, said in the report"] },
+  { format: "xls", read: true, write: false, keeps: "cells, strings, numbers, booleans, errors, formulas (written back as text), number formats, merges, the date system", loses: ["a formula whose tokens the app cannot write keeps the value cached", "chart and macro sheets are left out"] },
+  { format: "ods", read: true, write: false, keeps: "cells by their cached values, merges, sheets", loses: ["formulas are read as their cached values", "cells past the sheet's edge are left out"] },
+  { format: "csv", read: true, write: true, keeps: "the values as text, one sheet, a delimiter and encoding of your choosing", loses: ["formulas (values are written), looks, and every sheet but one"] },
+  { format: "json", read: true, write: true, keeps: "the app's own file: everything, with RexxJS formulas as written", loses: [] },
+  { format: "html", read: true, write: true, keeps: "a table of the shown values", loses: ["formulas, validation, charts"] },
+  { format: "pdf", read: false, write: true, keeps: "the printed pages (range, sheets, paper, orientation, margins)", loses: ["everything that is not on the page: it cannot be read back"] },
+];
+
 // A json= parameter: an object, or a refusal that says why not.
 function jsonOf(text: string): Record<string, any> {
   try {
@@ -3938,6 +3952,12 @@ const SPECS: readonly Spec[] = [
       const fs = [...wb.sheet.language.functions()].sort();
       return { ok: true, message: `${fs.length} ${wb.sheet.language.name} functions`, changed: [], output: fs };
     },
+  },
+  {
+    // The formats, read and written, what each keeps and loses; and the
+    // RexxJS policy: its results are written to XLSX, not its formulas.
+    id: "file.interchange", label: "File Formats", params: [], journaled: false, effect: "query",
+    run: async () => ({ ok: true, message: `${INTERCHANGE.length} formats; a RexxJS workbook is written to XLSX as its values, not its formulas`, changed: [], output: INTERCHANGE }),
   },
   {
     // Calculation timings: on=1 starts timing each formula's evaluations, on=0
