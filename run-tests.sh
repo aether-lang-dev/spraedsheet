@@ -103,7 +103,7 @@ for line in $TABLE; do
     case "$1" in
         xkeys) set -- sh "$ROOT/tests/specs/real_keys_x11.sh" ;;
         headless) set -- env SAE_LOWER_OUT="$T/lower-tests" SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/headless" ;;
-        mcp) set -- node --test "$ROOT/tests/mcp/" ;;
+        mcp) set -- node --test "$ROOT/tests/mcp/server.test.js" ;;
         cli) set -- sh -c 'r=0; for t in "$0"/tests/cli/test_*.sh; do echo "== $t"; SAE_DIR="$1" sh "$t" || r=1; done; exit $r' "$ROOT" "$SAE" ;;
         spec) set -- env SAE_TEST_LIB_DIR="$ROOT/tests/lib" \
                   "$SAE/tests/run_spec.sh" "$ROOT/tests/specs/$2.ae" "$ROOT/app" ;;
