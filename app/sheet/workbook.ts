@@ -260,6 +260,12 @@ export type BookName = { readonly page: Page; readonly range: [Addr, Addr] } | {
 // Undo steps kept, as the Tauri spreadsheet keeps.
 const HISTORY = 100;
 
+// And no more than this many map entries held by them (historyCost): a step
+// is a whole snapshot, so on a big sheet 100 of them outgrew the 512 MB page
+// (a 100,000-cell sheet ran out of memory at the 47th edit). The oldest steps
+// go first, one step always stays.
+export const HISTORY_ENTRIES = 2_000_000;
+
 // How many times settle() passes changes between sheets before it stops: a
 // guard only, as a cycle through two sheets is found first (#crossCycles).
 const ROUNDS = 20;
@@ -713,7 +719,7 @@ export class Workbook {
   // undo, and nothing left to redo.
   changed(before: Saved, label: string): void {
     this.#undo.push({ ...before, label });
-    if (this.#undo.length > HISTORY) this.#undo.shift();
+    this.#trimHistory();
     this.#redo.length = 0;
     this.#group?.labels.push(label);
   }
@@ -740,7 +746,7 @@ export class Workbook {
     if (!always && !g.labels.length && !whole) return false;
     this.#undo.length = Math.min(g.low, this.#undo.length);
     this.#undo.push({ ...g.before, label: g.labels.length === 1 && !g.undone ? g.labels[0] : "Script" });
-    if (this.#undo.length > HISTORY) this.#undo.shift();
+    this.#trimHistory();
     this.#redo.length = 0;
     return true;
   }
@@ -758,6 +764,36 @@ export class Workbook {
     if (!this.#group) return false;
     this.#group.depth = 1;
     return this.endGroup(whole, whole);
+  }
+
+  // Most map entries the history may hold (HISTORY_ENTRIES unless set).
+  historyEntries = HISTORY_ENTRIES;
+
+  #trimHistory(): void {
+    if (this.#undo.length > HISTORY) this.#undo.shift();
+    // Counting walks every step: only worth it when a step is big.
+    if (this.#undo.length < 2 || this.#undo.at(-1)!.pages.reduce((n, pg) => n + pg.sheet.inputs.size, 0) * this.#undo.length < this.historyEntries / 4) return;
+    while (this.#undo.length > 1 && this.historyCost().entries > this.historyEntries) this.#undo.shift();
+  }
+
+  // What the history holds, counted (docs/comparisons/IRONCALC.md action 4):
+  // the steps to undo and redo, and the entries of the maps they keep (a
+  // cell's input, a formula, a name, a table, a note), each saved map once
+  // however many steps share it. A step is a whole snapshot, so a one-cell
+  // edit keeps as many entries as the sheet has cells.
+  historyCost(): { undo: number; redo: number; snapshots: number; entries: number } {
+    const seen = new Set<object>();
+    let entries = 0;
+    const count = (m: ReadonlyMap<unknown, unknown>) => { if (!seen.has(m)) { seen.add(m); entries += m.size; } };
+    for (const step of [...this.#undo, ...this.#redo]) {
+      count(step.names);
+      count(step.styles);
+      for (const pg of step.pages) {
+        count(pg.sheet.inputs); count(pg.sheet.names); count(pg.sheet.formulas); count(pg.sheet.tables);
+        count(pg.notes);
+      }
+    }
+    return { undo: this.#undo.length, redo: this.#redo.length, snapshots: seen.size, entries };
   }
 
   get canUndo(): boolean { return this.#undo.length > 0; }
