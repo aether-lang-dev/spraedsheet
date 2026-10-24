@@ -30,9 +30,13 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    `#REF!`; tables are the workbook's, as in Excel, and the reference follows the
    table through inserted rows, a renamed column, a deleted table, undo and a
    reopened file (headless `sheet_crosstable`).
-2. **Calculation measurement** (dirty formulas, range visits, settlement rounds,
+2. ~~**Calculation measurement** (dirty formulas, range visits, settlement rounds,
    history memory; chains, diamonds, running totals, dynamic refs, spills,
-   volatiles). See HyperFormula 1. No parallelism or GPU work without evidence.
+   volatiles). See HyperFormula 1. No parallelism or GPU work without evidence.~~
+   Done 2026-10-24 with HyperFormula 1 (counters, headless `sheet_work`, which also
+   has a spill) and IronCalc 4 (history memory, `sheet_historycost`). No parallelism
+   or GPU work: the one cost found that the counters show (a cumulative `SUM` down a
+   column) is a rounding decision, not a compute-bound one.
 3. **Validation policy per entry path:** manual edit, paste, import, script,
    record form; make any bypass explicit. Unique keys validate the whole proposed
    batch, including conflicts among new rows. Fold into Grist 2.

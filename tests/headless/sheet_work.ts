@@ -84,6 +84,14 @@ const work = async (wb: Workbook, f: () => Promise<unknown>) => {
   eq("SUM($A$1:An) down 200 rows: 200 evaluations, each reading its whole range", [w.evaluated, w.reads >= 200 * 201 / 2, w.reads < 3 * 200 * 201 / 2, wb.sheet.value("B200")], [200, true, true, 201]);
 }
 
+// A spill is one evaluation; what reads one of its cells is evaluated with it.
+{
+  const { wb, cmds } = await make();
+  await wb.sheet.setMany([["A1", "3"], ["B1", "=SEQUENCE(A1)"], ["C1", "=SUM(B1:B3)"], ["D1", "=A1*2"]]);
+  const w = await work(wb, () => cmds.run("cell.set cell=A1 input=5"));
+  eq("a spill that grows: its formula, its reader and the one beside it, and the cells it took read again by their readers (5)", [w.evaluated, wb.sheet.value("B5"), wb.sheet.value("C1")], [5, 5, 6]);
+}
+
 // Reading counters is free of effect: they reset.
 {
   const { wb } = await make();
@@ -101,4 +109,5 @@ const work = async (wb: Workbook, f: () => Promise<unknown>) => {
 // expect: ok a volatile OFFSET and its reader are evaluated on an edit that touches neither
 // expect: ok SUM over 300 cells: one evaluation per edit
 // expect: ok SUM($A$1:An) down 200 rows: 200 evaluations, each reading its whole range
+// expect: ok a spill that grows: its formula, its reader and the one beside it, and the cells it took read again by their readers (5)
 // expect: ok counters reset to zero
