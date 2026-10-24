@@ -37,9 +37,15 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    has a spill) and IronCalc 4 (history memory, `sheet_historycost`). No parallelism
    or GPU work: the one cost found that the counters show (a cumulative `SUM` down a
    column) is a rounding decision, not a compute-bound one.
-3. **Validation policy per entry path:** manual edit, paste, import, script,
+3. ~~**Validation policy per entry path:** manual edit, paste, import, script,
    record form; make any bypass explicit. Unique keys validate the whole proposed
-   batch, including conflicts among new rows. Fold into Grist 2.
+   batch, including conflicts among new rows. Fold into Grist 2.~~ Done 2026-10-24
+   for the paths that exist (headless `sheet_validationpolicy`): typing and a
+   script's SETCELL are refused when they break a rule; a paste, a fill and an
+   import bring cells in (as Excel's do) and now say after which cells break their
+   rule and that `validation.circle` shows them; `validation.policy` lists the
+   paths and which are checked. Left with the record model (a decision for Paul):
+   the record form, and unique keys validated across a whole batch.
 4. **Inspection beyond Excel's:** calculation timings, query row lineage,
    grouping explanations; stepwise RexxJS evaluation belongs in canonical RexxJS
    first, then vendored. Lineage: see VisiData 3.

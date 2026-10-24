@@ -170,6 +170,21 @@ const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? "" : "s"}`;
 // a file are let through.
 const READ_VIEW = "read view: switch edit mode on to change the workbook";
 
+// The commands that bring cells in without asking their rules (Excel's paste,
+// fill and import do the same): they say which cells then break a rule.
+const BYPASSES = new Set(["edit.paste", "edit.pasteText", "edit.pasteSpecial", "edit.fillDown", "edit.fillRight", "edit.fillUp", "edit.fillLeft", "edit.fillSeries",
+  "file.importCsv", "file.importText", "file.importJson", "file.importHtml", "data.textToColumns"]);
+
+// Each way a value gets into a cell, and whether the cell's validation is
+// asked (validation.policy).
+const ENTRY_PATHS: readonly { path: string; commands: string; checked: boolean }[] = [
+  { path: "typing in a cell", commands: "cell.set", checked: true },
+  { path: "a script or the bus", commands: "SETCELL, SETCELLS and every command a script runs (cell.set)", checked: true },
+  { path: "a paste", commands: "edit.paste, edit.pasteText, edit.pasteSpecial", checked: false },
+  { path: "an import", commands: "file.importCsv, file.importText, file.importJson, file.importHtml, data.textToColumns", checked: false },
+  { path: "a fill", commands: "edit.fillDown, edit.fillRight, edit.fillUp, edit.fillLeft, edit.fillSeries", checked: false },
+];
+
 // A json= parameter: an object, or a refusal that says why not.
 function jsonOf(text: string): Record<string, any> {
   try {
@@ -1619,6 +1634,12 @@ const SPECS: readonly Spec[] = [
       for (const k of keys) wb.notes.set(k, { validation: undefined });
       return changedBy(wb, keys, `${named(r)} has no rule`);
     },
+  },
+  {
+    // Which ways in ask a cell's validation and which bring a value in
+    // without (and then say what broke its rule).
+    id: "validation.policy", label: "Validation Policy", params: [], journaled: false, effect: "query",
+    run: async () => ({ ok: true, message: ENTRY_PATHS.map((e) => `${e.path}: ${e.checked ? "checked" : "not checked, said after"}`).join("; "), changed: [], output: ENTRY_PATHS }),
   },
   {
     id: "validation.circle", label: "Circle Invalid Data", params: [], optional: ["off"], journaled: true, effect: "edit", unstepped: true,
@@ -4721,7 +4742,14 @@ export class Commands {
       if (id === "macro.run") return await this.#runMacro(params.name, params.args ?? "");
       if (id === "macro.preview") return await this.#previewMacro(params.name, params.args ?? "");
       const tablesBefore = this.#wb.tablesKey();
+      const invalidBefore = BYPASSES.has(id) ? new Set(this.#wb.invalid()) : null;
       const outcome = areas ? await this.#overAreas(spec!, params, areas) : await spec!.run(this.#wb, params, this.#store);
+      // A bypass says which cells it left breaking their rule.
+      let note = "";
+      if (outcome.ok && invalidBefore) {
+        const broke = this.#wb.invalid().filter((k) => !invalidBefore.has(k)), n = broke.length;
+        if (n) note = `; ${n} cell${n === 1 ? " breaks its" : "s break their"} validation (${broke.join(", ")}): validation.circle shows them`;
+      }
       // A table defined, moved, renamed or deleted: a formula on another sheet may name it.
       if (outcome.ok && this.#wb.tablesKey() !== tablesBefore) await this.#wb.tablesChanged();
       if (outcome.ok && guarded && tried) {
@@ -4746,7 +4774,7 @@ export class Commands {
       if (outcome.ok && spec!.journaled) this.#journal.push(lineOf(id, params));
       // Every recalculation: the workbook's checks worked out again (B.6).
       if (outcome.ok && this.#wb.checks.length) await this.#wb.runChecks();
-      return outcome;
+      return note ? { ...outcome, message: outcome.message + note } : outcome;
     } catch (e) {
       if (e instanceof Refused || e instanceof RangeError) {
         if (this.#trace && !id.startsWith("macro.")) this.#trace.push({ line: lineOf(id, params), ok: false, message: e.message, cells: [] });
