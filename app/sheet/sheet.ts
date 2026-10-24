@@ -655,6 +655,7 @@ export class Sheet {
 
     const { ordered, left } = this.#ordered(affected);
     for (const k of ordered) if (!k.includes("!")) await this.#evaluate(k);
+    await this.#settleVolatile(ordered);
     if (left.size > 0) {
       const onCycle = new Set<string>();
       for (const k of left) {
@@ -674,6 +675,24 @@ export class Sheet {
     const moved = [...this.#spillChanged];
     if (moved.length && depth < 4) changed = [...new Set([...changed, ...(await this.#recompute(moved, depth + 1, all))])].sort(byOrder);
     return changed;
+  }
+
+  // A volatile formula's references are known only once it has run, so on a
+  // first run (a file opened) it can have read a cell worked out after it.
+  // Those formulas, and what reads them, are worked out again now they are
+  // linked to what they read, a few times at most.
+  async #settleVolatile(ordered: readonly string[]): Promise<void> {
+    if (this.#volatile.size === 0) return;
+    for (let pass = 0; pass < 3; pass++) {
+      const place = new Map<string, number>();
+      ordered.forEach((k, i) => place.set(k, i));
+      const late = ordered.filter((k) => this.#volatile.has(k) && (this.#reads.get(k) ?? new Set<string>()).size > 0
+        && [...this.#reads.get(k)!].some((r) => (place.get(r) ?? -1) > (place.get(k) ?? 0)));
+      if (!late.length) return;
+      const again = this.#ordered(this.#downstream(late)).ordered;
+      for (const k of again) if (!k.includes("!")) await this.#evaluate(k);
+      ordered = again;
+    }
   }
 
   // A cycle's cells worked round, in sheet order, each from the values the
@@ -698,6 +717,12 @@ export class Sheet {
       if (moved <= change) return i;
     }
     return max;
+  }
+
+  // The cells a formula's array result fills below and beside it (none for
+  // a formula that gave one value, or whose spill is blocked).
+  spillOf(key: string): readonly string[] {
+    return this.#spills.has(key) ? this.#areas.get(key) ?? [] : [];
   }
 
   // A formula's spill taken back: its cells empty again (but for any that

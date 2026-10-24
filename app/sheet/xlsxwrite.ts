@@ -229,7 +229,12 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
     const spark = input.startsWith("=") && /\bSPARKLINE\s*\(/i.test(input);
     if (spark) sparks++;
     if (input.startsWith("=") && excel && !spark) {
-      const f = `<f>${escapeXml(storedFormula(input.slice(1)))}</f>`;
+      // A formula that filled cells with an array is written as an array
+      // formula over them, as Excel does: their values beside it are its
+      // result, not cells of their own to block it when the file is read.
+      const area = page.sheet.spillOf(k);
+      const span = area.length ? `${k}:${area[area.length - 1]}` : "";
+      const f = span ? `<f t="array" ref="${span}">${escapeXml(storedFormula(input.slice(1)))}</f>` : `<f>${escapeXml(storedFormula(input.slice(1)))}</f>`;
       c = v instanceof CellError ? `<c r="${k}" t="e"${attrS}>${f}<v>${escapeXml(v.code)}</v></c>`
         : typeof v === "string" ? `<c r="${k}" t="str"${attrS}>${f}<v>${escapeXml(v)}</v></c>`
         : typeof v === "boolean" ? `<c r="${k}" t="b"${attrS}>${f}<v>${v ? 1 : 0}</v></c>`

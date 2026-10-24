@@ -46,11 +46,35 @@ the number-format cases, the series-detection cases.
 
 ## Not reuse
 
-4. **Measure history cost** before choosing patches over snapshots (the workbook
+4. ~~**Measure history cost** before choosing patches over snapshots (the workbook
    keeps whole snapshots, `HISTORY` deep): one-cell edit, large paste, styles,
-   structural edits, scripted group, redo memory. Patches only if it pays.
-5. **Original workbook corpus:** open, calculate, edit, save, reopen, comparing
-   semantics (not ZIP bytes) and unsupported-feature reports.
+   structural edits, scripted group, redo memory. Patches only if it pays.~~ Measured
+   2026-10-24 (`Workbook.historyCost()`, headless `sheet_historycost`, in map
+   entries held, a saved map counted once however many steps share it): a one-cell
+   edit keeps every cell of the sheet again (the inputs map is copied) plus the
+   workbook's styles (21 entries, copied into every step, changed or not); a look
+   or a paste right after another keeps the inputs shared (only the notes and
+   styles are new); an inserted row or a structural edit copies the inputs; a
+   scripted group is one step and one snapshot; undo moves a step to redo with
+   nothing new. So a step costs about the sheet's cells. On 100,000 cells that is
+   a 512 MB page's undoing out of memory at the 47th edit (4.6 million entries,
+   9 s). Patches do pay on big sheets, but a cheap bound came first: the oldest
+   steps now go when the history holds over `HISTORY_ENTRIES` (2,000,000) entries
+   (about 20 steps at 100,000 cells, all 100 below 20,000 cells), tested. Patches
+   (and Univer 5's journal) stay a larger change, now with this test as the
+   yardstick. Left: the styles map is still copied into each step.
+5. ~~**Original workbook corpus:** open, calculate, edit, save, reopen, comparing
+   semantics (not ZIP bytes) and unsupported-feature reports.~~ Done 2026-10-24 for
+   the 70 or so Excel-authored workbooks of the calc_tests groups but ARABIC_ROMAN
+   (headless `sheet_corpus_roundtrip`: opened, a cell edited, saved as XLSX,
+   reopened; every sheet's cells compared as formula text or typed value and shown
+   value). It found two bugs, fixed: an array formula saved with its result cells
+   as plain values came back `#SPILL!` (the values blocked it; it is now written
+   as an array formula over its cells, `Sheet.spillOf`), and a volatile formula
+   (INDIRECT, OFFSET) read a cell worked out after it on a first run, so a file
+   opened showed `PRODUCT(INDIRECT("A6"))` as 0 until something changed
+   (`#settleVolatile`). The unsupported-feature report (`file.report`) is not
+   compared yet.
 6. ~~**Locale/time controls:** `dates.ts` `now()` reads the host clock and zone;
    make the clock injectable for tests and keep saved results independent of host
    locale.~~ Done 2026-10-21: `workbook.clock at=` (`SETCLOCK("2026-10-21 09:30")`,

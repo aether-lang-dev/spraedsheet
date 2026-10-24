@@ -25,7 +25,7 @@ for (const l of ["formulas.use language=Excel", "cell.set cell=A1 input=Tea", "c
 }
 const bytes = writeXlsx(wb).bytes;
 const sheet = utf8Text(unzip(bytes).get("xl/worksheets/sheet1.xml")!);
-const f = (ref: string) => { const m = new RegExp(`<c r="${ref}"[^>]*>\\s*<f>([^<]*)</f>`).exec(sheet); return m ? m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&") : null; };
+const f = (ref: string) => { const m = new RegExp(`<c r="${ref}"[^>]*>\\s*<f(?: [^>]*)?>([^<]*)</f>`).exec(sheet); return m ? m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&") : null; };
 eq("written with the prefixes Excel needs", [f("B1"), f("B2"), f("C1"), f("D1"), f("D2"), f("D3")],
   ['_xlfn.TEXTJOIN("-",TRUE,A1:A3)', "_xlfn._xlws.SORT(A1:A3)", "SUM(LEN(_xlfn.ANCHORARRAY(B2)))", "_xlfn.STDEV.S(1,2,3)", '_xlfn.XLOOKUP("Cake",A1:A3,A1:A3)', "SUM(1,2)"]);
 eq("text in a string is left alone", f("D4"), '"_xlfn.TEXTJOIN("&LEN(A1)');
