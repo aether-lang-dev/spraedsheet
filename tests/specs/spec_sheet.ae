@@ -3274,6 +3274,22 @@ main() {
             spec.assert_gt(g.cell_id("XFD", 1048576), 0, "Excel's last cell shown")
             g.goto("A1")
         }
+        spec.it("the app stayed small: after the whole run its RSS is under 1.5 GB (on macOS it had reached 5.8 GB when the driver's /widgets polls leaked)") callback {
+            // The page asks the driver, a hundred widgets at a time, for
+            // everything it checks; the macOS server thread once leaked what
+            // each answer autoreleased. Skipped with no lsof/ps to find the app.
+            port = os.os_getenv("AETHER_UI_TEST_PORT")
+            if port == null || string.length(port) == 0 { port = "9222" }
+            out, _e = os.exec("lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null | head -1")
+            pid = string.trim(out)
+            if string.length(pid) > 0 {
+                rss, _e2 = os.exec("ps -o rss= -p ${pid}")
+                kb, err = string.to_int(string.trim(rss))
+                println("  app RSS ${kb} KB")
+                spec.assert_eq(string.length(err), 0, "ps read the RSS")
+                spec.assert_true(kb < 1500000, "RSS ${kb} KB is under 1.5 GB")
+            }
+        }
     }
     return spec.run_summary(fw)
 }
