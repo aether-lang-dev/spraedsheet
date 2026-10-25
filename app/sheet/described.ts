@@ -106,6 +106,7 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   STOPRECORDING: fn([], "Stops recording: the macro kept with the workbook", "the macro's REXX"),
   PREVIEWMACRO: fn([p("name", "text"), opt("args", "text", "its parameters, \"CELL=B2;N=5\"")], "What a macro would do, shown without doing it: its commands, the cells each changes, which are refused", "the count, and whether a run would keep what it did before a failure"),
   FUNCTIONINFO: fn([p("name", "text", "a function: SUM, XLOOKUP, LET")], "What the app knows of one function: its arity, kind, volatility and where it differs from Excel", "the name, its arity, and notes"),
+  GROUPEXPLAIN: fn([RANGE, p("by", "text", "the column to group by: its header or letter"), opt("agg", "text", "sum, avg or count"), opt("value", "text", "the column to sum or average"), opt("key", "text", "one group only")], "Which rows each group came from, and how its aggregate came to what it is", "each group's explanation"),
   PROFILE: fn([opt("on", "flag", "1: start timing each formula's evaluations; 0: stop; none: the slowest cells")], "Calculation timings: where a slow workbook spends its time", "the slowest cells with their time and runs"),
   RUNMACRO: fn([p("name", "text"), opt("args", "text", "its parameters, \"CELL=B2;N=5\": each a variable the macro starts with")], "Runs a macro (one step of undo)", "what it did"),
   ONOPEN: fn([p("macro", "text"), opt("off", "flag", "1: no longer")], "A macro run when the workbook opens (saved with it)", "what it did"),
@@ -369,6 +370,8 @@ export const DESCRIBED: Readonly<Record<string, Described>> = {
   AVG: fn([QUERY, FIELD], "A column's mean (per group, when grouped)", "the mean, or a stem of rows"),
   COUNT: fn([QUERY], "Counts the rows (per group, when grouped)", "the count, or a stem of rows"),
   RESULT: fn([QUERY], "The query's rows", "a stem of rows"),
+  LINEAGE: fn([QUERY], "Where a result came from: each group's key, how many rows, and which sheet rows", "a stem of rows"),
+  EXPLAIN: fn([QUERY, p("kind", "text", "sum, avg or count"), opt("column", "text", "the column to sum or average")], "Why each group's aggregate is what it is: the rows folded and the sum, mean or count they came to", "a stem of key and explanation"),
   // ---- the workbook
   SPREADSHEET_VERSION: fn([], "The app's version", "e.g. \"sae demo 18\""),
   RUNCOMMAND: fn([p("line", "text", "a command line, as the command bar takes: cell.set cell=A1 input=4"), opt("encoding", "text", "\"json\": the line is a JSON string")], "Runs one of the app's commands by its command line", "what it said"),

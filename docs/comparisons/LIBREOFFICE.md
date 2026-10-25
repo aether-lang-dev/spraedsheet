@@ -52,8 +52,14 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    calculation timings, `formulas.profile` (`PROFILE()`): on=1 times each formula's
    evaluations, none lists the slowest cells with their milliseconds and runs
    (headless `sheet_profile`; the clock is `Date.now`, so a page's coarse clock
-   limits it). Not done: row lineage and grouping explanations wait on VisiData 3
-   (typed group keys first); stepwise REXX is RexxJS's.
+   limits it). Row lineage and grouping
+   explanations done 2026-10-25 on VisiData 3's typed keys: `RANGE(...) |> GROUP_BY(..)
+   |> LINEAGE()` spills each group's key, row count and sheet rows; `|> EXPLAIN("sum",
+   "amount")` says why each aggregate is what it is ("North: SUM of amount over rows 4,
+   6: 120 + 40 = 160", with any non-numbers skipped said); `group.explain range= by=
+   [agg= value= key=]` (`GROUPEXPLAIN` from a script) does the same over the active
+   sheet and gives the cells of each group's rows. Headless `sheet_lineage`. Not
+   done: stepwise REXX is RexxJS's.
 5. ~~**Interchange honesty:** publish supported semantics and known losses; an
    exported RexxJS workbook needs a formula/results policy for apps that cannot
    run RexxJS. ODS stays cached-value import.~~ Done 2026-10-24: `file.interchange`

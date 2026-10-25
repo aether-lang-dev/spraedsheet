@@ -2,26 +2,27 @@
 // holds the LAMBDA): rows of values grouped by their key fields, each
 // group's values folded by an aggregate, in order, with totals. Pure: no
 // sheet here.
-import { CellError, compare, ordered } from "./values.ts";
+import { CellError, ordered } from "./values.ts";
+import { keyOf, keyOfRow } from "./groupkey.ts";
 import type { Value } from "./values.ts";
 
 export type Aggregate = (values: readonly Value[]) => Value;
 
-// Rows that share a key (every field equal, text without regard to case),
-// in the order the sort asks: a column number from 1 (the output's), minus
-// for descending, 0 for as found.
+// Rows that share a key (every field the same, typed: groupkey.ts), in the
+// order their first rows come. Keyed by a hash, so a group is the same
+// whatever order the rows are in.
 function grouped(keys: readonly (readonly Value[])[]): Map<number, number[]> {
-  const found: number[][] = [], byRow = new Map<number, number[]>();
+  const found = new Map<string, number[]>();
   for (let i = 0; i < keys.length; i++) {
-    let g = found.find((rows) => keys[rows[0]].every((v, f) => alike(v, keys[i][f])));
-    if (!g) found.push((g = []));
+    const k = keyOfRow(keys[i]);
+    let g = found.get(k);
+    if (!g) found.set(k, (g = []));
     g.push(i);
-    byRow.set(i, g);
   }
-  return new Map(found.map((g) => [g[0], g]));
+  return new Map([...found.values()].map((g) => [g[0], g]));
 }
 
-const alike = (a: Value, b: Value): boolean => (a instanceof CellError || b instanceof CellError ? a === b : compare("=", a, b));
+const alike = (a: Value, b: Value): boolean => keyOf(a) === keyOf(b);
 
 const rank = (a: Value, b: Value): number => {
   if (a instanceof CellError || b instanceof CellError) return 0;

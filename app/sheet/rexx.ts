@@ -10,7 +10,7 @@
 // SUM_RANGE("Costs!B1:B3").
 import { addrOf, keyOf, parseRange, qualified, range, sheetPrefix } from "./address.ts";
 import type { Env, Formula, Formulas, Language, Names, Tables } from "./language.ts";
-import { aggregate, groupBy, pluck, queryOf, result, where } from "./query.ts";
+import { aggregate, explain, groupBy, lineage, pluck, queryOf, result, where } from "./query.ts";
 import type { Query } from "./query.ts";
 import { array } from "./values.ts";
 import type { Addr } from "./address.ts";
@@ -196,7 +196,7 @@ export function rangeFunctions(read: (key: string) => unknown, names: () => Name
   // A range as rows of values, and its first column.
   const grid = (r: [Addr, Addr], key: (k: string) => string = (k) => k) => {
     const left = Math.min(r[0].col, r[1].col), right = Math.max(r[0].col, r[1].col);
-    const rows: Value[][] = [];
+    const rows: Value[][] = [], top = Math.min(r[0].row, r[1].row) + 1;
     for (let row = Math.min(r[0].row, r[1].row); row <= Math.max(r[0].row, r[1].row); row++) {
       const line: Value[] = [];
       for (let col = left; col <= right; col++) {
@@ -205,13 +205,13 @@ export function rangeFunctions(read: (key: string) => unknown, names: () => Name
       }
       rows.push(line);
     }
-    return { rows, left };
+    return { rows, left, top };
   };
   const query = (q: unknown, fn: string): Query => {
     if (!(q instanceof Piped)) throw new Error(`${fn} takes a query: RANGE(...) or TABLE(...) |> ${fn}(...)`);
     return q.q;
   };
-  const aggregated = (a: number | [string, number][]) => (typeof a === "number" ? a : rowsOf(a));
+  const aggregated = (a: number | [Value, number][]) => (typeof a === "number" ? a : rowsOf(a));
   return {
     SUM_RANGE: (r: string) => numbers(values(r)).reduce((s, n) => s + n, 0),
     AVERAGE_RANGE: (r: string) => {
@@ -268,14 +268,14 @@ export function rangeFunctions(read: (key: string) => unknown, names: () => Name
     // name (or column_C) bound to the row's value.
     RANGE: (ref: string) => {
       const { r, key } = located(ref), g = grid(r, key);
-      return new Piped(queryOf(g.rows, g.left));
+      return new Piped(queryOf(g.rows, g.left, undefined, g.top));
     },
     TABLE: (name: string) => {
       const t = tables()?.(String(name));
       if (!t) throw new Error(`no table ${name}`);
       const g = grid(t.range);
       const rows = t.headers ? g.rows.slice(1) : g.rows;
-      return new Piped(queryOf(rows, g.left, t.columns ?? (t.headers ? g.rows[0].map((v) => String(v ?? "")) : null)));
+      return new Piped(queryOf(rows, g.left, t.columns ?? (t.headers ? g.rows[0].map((v) => String(v ?? "")) : null), g.top + (t.headers ? 1 : 0)));
     },
     WHERE: async (q: unknown, condition: string) => {
       const it = new RexxInterpreter(null, { output: () => {} });
@@ -302,6 +302,15 @@ export function rangeFunctions(read: (key: string) => unknown, names: () => Name
     AVG: (q: unknown, column: string) => aggregated(aggregate(query(q, "AVG"), "avg", column)),
     COUNT: (q: unknown) => aggregated(aggregate(query(q, "COUNT"), "count")),
     RESULT: (q: unknown) => rowsOf(result(query(q, "RESULT"))),
+    // Where a result came from (query.ts): each group's key, how many rows and
+    // which (sheet rows); EXPLAIN says how a group's SUM, AVG or COUNT came to
+    // what it did.
+    LINEAGE: (q: unknown) => rowsOf(lineage(query(q, "LINEAGE")).map((l) => [l.key, l.rows.length, l.rows.join(", ")])),
+    EXPLAIN: (q: unknown, kind: string, column?: string) => {
+      const k = String(kind).toLowerCase();
+      if (k !== "sum" && k !== "avg" && k !== "count") throw new Error(`EXPLAIN takes "sum", "avg" or "count", not ${kind}`);
+      return rowsOf(explain(query(q, "EXPLAIN"), k, column).map((e) => [e.key, e.text]));
+    },
     SPARKLINE_RANGE: (r: string, type: unknown, options: unknown) => sparkline(numbers(values(r)), (SPARKLINE_TYPES as readonly string[]).includes(String(type ?? "").toLowerCase()) ? String(type).toLowerCase() as SparklineType : "line", sparklineOptions(String(options ?? "")) ?? {}),
   };
 }

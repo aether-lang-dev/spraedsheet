@@ -74,6 +74,9 @@ import { errorCheck } from "./errorcheck.ts";
 import { PANELS, menuLines } from "./menus.ts";
 import { allFunctions, functionInfo } from "./funcinfo.ts";
 import { profile } from "./sheet.ts";
+import { explain, groupBy, queryOf } from "./query.ts";
+import type { Explained } from "./query.ts";
+import { keyOf as groupKeyOf } from "./groupkey.ts";
 import { complete, cycleRef } from "./complete.ts";
 import { KEYS } from "./keys.ts";
 import { infer, run as runFill } from "./flashfill.ts";
@@ -3974,6 +3977,42 @@ const SPECS: readonly Spec[] = [
       if (!rows) return { ok: true, message: "not profiling: formulas.profile on=1 starts it", changed: [], output: [] };
       const top = p.top === undefined ? 10 : countOf(p.top), shown = rows.slice(0, top);
       return { ok: true, message: shown.length ? `slowest: ${shown.map((r) => `${r.sheet}!${r.cell} ${r.ms} ms in ${r.runs} run${r.runs === 1 ? "" : "s"}`).join(", ")}` : "no formula has run yet", changed: [], output: shown };
+    },
+  },
+  {
+    // Row lineage and grouping explanations (query.ts): the rows of `range`
+    // (its first row the headers when all text above numbers) grouped by the
+    // column `by` on typed keys (groupkey.ts), each group with the sheet rows
+    // it came from and, with agg= (sum, avg or count; sum and avg of value=),
+    // how its aggregate came to what it did. key= keeps one group (matched as
+    // the grouping does, without regard to case); output lists each group's
+    // key, rows, the cells of those rows and its result. Changes nothing: an
+    // aggregate is a result, to be changed at its source rows.
+    id: "group.explain", label: "Explain Groups", params: ["range", "by"], optional: ["agg", "value", "key"], journaled: false, effect: "query",
+    run: async (wb, p) => {
+      const [a, b] = rangeOf(p.range), left = Math.min(a.col, b.col), top = Math.min(a.row, b.row);
+      const grid: Value[][] = [];
+      for (let row = top; row <= Math.max(a.row, b.row); row++) {
+        const line: Value[] = [];
+        for (let col = left; col <= Math.max(a.col, b.col); col++) { const v = wb.sheet.value(keyOf({ col, row })); line.push(v === "" ? null : v as Value); }
+        grid.push(line);
+      }
+      const kind = (p.agg ?? "count").toLowerCase();
+      if (kind !== "sum" && kind !== "avg" && kind !== "count") refuse(`agg is sum, avg or count, not ${p.agg}`);
+      let found: Explained[];
+      try {
+        found = explain(groupBy(queryOf(grid, left, undefined, top + 1), p.by), kind as "sum" | "avg" | "count", p.value);
+      } catch (e) {
+        return { ok: false, message: (e as Error).message, changed: [] };
+      }
+      const width = (grid[0]?.length ?? 1);
+      const shown = p.key === undefined ? found : found.filter((e) => groupKeyOf(e.key) === groupKeyOf(p.key as Value));
+      if (!shown.length) return { ok: false, message: `no group ${p.key}`, changed: [] };
+      const output = shown.map((e) => ({
+        key: e.key === null ? "" : show(e.key), rows: [...e.rows], result: e.result, text: e.text,
+        cells: e.rows.flatMap((r) => Array.from({ length: width }, (_, c) => keyOf({ col: left + c, row: r - 1 }))),
+      }));
+      return { ok: true, message: shown.map((e) => e.text).join("; "), changed: [], output };
     },
   },
   {

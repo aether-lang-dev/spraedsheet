@@ -387,6 +387,7 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   STOPRECORDING: async (exec) => String((await must(exec, "macro.stop", {})).output),
   PREVIEWMACRO: async (exec, n, a) => (await must(exec, "macro.preview", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
   FUNCTIONINFO: async (exec, n) => (await must(exec, "formulas.functionInfo", { name: text(n) })).message,
+  GROUPEXPLAIN: async (exec, range, by, agg, value, key) => (await must(exec, "group.explain", { range: text(range), by: text(by), ...(text(agg) ? { agg: text(agg) } : {}), ...(text(value) ? { value: text(value) } : {}), ...(text(key) ? { key: text(key) } : {}) })).message,
   PROFILE: async (exec, on) => (await must(exec, "formulas.profile", text(on) === "" ? {} : { on: text(on) })).message,
   RUNMACRO: async (exec, n, a) => (await must(exec, "macro.run", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
   // A macro run on open, or after a change to a range: ONOPEN("Setup"),

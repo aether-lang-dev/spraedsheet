@@ -48,14 +48,18 @@ labels, params, journal and grouped undo; `journaled` and `unstepped` flags
    workbook shown after a 1904 one made 1904 serials. `Workbook.claimDates()` now
    runs whenever a workbook becomes the active one (`books.ts`). Headless
    `sheet_booksglobals`. The new clock (`workbook.clock`) is the page's by design.
-5. **Mutation journal (later).** Could cut snapshot cost and give blog-entry-todo
-   B.4/B.5 their diff; do after the history-cost measurement (see IronCalc). Not
-   done 2026-10-24. The measurement is in (IronCalc 4): a step costs about the sheet's
-   cells, and a 100,000-cell sheet ran out of memory at the 47th edit, now bounded
-   by `HISTORY_ENTRIES`. B.5's diff is already built (`review.*`). A journal would
-   replace `Saved` for every kind of state (cells, notes, views, names, styles,
-   pivots, charts ...), so it is a change to every command's undo, not one step;
-   `sheet_historycost` is its yardstick.
+5. ~~**Mutation journal (later).** Could cut snapshot cost and give blog-entry-todo
+   B.4/B.5 their diff; do after the history-cost measurement (see IronCalc).~~ Done
+   2026-10-25 (design and measurement: `docs/mutation_journal.md`): a step of undo is a
+   list of journal entries (`journal.ts`), each a kind of state with what it was and
+   what it became, and undo and redo apply them backwards and forwards; cells, notes,
+   a sheet's names, formulas and tables, the workbook's names and cell styles, and
+   widths, heights, pivots and outline levels are kept as the keys that changed. A
+   one-cell edit on a 2,000-cell sheet held 2,021 map entries and holds 1; a script of
+   fifty edits 3,043 and now 50 (`sheet_historycost`, `sheet_journal`). Left: recording at
+   the mutation (the diff is taken when the command is done), and recording and MCP
+   discovery reading `effect` (action 1's remainder). View changes stay undoable, as
+   before: a decision for Paul (TODO.md).
 
 Proof: record a panel command, replay it over the bus with another selection;
 it hits the original target. Undo and reopen restore everything attached.
