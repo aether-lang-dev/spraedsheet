@@ -1557,11 +1557,18 @@ def("TIMEVALUE", 1, 1, (args) => {
   const s = str(args, 0);
   return parseTime(s) ?? fail("#VALUE!", `'${s}' is not a time`);
 });
-def("TIME", 3, 3, (args) => ((num(args, 0) * 3600 + num(args, 1) * 60 + num(args, 2)) / 86400) % 1);
-const clock = (args: readonly Arg[]) => Math.round((date(args, 0) % 1) * 86400);
-def("HOUR", 1, 1, (args) => Math.floor(clock(args) / 3600) % 24);
-def("MINUTE", 1, 1, (args) => Math.floor(clock(args) / 60) % 60);
-def("SECOND", 1, 1, (args) => clock(args) % 60);
+def("TIME", 3, 3, (args) => {
+  const seconds = Math.trunc(num(args, 0)) * 3600 + Math.trunc(num(args, 1)) * 60 + Math.trunc(num(args, 2));
+  if (seconds < 0) return fail("#NUM!", `TIME of ${seconds} seconds is before midnight`);
+  return (seconds / 86400) % 1;
+});
+const clock = (args: readonly Arg[]): number | ReturnType<typeof fail> => {
+  const serial = date(args, 0);
+  return serial < 0 ? fail("#NUM!", `${serial} is before the first day`) : Math.round((serial % 1) * 86400);
+};
+def("HOUR", 1, 1, (args) => { const c = clock(args); return typeof c === "number" ? Math.floor(c / 3600) % 24 : c; });
+def("MINUTE", 1, 1, (args) => { const c = clock(args); return typeof c === "number" ? Math.floor(c / 60) % 60 : c; });
+def("SECOND", 1, 1, (args) => { const c = clock(args); return typeof c === "number" ? c % 60 : c; });
 def("TODAY", 0, 0, () => Math.floor(now()));
 def("NOW", 0, 0, () => now());
 
