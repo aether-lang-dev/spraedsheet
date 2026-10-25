@@ -433,12 +433,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "GAMMALN GAMMALN.PRECISE!B45": "we-error",
     "GAMMALN GAMMALN.PRECISE!C45": "we-error",
   },
-  "STATISTICAL/LINEST_LOGEST.xlsx": {
-    "Sheet1!G2": "we-error",
-    "Sheet1!G3": "we-error",
-    "Sheet1!G4": "we-error",
-    "Sheet1!G5": "we-error",
-  },
   "STATISTICAL/LOGNORM.xlsx": {
     "LOGNORM.DIST LOGNORM.INV!F26": "value",
     "LOGNORM.DIST LOGNORM.INV!E66": "legacy",

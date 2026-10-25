@@ -47,7 +47,7 @@ Seek, and Solver including GRG nonlinear and evolutionary (TODO 6.8b); the
    `LINEST` fitted one predictor only and ignored the constant and statistics
    arguments; it now takes several predictors, `const`, and the 5-row statistics
    block, and says "the x columns are collinear" (#NUM!) where Excel would give a
-   coefficient made of rounding. `LOGEST` is still missing.
+   coefficient made of rounding. `LOGEST` is in (2026-10-25: LINEST on ln y, coefficients exponentiated; headless `sheet_logest`, and the four IronCalc/Excel `LINEST_LOGEST.xlsx` cells that differed now agree).
 5. ~~**Machine-readable failures and loss reports from the CLI** (`sheet convert`
    exists; add the structured errors).~~ Done 2026-10-24: `sheet convert|run --json`:
    convert prints one JSON object with `read`, `write` and `report` (what the file

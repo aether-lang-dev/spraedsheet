@@ -1005,38 +1005,41 @@ def("GROWTH", 1, 3, (args) => line("GROWTH", args, true));
 // R squared and the standard error of y, F and its degrees of freedom, and the
 // regression and residual sums of squares. Predictors that are collinear are
 // #NUM!, not a coefficient made of rounding. Fitted on centred data.
-def("LINEST", 1, 4, (args) => {
+// LOGEST fits ln y the same way and gives the coefficients exponentiated (the
+// bases m1, m2 ... and the multiplier b of y = b * m1^x1 * m2^x2); the
+// statistics rows stay those of the ln fit, as in Excel.
+const linest = (name: string, args: readonly Arg[], log: boolean) => {
   const yArg = args[0];
-  const asNumbers = (a: Arg): number[] => a.values.map((v) => { const t = scalar(v); return typeof t === "number" ? t : fail("#VALUE!", "LINEST takes numbers only"); });
-  const y = asNumbers(yArg), n = y.length, byRow = yArg.cols > 1 && yArg.values.length === yArg.cols;
-  if (n < 2) return fail("#DIV/0!", "LINEST needs two values or more");
+  const asNumbers = (a: Arg): number[] => a.values.map((v) => { const t = scalar(v); return typeof t === "number" ? t : fail("#VALUE!", `${name} takes numbers only`); });
+  const y = asNumbers(yArg).map((v) => (log ? (v > 0 ? Math.log(v) : fail("#NUM!", "LOGEST takes y values above zero")) : v)), n = y.length, byRow = yArg.cols > 1 && yArg.values.length === yArg.cols;
+  if (n < 2) return fail("#DIV/0!", `${name} needs two values or more`);
   const withConst = absent(args, 2) ? true : toNumber(val(args, 2)) !== 0, stats = absent(args, 3) ? false : toNumber(val(args, 3)) !== 0;
   let X: number[][];
   if (absent(args, 1)) X = y.map((_, i) => [i + 1]);
   else {
     const xs = asNumbers(args[1]), xa = args[1];
     if (byRow) {
-      if (xa.cols !== n) return fail("#REF!", "LINEST's x has to have as many columns as y has");
+      if (xa.cols !== n) return fail("#REF!", `${name}: x has to have as many columns as y has`);
       const k = xs.length / n;
       X = Array.from({ length: n }, (_, i) => Array.from({ length: k }, (_, j) => xs[j * n + i]));
     } else {
-      if (xs.length % n !== 0 || xa.values.length / xa.cols !== n) return fail("#REF!", "LINEST's x has to have as many rows as y has");
+      if (xs.length % n !== 0 || xa.values.length / xa.cols !== n) return fail("#REF!", `${name}: x has to have as many rows as y has`);
       X = Array.from({ length: n }, (_, i) => Array.from({ length: xa.cols }, (_, j) => xs[i * xa.cols + j]));
     }
   }
   const k = X[0].length, df = n - k - (withConst ? 1 : 0);
-  if (df < 0) return fail("#NUM!", "LINEST: more predictors than values");
+  if (df < 0) return fail("#NUM!", `${name}: more predictors than values`);
   const xm = withConst ? X[0].map((_, j) => mean(X.map((r) => r[j]))) : X[0].map(() => 0), ym = withConst ? mean(y) : 0;
   const Xc = X.map((r) => r.map((v, j) => v - xm[j])), yc = y.map((v) => v - ym);
   const xtx = Array.from({ length: k }, (_, a) => Array.from({ length: k }, (_, b) => sum(Xc.map((r) => r[a] * r[b]))));
   const inv = eliminate(xtx).inverse;
-  if (!inv) return fail("#NUM!", "LINEST: the x columns are collinear");
+  if (!inv) return fail("#NUM!", `${name}: the x columns are collinear`);
   const xty = Array.from({ length: k }, (_, a) => sum(Xc.map((r, i) => r[a] * yc[i])));
   const b = inv.map((row) => sum(row.map((v, j) => v * xty[j])));
   const intercept = withConst ? ym - sum(b.map((v, j) => v * xm[j])) : 0;
   const rev = <T,>(a: readonly T[]): T[] => [...a].reverse();
-  const coefficients: Value[] = [...rev(b), intercept];
-  if (!stats) return array(1, k + 1, coefficients);
+  const coefficients: Value[] = [...rev(b), intercept], shown = (v: Value): Value => (log && typeof v === "number" ? Math.exp(v) : v);
+  if (!stats) return array(1, k + 1, coefficients.map(shown));
   const resid = X.map((r, i) => y[i] - (intercept + sum(r.map((v, j) => v * b[j]))));
   const ssresid = sum(resid.map((r) => r * r)), sstotal = withConst ? sum(yc.map((v) => v * v)) : sum(y.map((v) => v * v)), ssreg = sstotal - ssresid;
   const na = new CellError("#N/A", "not part of the statistics"), bad = (why: string) => new CellError("#NUM!", why);
@@ -1044,14 +1047,16 @@ def("LINEST", 1, 4, (args) => {
   const se: Value[] = [...rev(inv.map((row, j) => Math.sqrt(mse * row[j]))), withConst ? Math.sqrt(mse * (1 / n + sum(inv.map((row, a) => sum(row.map((v, c) => xm[a] * v * xm[c])))))) : na];
   const fixed = (v: number, why: string): Value => (Number.isFinite(v) ? v : bad(why));
   const rows: Value[][] = [
-    coefficients,
+    coefficients.map(shown),
     se.map((v) => (typeof v === "number" ? fixed(v, "no degrees of freedom left") : v)),
     [fixed(ssreg / sstotal, "the y values are all alike"), fixed(Math.sqrt(mse), "no degrees of freedom left"), ...Array(k - 1).fill(na)],
     [fixed(ssreg / k / mse, "no degrees of freedom left"), df, ...Array(k - 1).fill(na)],
     [ssreg, ssresid, ...Array(k - 1).fill(na)],
   ];
   return array(5, k + 1, rows.flatMap((r) => [...r, ...Array(k + 1 - r.length).fill(na)]));
-});
+};
+def("LINEST", 1, 4, (args) => linest("LINEST", args, false));
+def("LOGEST", 1, 4, (args) => linest("LOGEST", args, true));
 // FREQUENCY(data, bins): how many fall in each bin (up to and including
 // its bound, above the one before), and one more for what is past the last.
 def("FREQUENCY", 2, 2, (args) => {
