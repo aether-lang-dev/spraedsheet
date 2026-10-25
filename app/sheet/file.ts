@@ -222,7 +222,9 @@ function layoutOf(l: any): PageLayout {
   const d = DEFAULT_LAYOUT, text = (x: unknown, or: string) => (typeof x === "string" ? x : or), flag = (x: unknown, or: boolean) => (typeof x === "boolean" ? x : or);
   const num = (x: unknown, or: number, lo: number, hi: number) => (typeof x === "number" && x >= lo && x <= hi ? x : or);
   return { paper: l?.paper === "letter" ? "letter" : "a4", landscape: flag(l?.landscape, d.landscape), margin: num(l?.margin, d.margin, 0, 144), scale: num(l?.scale, d.scale, 10, 400),
-    area: parseRange(text(l?.area, "")) ? text(l?.area, "") : "", titles: /^\d+:\d+$/.test(text(l?.titles, "")) ? text(l?.titles, "") : "", header: text(l?.header, ""), footer: text(l?.footer, ""),
+    fitWide: Math.round(num(l?.fitWide, d.fitWide, 0, 99)), fitTall: Math.round(num(l?.fitTall, d.fitTall, 0, 99)),
+    area: parseRange(text(l?.area, "")) ? text(l?.area, "") : "", titles: /^\d+:\d+$/.test(text(l?.titles, "")) ? text(l?.titles, "") : "",
+    titleCols: /^[A-Z]{1,3}:[A-Z]{1,3}$/.test(text(l?.titleCols, "")) ? text(l?.titleCols, "") : "", header: text(l?.header, ""), footer: text(l?.footer, ""),
     gridlines: flag(l?.gridlines, d.gridlines), headings: flag(l?.headings, d.headings) };
 }
 

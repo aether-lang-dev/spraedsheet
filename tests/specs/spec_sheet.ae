@@ -22,6 +22,7 @@ import std.fs
 const TRIES = 60
 const POLL_MS = 50
 
+
 // The formula bar comes to `want`, after a selection's follow. 1 if so.
 wait_formula(want: string) -> int {
     i = 0
@@ -160,6 +161,15 @@ active_book() -> string {
     return name
 }
 
+// Waits for the cell at column A, row `row`, to be drawn (the grid brings it in after a jump).
+shown_a(row: int) {
+    i = 0
+    while i < 60 && g.cell_id("A", row) == 0 {
+        sleep(50)
+        i = i + 1
+    }
+}
+
 // The visible controls (buttons, text fields, sliders, toggles) /widgets lists
 // that a screen reader would name by nothing: no accessible name. The grid's
 // own cells and in-cell editor are the grid's to name. "type:id" for each.
@@ -220,6 +230,184 @@ unfocusable_controls() -> string {
     }
     json.json_free(v)
     return string.trim(out)
+}
+
+// 1 unless the widget says it is disabled.
+enabled_(w: ptr) -> int {
+    f = json.json_object_get_raw(w, "enabled")
+    if f == null { return 1 }
+    return json.json_get_bool(f)
+}
+
+// 1 when the widget with this id is shown and so is everything it sits in (a panel that is shut leaves
+// its controls "visible" themselves, in a container that is not).
+shown_through_(id: int) -> int {
+    cur = id
+    steps = 0
+    while cur > 0 && steps < 40 {
+        v, _jerr = json.parse(uidriver.get_body("/widget/${cur}"))
+        if v == null { return 0 }
+        vis = shown_(v)
+        parent = uidriver.field_int(v, "parent")
+        json.json_free(v)
+        if vis == 0 { return 0 }
+        cur = parent
+        steps = steps + 1
+    }
+    return 1
+}
+
+// Whether the focus ring is drawn on a tool's canvas (cid is its /canvas id): its edge, at the middle of the left side.
+ring_pixel_(cid: int) -> int {
+    v, _jerr = json.parse(uidriver.get_body("/canvas/${cid}/pixel?x=1&y=13&w=26&h=26"))
+    if v == null { return 0 }
+    p = uidriver.field_int(v, "pixel")
+    json.json_free(v)
+    return p
+}
+ring_blue_(cid: int) -> int {
+    p = ring_pixel_(cid)
+    r = (p >> 16) & 255
+    bl = p & 255
+    if bl > 150 && r < 140 { return 1 }
+    return 0
+}
+ring_on(cid: int) -> int { return ring_blue_(cid) }
+ring_off(cid: int) -> int { return 1 - ring_blue_(cid) }
+
+// Waits for the ring to be drawn (want 1) or gone (0) on a tool.
+wait_ring(cid: int, want: int) -> int {
+    i = 0
+    while i < 40 {
+        if ring_blue_(cid) == want { return 1 }
+        sleep(50)
+        i = i + 1
+    }
+    return 0
+}
+
+// The name of a widget in a /focus/move answer as a person would call it: its accessible name, else its
+// text, else its placeholder.
+stop_name_(w: ptr) -> string {
+    n = uidriver.field_str(w, "a11y_name")
+    if string.length(n) == 0 { n = uidriver.field_str(w, "text") }
+    if string.length(n) == 0 { n = uidriver.field_str(w, "placeholder") }
+    return n
+}
+
+// Tab all the way round from the Name Box (aether-ui's POST /focus/move: the toolkit's own order, and nothing
+// else; the grid's own Tab for its cursor is not in it) and assert what a person finds: every stop once and
+// back at the start; the order goes down the window in reading order (a row left to right, then the next
+// row) and wraps once; the Name Box comes right after the toolbar (its one stop) and the formula bar right
+// after it; and every control that is shown and enabled is one of the stops.
+tab_round(what: string) {
+    start = g.field("cell")
+    uidriver.focus_widget(start)
+    seen = " "
+    steps = 0
+    dup = 0
+    jumps = 0
+    jumped = ""
+    prev_x = 0
+    prev_y = 0 - 100000
+    prev_h = 0
+    prev_name = ""
+    after = ""
+    before = ""
+    before_type = ""
+    before_y = 0
+    while steps < 300 {
+        body = uidriver.focus_move_body(0)
+        v, _jerr = json.parse(body)
+        if v == null { break }
+        id = uidriver.field_int(v, "handle")
+        w = json.json_object_get_raw(v, "widget")
+        if id == start || id == 0 || w == null {
+            json.json_free(v)
+            break
+        }
+        steps = steps + 1
+        // GTK4's flow box (a wrap of controls) puts a stop of Tab on each cell before the control in it: the toolkit's
+        // own, reported as the wrap itself, and not a control to count.
+        if string.equals(uidriver.field_str(w, "type"), "wrap") == 1 {
+            json.json_free(v)
+            continue
+        }
+        // A control squeezed to nothing (a row of sixty sheet tabs is wider than the window and the stack
+        // clips what does not fit) is a stop that cannot be seen: it takes the focus, and is not placed.
+        if uidriver.field_int(w, "w") == 0 || uidriver.field_int(w, "h") == 0 {
+            seen = "${seen}${id} "
+            json.json_free(v)
+            continue
+        }
+        name = stop_name_(w)
+        // The page may scroll as the focus goes down it (GTK4 scrolls to the focus), so a stop is
+        // placed by where it is on the page: its place less the Name Box's, as it is now. The
+        // browser's own address row is not the page's, and not part of the order asked about.
+        // (Read again once the page has stopped scrolling: the stop and the Name Box in the same moment.)
+        x = uidriver.field_int(w, "x")
+        hgt = uidriver.field_int(w, "h")
+        y = uidriver.field_int(w, "y") - uidriver.widget_int_field_by_id(start, "y")
+        settle = 0
+        while settle < 12 {
+            cy1 = uidriver.widget_int_field_by_id(start, "y")
+            sy = uidriver.widget_int_field_by_id(id, "y")
+            x = uidriver.widget_int_field_by_id(id, "x")
+            hgt = uidriver.widget_int_field_by_id(id, "h")
+            cy2 = uidriver.widget_int_field_by_id(start, "y")
+            y = sy - cy2
+            if cy1 == cy2 { break }
+            sleep(40)
+            settle = settle + 1
+        }
+        chrome = 0
+        if string.equals(name, "Back") == 1 || string.equals(name, "Forward") == 1 || string.equals(name, "Reload") == 1 || string.equals(name, "Address") == 1 || string.equals(name, "Go") == 1 || string.starts_with(name, "http") == 1 { chrome = 1 }
+        if string.contains(seen, " ${id} ") == 1 { dup = dup + 1 }
+        seen = "${seen}${id} "
+        if steps == 1 { after = name }
+        // Reading order: on the last stop's row (their heights overlap) and to its right, or below it.
+        if chrome == 0 {
+            same_row = 0
+            if y < prev_y + prev_h && prev_y < y + hgt { same_row = 1 }
+            if prev_name != "" && ((same_row == 1 && x <= prev_x) || (same_row == 0 && y < prev_y)) {
+                jumps = jumps + 1
+                jumped = "${jumped} ${prev_name} -> ${name};"
+            }
+            prev_x = x
+            prev_y = y
+            prev_h = hgt
+            prev_name = name
+        }
+        before = name
+        before_type = uidriver.field_str(w, "type")
+        before_y = y
+        json.json_free(v)
+        if dup > 0 { break }
+    }
+    println("  Tab ${what}: ${steps} stops, ${jumps} jump(s) up${jumped}")
+    spec.assert_eq(dup, 0, "${what}: no stop is visited twice (no trap)")
+    spec.assert_gt(steps, 10, "${what}: a round of Tab has stops (${steps})")
+    spec.assert_eq(jumps, 1, "${what}: the order goes down the window and wraps once, in reading order:${jumped}")
+    spec.assert_true(string.equals(before_type, "canvas") == 1 && before_y < 0, "${what}: the toolbar's one stop is the stop before the Name Box: a tool, above it (it is ${before_type} '${before}')")
+    spec.assert_str_eq(after, "formula", "${what}: the formula bar is the stop after the Name Box")
+    // Every shown, enabled control is a stop.
+    wl, _jerr2 = json.parse(uidriver.get_body("/widgets"))
+    missing = ""
+    if wl != null {
+        i = 0
+        while i < json.json_array_size(wl) {
+            c = json.json_array_get_raw(wl, i)
+            t = uidriver.field_str(c, "type")
+            cls = uidriver.field_str(c, "classes")
+            if (string.equals(t, "button") == 1 || string.equals(t, "textfield") == 1 || string.equals(t, "securefield") == 1 || string.equals(t, "slider") == 1 || string.equals(t, "toggle") == 1 || string.equals(t, "checkbox") == 1) && shown_(c) == 1 && enabled_(c) == 1 && uidriver.field_int(c, "w") > 0 && uidriver.field_int(c, "h") > 0 && string.contains(cls, "aui-grid") == 0 {
+                cid = uidriver.field_int(c, "id")
+                if cid != start && string.contains(seen, " ${cid} ") == 0 && shown_through_(cid) == 1 { missing = "${missing} ${t}:${stop_name_(c)};" }
+            }
+            i = i + 1
+        }
+        json.json_free(wl)
+    }
+    spec.assert_true(string.length(missing) == 0, "${what}: every shown, enabled control is a stop of Tab; not reached:${missing}")
 }
 
 // Asserts every shown control takes the keyboard focus, printing the ones that do not.
@@ -451,6 +639,7 @@ focus_() -> int {
 ink_at(name: string, col: string, row: int) -> string {
     id = g.cell_id(col, row)
     if id == 0 { return "" }
+    sleep(200)   // the cell repainted after the click or the pick before it, on a machine that is busy too
     _s = snapshot(name)
     bn = uidriver.widget_id_by_text("Under Remote Control")
     banner = "${uidriver.widget_int_field_by_id(bn, "x")}:${uidriver.widget_int_field_by_id(bn, "y")}:${uidriver.widget_int_field_by_id(bn, "w")}:${uidriver.widget_int_field_by_id(1, "w")}"
@@ -682,6 +871,8 @@ main() {
             b.navigate(b.test_url("/sheet"))
             b.assert_page("Spreadsheet", "200 ", "sheet page")
             spec.assert_true(b.wait_for_text("A1: (empty)"), "the status line")
+            // The page keeps the most its heap and its widgets' callbacks reach, for the last case to ask.
+            g.command("app.heap watch=1")
             spec.assert_true(b.wait_for_text("No problems"), "the computed summary")
             spec.assert_gt(g.cell_id("A", 1), 0, "A1 is there")
             spec.assert_gt(g.cell_id("J", 20), 0, "and J20, the last")
@@ -2631,6 +2822,25 @@ main() {
             spec.assert_true(g.wait_cell("A", 3, "ink"), "a record a row")
             g.command("view.panel name=none")
         }
+        spec.it("Page Setup in the File panel: fit pages wide and columns to repeat typed into its fields and applied; Page Breaks lays the sheet out by them") callback {
+            g.command("sheet.add name=Wideprint")
+            g.command("cell.set cell=T1 input=end")
+            g.goto("T1")
+            spec.assert_true(b.wait_for_text("T1: end → end"), "a sheet twenty columns wide")
+            g.goto("A1")
+            g.command("view.panel name=file")
+            b.set_field_by("columns to repeat", "A:B")
+            b.set_field_by("fit pages wide", "2")
+            b.click("Apply page setup")
+            spec.assert_true(b.wait_for_text("page setup: a4, portrait, margin 36, scale 100%, fit 2 wide by automatic tall, title columns A:B"), "the setup said beside the fields")
+            g.command("page.breaks")
+            spec.assert_true(b.wait_for_console("2 pages: A1:K1, L1:T1; manual breaks: none; scale 79%"), "two pages across at the largest scale that fits them with two columns repeated")
+            b.set_field_by("fit pages wide", "0")
+            b.set_field_by("columns to repeat", "none")
+            b.click("Apply page setup")
+            spec.assert_true(b.wait_for_text("page setup: a4, portrait, margin 36, scale 100%"), "taken away again")
+            g.command("view.panel name=none")
+        }
         spec.it("a doughnut and a stacked column chart from the Charts panel, each drawn") callback {
             g.command("sheet.add name=Kinds")
             g.script("LET r = SETCELL('A2', 'Q1'); LET r = SETCELL('A3', 'Q2'); LET r = SETCELL('B1', 'N'); LET r = SETCELL('B2', 3); LET r = SETCELL('B3', 1)")
@@ -3452,6 +3662,92 @@ main() {
             sleep(300)
             focusable_controls("the lists panel")
             g.command("view.panel name=none")
+        }
+        spec.it("Tab order: from the Name Box round the toolbar, the formula bar, the grid, the sheet tabs, the sheet buttons, the panels' tabs and each of the fifteen panels, in reading order, every control a stop, and back") callback {
+            g.extras(1)
+            g.command("view.panel name=none")
+            sleep(300)
+            tab_round("none panel open")
+            panels = string.string_split("edit looks view names rules validation editors data find audit insert chart file script lists", " ")
+            i = 0
+            while i < string.string_array_size(panels) {
+                name = string.string_array_get(panels, i)
+                g.command("view.panel name=${name}")
+                sleep(300)
+                tab_round("the ${name} panel")
+                i = i + 1
+            }
+            g.command("view.panel name=none")
+        }
+        spec.it("the toolbar by the keyboard: Shift+Tab from the Name Box lands on it, the arrows move a ring from tool to tool, Return presses the one it is on") callback {
+            g.enter("L50", "7")
+            g.goto("L50")
+            uidriver.focus_widget(g.field("cell"))
+            body = uidriver.focus_move_body(1)
+            spec.assert_contains(body, "\"a11y_name\":\"Undo (Ctrl+Z)\"", "Shift+Tab from the Name Box is the toolbar's one stop, its first tool, Undo")
+            undo = tool_canvas("Undo (Ctrl+Z)")
+            bold = tool_canvas("Bold (Ctrl+B)")
+            // The ring is the blue (#1060d0) edge of the tool's square, drawn while the toolbar has the focus and the ring is on it.
+            spec.assert_true(ring_on(undo), "the ring is on the first tool, Undo")
+            spec.assert_true(ring_off(bold), "and not on Bold")
+            i = 0
+            while i < 5 {
+                spec.assert_true(uidriver.window_key("Right") == 1, "Right ${i + 1}")
+                i = i + 1
+            }
+            spec.assert_true(wait_ring(bold, 1), "five Rights on: the ring is on Bold")
+            spec.assert_true(ring_off(undo), "and off Undo")
+            spec.assert_true(uidriver.window_key("Return") == 1, "Return")
+            spec.assert_true(b.wait_for_console("sheet: L50: bold"), "Return pressed Bold")
+            italic = tool_canvas("Italic (Ctrl+I)")
+            spec.assert_true(uidriver.window_key("Right") == 1, "Right")
+            spec.assert_true(wait_ring(italic, 1) && wait_ring(bold, 0), "Right: the ring is on Italic, off Bold")
+            spec.assert_true(uidriver.window_key("Left") == 1, "Left")
+            spec.assert_true(wait_ring(bold, 1) && wait_ring(italic, 0), "Left: the ring is back on Bold")
+            spec.assert_true(uidriver.window_key("Home") == 1, "Home")
+            spec.assert_true(wait_ring(undo, 1), "Home: the ring is on Undo")
+            // Tab on: the toolbar is left, and its ring with it; the arrows are the grid's again.
+            uidriver.focus_move_body(0)
+            spec.assert_true(wait_ring(undo, 0), "Tab on from the toolbar: its ring is gone")
+        }
+        spec.it("a large column: Ctrl+Down jumps the 20,000 rows, Ctrl+Shift+Down selects them and the status bar counts them, Ctrl+End and Ctrl+Home come back") callback {
+            // (Its own spec, spec_sheet_large, while the page's heap held 80 MB by this
+            // point, past the 128 MB it was given with 20,000 cells more; it holds 17 MB now,
+            // so this runs where it ends, in the same page, on a sheet of its own.)
+            g.command("sheet.add name=Large")
+            g.command("view.select range=A1")
+            spec.assert_true(b.wait_for_text("A1: (empty)"), "a sheet of its own")
+            g.command("cell.set cell=A1 input=1")
+            g.command("cell.set cell=A2 input=2")
+            g.command("edit.fillSeries range=A1:A20000")
+            g.goto("A20000")
+            spec.assert_true(b.wait_for_text_secs("A20000: 20000 → 20000", 30), "the series reaches row 20,000")
+            g.goto("A1")
+            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "back at A1")
+            shown_a(1)
+            g.pick("A", 1)
+            g.key("Ctrl+Down")
+            spec.assert_true(b.wait_for_text_secs("A20000: 20000 → 20000", 30), "Ctrl+Down: the last row of the data")
+            g.key("Ctrl+Up")
+            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "Ctrl+Up: back to the first")
+            g.key("Ctrl+Shift+Down")
+            spec.assert_true(uidriver.wait_body_contains("/widgets", "Count: 20000  Numerical Count: 20000", 400), "Ctrl+Shift+Down: the whole column selected, counted in the status bar")
+            g.goto("A1")
+            shown_a(1)
+            g.pick("A", 1)
+            g.key("Ctrl+End")
+            spec.assert_true(b.wait_for_text_secs("A20000: 20000 → 20000", 30), "Ctrl+End: the last cell used")
+            g.key("Ctrl+Home")
+            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "Ctrl+Home: A1")
+        }
+        spec.it("the page stayed bounded: sixty sheets, a hundred steps of undo and a column of 20,000 cells in, its heap peaked under 56 MB and its widgets held under 2,000 callbacks (80 MB and 45,000 when a rebuilt tab kept every callback it ever made)") callback {
+            note = g.heap_note()
+            hp = g.number_after(note, "peak ")
+            cp = g.number_after(note, "handles peak ")
+            println("  ${note}")
+            spec.assert_true(hp > 0, "the page said how big its heap got")
+            spec.assert_true(hp < 56000000, "the heap peaked at ${hp} bytes, under 56 MB")
+            spec.assert_true(cp > 0 && cp < 2000, "the callbacks held peaked at ${cp}, under 2,000")
         }
         spec.it("the app stayed small: after the whole run its RSS is under 1.5 GB (on macOS it had reached 5.8 GB when the driver's /widgets polls leaked)") callback {
             // The page asks the driver, a hundred widgets at a time, for

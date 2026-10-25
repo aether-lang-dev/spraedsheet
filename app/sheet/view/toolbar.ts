@@ -74,7 +74,7 @@ export function toolBar(v: SheetView): void {
   });
   // Each group its own row, close set; the groups set apart.
   const groups = GROUPS.map((first, i) => TOOLS.slice(TOOLS.findIndex(([l]) => l === first), i + 1 < GROUPS.length ? TOOLS.findIndex(([l]) => l === GROUPS[i + 1]) : TOOLS.length));
-  ui.hstack(14, () => {
+  const bar = ui.hstack(14, () => {
     for (const group of groups) {
       ui.hstack(2, () => {
         for (const [label, tip, action] of group) {
@@ -87,7 +87,51 @@ export function toolBar(v: SheetView): void {
       });
     }
   });
+  // The toolbar is one stop of Tab (the ARIA toolbar pattern, "a roving tabindex"): the tool the focus
+  // last rested on takes it, the arrows move it to the next tool (which becomes the stop, the old one not),
+  // Return or Space presses the one that has it, and a ring is drawn round it. No other tool takes the
+  // focus (GTK4 gives every canvas one), so Tab does not walk thirty tools.
+  ui.a11y_role(bar, "group");
+  ui.a11y_label(bar, "Toolbar");
+  stops.forEach((t, i) => {
+    ui.set_focusable(t.scene, i === toolAt ? 1 : 0);
+    ui.on_focus_change(t.scene, (inside: number) => {
+      if (inside !== 0) { toolFocus = i; toolAt = i; } else if (toolFocus === i) toolFocus = -1;
+      vg.set(t.ring, { opacity: inside !== 0 ? 1 : 0 });
+    });
+  });
 }
+
+// The tools in order, each with what presses it and its focus ring; the one that has the focus (or -1),
+// and the one that is the toolbar's stop of Tab.
+const stops: { readonly scene: number; readonly ring: number; readonly run: () => unknown; readonly label: string }[] = [];
+let toolFocus = -1, toolAt = 0;
+
+// Left, Right, Home, End and Return or Space, while a tool has the focus; true when it took the key.
+export function toolbarKey(key: string): boolean {
+  if (toolFocus < 0 || !stops.length) return false;
+  let to = toolFocus;
+  if (key === "Right") to = (to + 1) % stops.length;
+  else if (key === "Left") to = (to + stops.length - 1) % stops.length;
+  else if (key === "Home") to = 0;
+  else if (key === "End") to = stops.length - 1;
+  else if (key === "Return" || key === "space") { stops[toolFocus].run(); return true; }
+  else return false;
+  if (to !== toolFocus) {
+    // The new tool takes the focus and becomes the stop; the old one stops being one. (Which tool has the
+    // focus is noted now: the toolkit tells of a focus change a moment later, and a second arrow before
+    // it must move on from here.)
+    const from = toolFocus;
+    toolFocus = toolAt = to;
+    ui.set_focusable(stops[to].scene, 1);
+    ui.focus(stops[to].scene);
+    ui.set_focusable(stops[from].scene, 0);
+  }
+  return true;
+}
+
+// The tool the ring is on, by label (for a spec).
+export function toolOnRing(): string { return toolFocus >= 0 ? stops[toolFocus].label : ""; }
 
 // A tool: its icon (icons.ts) in a 26 px square, the click running it; its tooltip the tool's name and shortcut,
 // and to a screen reader a button named so.
@@ -97,6 +141,7 @@ const inked: { readonly h: number; readonly stroke?: number; readonly fill?: boo
 function tool(label: string, tip: string, run: () => unknown): number {
   const icon = ICONS[label] ?? { text: label };
   const ink = INK.light;
+  let ringShape = 0;
   const scene: number = vg.scene("0 0 24 24", 26, 26, () => {
     if (icon.strokes) inked.push({ h: vg.path(icon.strokes, () => { vg.fill("none"); vg.stroke(ink, 1.8); vg.linecap("round"); vg.linejoin("round"); }), stroke: 1.8 });
     if (icon.fills) inked.push({ h: vg.path(icon.fills, () => vg.fill(ink)), fill: true });
@@ -114,6 +159,8 @@ function tool(label: string, tip: string, run: () => unknown): number {
       }
     }
     if (icon.bar) vg.rect(3, 20.5, 18, 3, () => vg.fill(icon.bar!));
+    // The focus ring, unseen until the toolbar has the focus and the arrows bring it here.
+    ringShape = vg.rrect(0.8, 0.8, 22.4, 22.4, 3, () => { vg.fill("none"); vg.stroke("#1060d0", 1.6); vg.opacity(0); });
     // Over the glyph, unseen: what the pointer clicks and rests on.
     vg.rrect(0, 0, 24, 24, 3, () => {
       vg.fill("#ffffff");
@@ -128,6 +175,7 @@ function tool(label: string, tip: string, run: () => unknown): number {
   ui.a11y_role(scene, "button");
   ui.a11y_label(scene, tip);
   v_tools.set(label, scene);
+  stops.push({ scene, ring: ringShape, run, label });
   return scene;
 }
 

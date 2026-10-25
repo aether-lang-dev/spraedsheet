@@ -76,15 +76,22 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    toggle lacks an accessible name, and the audit sees at least five controls in each
    panel); it found nothing to fix. Done 2026-10-25, with no new aether-ui capability
    needed (so nothing to add on the four backends):
-   - **Keyboard-only:** spec_sheet "keyboard only: every control in the toolbar and in
-     each of the fifteen panels takes the keyboard focus": each shown control is given the
-     keyboard focus by the driver and `/focus` must name it. F6 through the panels, the
-     focus in each, was already tested. Not done: the *order* Tab visits them in.
-     aether-ui's driver has no "move focus as Tab does" route (`/focus` reads, a widget's
-     `/focus` sets); a real-Tab walk needs one on each backend (GTK `gtk_widget_child_focus`,
-     AppKit `selectNextKeyView`, Win32 `GetNextDlgTabItem`, UIKit's focus system, Android
-     `focusSearch`) and is the next step if Paul wants the order itself asserted.
-     `real_keys_x11` already sends real Tab and Shift+Tab to the grid on the Linux lane.
+   - **Keyboard-only:** spec_sheet "keyboard only: every control in the toolbar and in each
+     of the fifteen panels takes the keyboard focus": each shown control is given the
+     keyboard focus by the driver and `/focus` must name it. F6 through the panels, the focus in
+     each, was already tested. Done 2026-10-25 (later): **the Tab order itself**, on aether-ui's new
+     driver route `POST /focus/move?dir=forward|backward` (focus moved as Tab and Shift+Tab move it,
+     through the toolkit's own order and nothing else, the widget that has it reported; real on GTK4,
+     AppKit, Win32, UIKit and Android; sae passes it on the control bus and `saedriver` has `tab`).
+     spec_sheet "Tab order": from the Name Box all the way round, with no panel open and with each
+     of the fifteen panels: every stop once and back at the start, the order going down the window in
+     reading order and wrapping once, the toolbar the stop before the Name Box and the formula bar the
+     stop after it, and every shown, enabled control a stop. It found the toolbar unreachable: its
+     tools are vg canvases that only took a click. The toolbar is now one stop (the ARIA toolbar
+     pattern): Left, Right, Home and End move a blue ring from tool to tool, Return or Space presses
+     the one it is on ("the toolbar by the keyboard"). That needed `ui.set_focusable` in sae (a stack
+     that takes the focus; aether-ui had it for stacks on every backend). `real_keys_x11` already sends
+     real Tab and Shift+Tab to the grid on the Linux lane.
    - **Print/layout:** Page Setup is the sheet's own (`page.setup` / `page.layout`,
      PAGESETUP / GETPAGESETUP, and a row in the File panel): paper, orientation, margin,
      scale (10 to 400 percent), print area, rows to repeat at the top of each page after
@@ -92,11 +99,20 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
      It is undoable (a journal entry), saved in the file and in XLSX (`pageSetup`,
      `pageMargins`, `printOptions`, `headerFooter`, `_xlnm.Print_Area`, `_xlnm.Print_Titles`),
      and Print, Export PDF and Page Breaks lay the sheet out by it unless told otherwise.
-     Headless `sheet_pagesetup`. Left: columns to repeat; fit to N pages wide; the File
+     Headless `sheet_pagesetup`. Done 2026-10-25 (later): **columns to repeat** at the left
+     (`titleCols=A:B`, printed again on each page after the one they first appear on, the
+     corner with the repeated rows, a hidden one left out, the pages' own columns given
+     less room) and **fit to N pages wide by M tall** (`fitWide=`, `fitTall=`, 0 for as many
+     as it takes, `fit=none`): the largest whole percent to 100 that does it, manual breaks
+     ignored, never enlarging; a scale given on its own takes the fit away (Excel's "Adjust
+     to"). Undoable, saved in the file and in XLSX (`_xlnm.Print_Titles` with both ranges,
+     `fitToPage`, `fitToWidth`, `fitToHeight`), in the File panel's row, and used by Print,
+     Export PDF and Page Breaks (`page.breaks` says the scale when fitted). Left: the File
      panel's Export PDF and Print buttons still pass `gridlines` themselves (a decision
      for Paul, TODO.md).
-   - **Larger grid:** `spec_sheet_large` (a page of its own: spec_sheet's is full of sixty sheets by
-     its end): over 20,000 rows Ctrl+Down, Ctrl+Up,
+   - **Larger grid:** spec_sheet "a large column" (it was a spec of its own, `spec_sheet_large`,
+     while spec_sheet's page held 80 MB by its end; sae kept every callback of a widget it had destroyed,
+     and that is fixed, so it runs at the end of spec_sheet's page): over 20,000 rows Ctrl+Down, Ctrl+Up,
      Ctrl+Shift+Down (counted in the status bar), Ctrl+End and Ctrl+Home land where
      Excel's do.
 7. **Stable record identity, relations, saved views** (the object/table

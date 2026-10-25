@@ -333,7 +333,8 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
     // (the print area and the rows to repeat are defined names, read below).
     {
       const ps = kid(ws, "pageSetup"), pm = kid(ws, "pageMargins"), po = kid(ws, "printOptions"), hf = kid(ws, "headerFooter");
-      if (ps || pm || po || hf) {
+      const spr = kid(ws, "sheetPr"), fitOn = !!spr && ["1", "true"].includes(attr(kid(spr, "pageSetUpPr") ?? { name: "", attrs: {}, children: [] }, "fitToPage") ?? "");
+      if (ps || pm || po || hf || fitOn) {
         const layout: Record<string, unknown> = {};
         const size = attr(ps ?? { name: "", attrs: {}, children: [] }, "paperSize");
         if (size === "1") layout.paper = "letter";
@@ -341,6 +342,12 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
         if (ps && attr(ps, "orientation") === "landscape") layout.landscape = true;
         const scale = Number(attr(ps ?? { name: "", attrs: {}, children: [] }, "scale") ?? 100);
         if (scale >= 10 && scale <= 400) layout.scale = scale;
+        // Fit to pages: fitToPage in the sheet's properties, the pages in pageSetup (1 each when left out; 0: as many as it takes).
+        if (fitOn) {
+          const pages = (a: string) => { const v = Number(attr(ps ?? { name: "", attrs: {}, children: [] }, a) ?? 1); return Number.isInteger(v) && v >= 0 && v <= 99 ? v : 1; };
+          layout.fitWide = pages("fitToWidth");
+          layout.fitTall = pages("fitToHeight");
+        }
         if (pm && Number.isFinite(Number(attr(pm, "left")))) layout.margin = Math.min(144, Math.max(0, Math.round(Number(attr(pm, "left")) * 72)));
         if (po && ["1", "true"].includes(attr(po, "gridLines") ?? "")) layout.gridlines = true;
         if (po && ["1", "true"].includes(attr(po, "headings") ?? "")) layout.headings = true;
@@ -458,8 +465,10 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
       const first = text.split(",")[0].slice(text.indexOf("!") + 1).replace(/\$/g, "");
       if (n === "_xlnm.Print_Area" && /^[A-Z]{1,3}\d+(:[A-Z]{1,3}\d+)?$/i.test(first)) layout.area = first.toUpperCase();
       else if (n === "_xlnm.Print_Titles") {
-        const rows = text.split(",").map((t) => t.slice(t.indexOf("!") + 1).replace(/\$/g, "")).find((t) => /^\d+:\d+$/.test(t));
-        if (rows) layout.titles = rows; else report.push("Print_Titles (columns to repeat) left out");
+        const ranges = text.split(",").map((t) => t.slice(t.indexOf("!") + 1).replace(/\$/g, "").toUpperCase());
+        const rows = ranges.find((t) => /^\d+:\d+$/.test(t)), titleCols = ranges.find((t) => /^[A-Z]{1,3}:[A-Z]{1,3}$/.test(t));
+        if (rows) layout.titles = rows;
+        if (titleCols) layout.titleCols = titleCols;
       } else report.push(`${n.slice(6)} (not a single range) left out`);
       continue;
     }

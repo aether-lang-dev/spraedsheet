@@ -8,7 +8,7 @@
 
 exports(
     cell_id, cell_text, wait_cell, cell_has, pick, goto, formula_field, enter, editor,
-    header_id, grip_of, key, field, command, script, extras
+    header_id, grip_of, key, field, command, script, extras, heap, heap_note, number_after, handles_in
 )
 
 import std.string
@@ -198,6 +198,58 @@ command(line: string) {
     b.set_field_by("command", line)
     uidriver.post_ok("/widget/${field("command")}/submit", "Return in the command bar")
 }
+
+// What the page says of its own memory (the app.heap command, which reads
+// performance.memoryUsed and performance.handlesHeld): "heap 14871400
+// (call 7, handles 581, sheets 5, cells 150, undo 100, ...)", or "" when it does not
+// answer. The call number tells the answer on the screen is this time's.
+var heap_calls_seen: int = 0
+
+heap_note() -> string {
+    command("app.heap")
+    t = 0
+    while t < 80 {
+        all = b.page_texts()
+        at = string.index_of(all, "heap ")
+        if at >= 0 {
+            rest = string.substring(all, at, string.length(all))
+            nl = string.index_of(rest, "\n")
+            if nl >= 0 { rest = string.substring(rest, 0, nl) }
+            call = number_after(rest, "call ")
+            if call > heap_calls_seen && string.index_of(rest, ")") > 0 {
+                heap_calls_seen = call
+                return rest
+            }
+        }
+        sleep(50)
+        t = t + 1
+    }
+    return ""
+}
+
+// The whole number after `key` in `s`, or -1.
+number_after(s: string, key: string) -> int {
+    at = string.index_of(s, key)
+    if at < 0 { return 0 - 1 }
+    i = at + string.length(key)
+    n = 0
+    seen = 0
+    while i < string.length(s) {
+        c = string.char_at(s, i)
+        if c < 48 || c > 57 { break }
+        n = n * 10 + (c - 48)
+        seen = 1
+        i = i + 1
+    }
+    if seen == 0 { return 0 - 1 }
+    return n
+}
+
+// The bytes the page's JS heap holds, asked of the page itself; -1 when it does not answer.
+heap() -> int { return number_after(heap_note(), "heap ") }
+
+// How many values the host holds for the page (the callbacks its widgets keep).
+handles_in(note: string) -> int { return number_after(note, "handles ") }
 
 // A RexxJS script run through the command bar ("RexxJS script" field, the
 // Run script button); ';' ends a clause.

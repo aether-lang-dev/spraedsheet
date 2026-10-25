@@ -52,15 +52,16 @@ done
 
 T=$ROOT/target
 LOGS=$T/run-tests
-rm -rf "$LOGS" "$T/sheet-files-appdata" "$T/sheet-shell.log" "$T/sheet-storage" "$T/sheet-large-storage" "$T/sheet-bus-appdata" "$T/sheet-rexx-appdata" "$T/sheet-mcp-appdata"; mkdir -p "$LOGS"
+rm -rf "$LOGS" "$T/sheet-files-appdata" "$T/sheet-shell.log" "$T/sheet-storage" "$T/sheet-bus-appdata" "$T/sheet-rexx-appdata" "$T/sheet-mcp-appdata"; mkdir -p "$LOGS"
 # label | environment (space-separated NAME=value) | command
 # spec_sheet is one page for its whole run: some sixty sheets, their charts
-# and drawings, and a hundred steps of undo, past the 32 MB a sae page gets
-# by default (QuickJS ran out of memory near its end), so it gets 128 MB.
+# and drawings, a hundred steps of undo and a column of 20,000 cells. Its
+# heap peaks near 45 MB (it peaked at 80 MB, past this page's 128 MB with the
+# 20,000 cells, when sae kept every callback of a widget it had destroyed), so
+# it gets 64 MB, and its last case asserts the peak and the callbacks held.
 TABLE="
 headless||headless
-spec_sheet|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-storage SAE_PAGE_MEM=134217728|spec spec_sheet
-spec_sheet_large|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-large-storage SAE_PAGE_MEM=268435456|spec spec_sheet_large
+spec_sheet|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-storage SAE_PAGE_MEM=67108864|spec spec_sheet
 spec_app_sheet_bus|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-bus-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app|spec spec_app_sheet_bus
 spec_app_sheet_files|AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SAE_APPDATA_DIR=$T/sheet-files-appdata SAE_SHELL_LOG=$T/sheet-shell.log|spec spec_app_sheet_files
 spec_app_sheet_rexx|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-rexx-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SHEET_ROOT=$ROOT|spec spec_app_sheet_rexx

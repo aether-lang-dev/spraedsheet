@@ -19,6 +19,7 @@
 import { COLS, ROWS, addrOf, colName, keyOf } from "../address.ts";
 import type { SheetView } from "./view.ts";
 import { toggleFont } from "./lookbar.ts";
+import { toolbarKey } from "./toolbar.ts";
 import { pointable } from "../typing.ts";
 
 const SHIFT = 1, CTRL = 2, SUPER = 8;
@@ -236,6 +237,8 @@ export function sheetGrid(v: SheetView): void {
   v.action("Fill Left", () => v.run("edit.fillLeft", { range: v.range() }));
 
   ui.on_key((key: string, mods: number) => {
+    // The toolbar has the keyboard focus: its arrows and Return are its own.
+    if (toolbarKey(key)) return;
     // Escape closes the editor without a commit: the outlines go with it.
     if (key === "Escape") {
       pointing = false;

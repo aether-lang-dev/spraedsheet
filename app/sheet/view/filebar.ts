@@ -71,7 +71,7 @@ export function fileBar(v: SheetView): void {
 // is said beside them. Print and Export PDF follow it (the buttons above pass
 // gridlines themselves, as they always have).
 function pageSetupRow(v: SheetView): void {
-  const said = state(""), margin = state(""), scale = state(""), area = state(""), titles = state(""), header = state(""), footer = state("");
+  const said = state(""), margin = state(""), scale = state(""), fitWide = state(""), fitTall = state(""), area = state(""), titles = state(""), titleCols = state(""), header = state(""), footer = state("");
   const refresh = async () => { said.set((await v.cmds.execute("page.layout")).message); };
   const set = async (p: Record<string, string>) => { await v.run("page.setup", p); await refresh(); };
   ui.wrap(() => {
@@ -82,12 +82,15 @@ function pageSetupRow(v: SheetView): void {
     bind(ui.textfield("margin points", () => {}), margin);
     bind(ui.textfield("scale percent", () => {}), scale);
     bind(ui.textfield("print area", () => {}), area);
+    bind(ui.textfield("fit pages wide", () => {}), fitWide);
+    bind(ui.textfield("fit pages tall", () => {}), fitTall);
     bind(ui.textfield("rows to repeat", () => {}), titles);
+    bind(ui.textfield("columns to repeat", () => {}), titleCols);
     bind(ui.textfield("header", () => {}), header);
     bind(ui.textfield("footer", () => {}), footer);
     v.btn("Apply page setup", () => {
       const p: Record<string, string> = {};
-      for (const [k, f] of [["margin", margin], ["scale", scale], ["area", area], ["titles", titles], ["header", header], ["footer", footer]] as const) if (f.value.trim()) p[k] = f.value.trim();
+      for (const [k, f] of [["margin", margin], ["scale", scale], ["fitWide", fitWide], ["fitTall", fitTall], ["area", area], ["titles", titles], ["titleCols", titleCols], ["header", header], ["footer", footer]] as const) if (f.value.trim()) p[k] = f.value.trim();
       return set(p);
     });
     bind(ui.text(""), said);

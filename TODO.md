@@ -49,6 +49,37 @@ plus the 0842 override). Lane: `/work/aether-0842-m6`, built with `/work/lane-bu
   capability was needed, so nothing to add on the four backends; what would need one is below. 37217b4, 0ecfe87 (`spec_sheet`'s
   "keyboard only" case, the new `spec_sheet_large`; XLSX print areas are read now, so `sheet_xlsx`'s report no longer names one).
 
+**Done 2026-10-25 (the last buildable items; PAUSED at Paul's request, 2026-10-25 evening, NOT on main: aether-ui, sae and spraedsheet each have the work as commits on branch `pause-2026-10-25`, pushed to origin as a backup):**
+Verified green before the last two small edits: spraedsheet `./run-tests.sh` macOS 8 passed and aether-linux 9 passed; sae `tests/run_all.sh` 59/61 on macOS and 60/61 on aether-linux (the failures, spec_nav's case order and spec_keys on macOS, are fixed since); `focus_order_demo` 5/5 on macOS, aether-linux, win11, the iOS simulator and the Android emulator. NOT re-run after: macOS `aether_ui_focus_impl` now returns when the view does not accept first responder (spec_keys' set_focusable-off case), the spec_nav case moved after the dynamic group, ink_at's 200 ms wait, the toolbar's immediate focus index. aether-ui `./ci.sh` was never completed (an earlier run showed only the iOS a11y_demo toggle failure, fixed).
+**Resume point:** on each repo `git checkout pause-2026-10-25`; rebuild sae clean (`rm -rf sae/target/build`, then `./build.sh` and `AETHER_UI_WITH_DRIVER=1 ./build.sh`, env842); run `/Volumes/Mini2/claude-scratch/final-chain.sh` under with-test-lock.sh (spraedsheet run-tests, sae run_all, aether-ui ci.sh) and the same spraedsheet run on aether-linux; then merge the branches to main in order aether-ui, sae, spraedsheet (fast-forward, push) and delete the branches.
+- **spec_sheet's memory.** The page held 44,863 callbacks and 80 MB of heap by the end of its run (a 20,000-cell fill then ran it out of
+  128 MB). Sampling the page (`app.heap`: `performance.memoryUsed()` and `performance.handlesHeld()`, new in sae) showed the callbacks
+  growing with the sheets: sae held every function a widget was given for the page's whole life and let none go when `ui.clear` or
+  `each()` destroyed the widget, and a rebuilt sheet tab keeps 17 of them and its context menu's items. The root was sae's, not the
+  app's: it now notes each callback with its widget and lets go of those of a destroyed one (sae {SHA['s1']}, test `site/rebuild.ts`
+  in `spec_nav`, failing on the old host). Now the callbacks stay at 560 to 750 and the whole run peaks at 35 MB (macOS) with the 20,000
+  cells in it. So `spec_sheet_large` is folded back into `spec_sheet` (a sheet of its own, same page: 4 s, +22 MB), the page gets 64 MB
+  (from 128) so a leak coming back fails, and the last case asserts the peaks (heap under 56 MB, callbacks held under 2,000; the page
+  samples itself every quarter second after `app.heap watch=1`, because a command typed into the command bar after every case made GTK
+  scroll the page). spraedsheet {SHA['p1']}.
+- **Tab order.** aether-ui `POST /focus/move?dir=forward|backward` moves the focus as Tab and Shift+Tab do (the toolkit's own order and
+  nothing else) and says which widget has it; real on GTK4, AppKit, Win32, UIKit and Android (aether-ui {SHA['a']}, `examples/focus_order_demo`,
+  `tests/focus_order_demo`: macOS 5, aether-linux 5, win11 5, the iOS simulator 5, the Android emulator 5; `./ci.sh` on macOS). sae passes
+  it on the control bus, `saedriver.tab`, and `ui.set_focusable`/`ui.focus`/`ui.on_focus_change` take a vg scene (sae {SHA['s2']}).
+  spec_sheet "Tab order" walks Tab round from the Name Box with no panel open and with each of the fifteen panels (every stop once,
+  reading order, wrapping once, every shown enabled control a stop). It found the toolbar unreachable (its tools are vg canvases that took
+  only a click): it is one stop now, the ARIA toolbar pattern, arrows to move a ring, Return to press ("the toolbar by the keyboard"):
+  spraedsheet {SHA['p2']}. Found by the way and fixed in aether-ui: the Android compile of `aether_ui_accel.h`, and the UIKit toggle
+  with no accessible name (the a11y_demo case failed on the iOS simulator).
+- **Page Setup: columns to repeat and fit to N pages wide by M tall** (`titleCols=A:B`, `fitWide=`, `fitTall=`, `fit=none`), test first
+  (`sheet_pagesetup`), undoable, saved in the file and in XLSX (`_xlnm.Print_Titles` with both ranges, `fitToPage`/`fitToWidth`/`fitToHeight`),
+  in the File panel's row, and used by Print, Export PDF and Page Breaks: spraedsheet {SHA['p3']}.
+- **Found, not fixed:** on GTK4 a wrap's flow box puts a stop of Tab on each cell before the control in it, so every button of a wrap takes
+  two Tabs (making the cells unfocusable made the flow box swallow Tab; `tab_round` counts controls); GTK4 does not scroll the page back
+  to a focused widget at the top after Tab from the bottom (the toolbar read y = -299, off screen); a row of 49 sheet tabs is wider than
+  the window and the stack squeezes the surplus to nothing (they are still stops of Tab, unseen; `tab_round` ignores zero-size stops);
+  a UIKit toggle shows no label (a `UISwitch` has none; it is named by it now).
+
 **Done 2026-10-24:** see the commits on main; in short, the wedged Turns queue, Univer 1, IronCalc 4 and 5, HyperFormula 1, 4 and 5,
 Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/comparisons/` strikes each).
 
@@ -56,8 +87,6 @@ Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/com
 - Univer 5 follow-ups: record at the mutation (the journal's diff is taken when a command is done, not as each mutation is
   made, so a command still copies a changed map once); the remaining kinds still kept whole (rules, charts, merges, hidden rows).
   Recording and MCP discovery do not read `effect` yet (Univer 1).
-- LibreOffice 6: the Tab *order* (a driver route to move focus as Tab does, on GTK4, AppKit, Win32, UIKit and Android: see
-  `docs/comparisons/LIBREOFFICE.md` action 6), columns to repeat and fit-to-pages in Page Setup.
 - Gnumeric 1: a generated status document (the examples and boundary tests are done for all 478 functions, see Done above).
 - IronCalc: the 47 calc_tests workbooks with more differences (`COMPATIBILITY.md`'s ledger).
 
@@ -69,7 +98,6 @@ Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/com
   depended on row order). Say if a blank should group with "" as Excel's pivot tables do.
 - The File panel's Export PDF and Print buttons pass `gridlines=1` themselves, as they always have, so Page Setup's gridlines
   governs scripts and the bus but not those buttons. Should the buttons follow the sheet's setup (no gridlines by default)?
-- The Tab order assertion (above) needs a new driver route on five backends; wanted?
 - Grist 1 to 4, Airtable 1 to 3, VisiData 1 and 4, LibreOffice 7 (and the record form and batch-wide unique keys
   of LibreOffice 3): a record model (stable record IDs independent of row position, reference fields, saved
   views, keyed reconcile). Wanted, and how far (an ID column plus references on tables, or a full relations layer)?

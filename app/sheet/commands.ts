@@ -81,6 +81,8 @@ import { complete, cycleRef } from "./complete.ts";
 import { KEYS } from "./keys.ts";
 import { infer, run as runFill } from "./flashfill.ts";
 
+let heapCalls = 0, heapPeak = 0, handlesPeak = 0;
+let heapTimer: number | null = null;
 const resolvedColour = (c: string | null): string | null => (c === null ? null : resolved(c));
 const NUMERIC_TEXT = /^\s*[-+]?(?:\d+\.?\d*|\.\d+)\s*$/;
 import { CellError } from "./values.ts";
@@ -826,7 +828,9 @@ function setupOf(page: Page, p: Params, file: string): PageSetup {
   if (!(margin >= 0 && margin <= 144)) refuse(`${p.margin} is not a margin (0 to 144 points)`);
   const scale = p.scale === undefined ? l.scale : Number(p.scale);
   if (!(scale >= 10 && scale <= 400)) refuse(`${p.scale} is not a scale (10 to 400 percent)`);
-  return { paper: paper as "a4" | "letter", landscape: p.landscape === undefined ? l.landscape : flag(p.landscape), margin, scale,
+  // The sheet's fit to pages, unless the command was given a scale of its own.
+  const fit = p.scale === undefined && (l.fitWide > 0 || l.fitTall > 0) ? { fit: { wide: l.fitWide, tall: l.fitTall } } : {};
+  return { paper: paper as "a4" | "letter", landscape: p.landscape === undefined ? l.landscape : flag(p.landscape), margin, scale, ...fit,
     gridlines: p.gridlines === undefined ? l.gridlines : flag(p.gridlines), headings: p.headings === undefined ? l.headings : flag(p.headings),
     header: l.header, footer: l.footer, fileName: file };
 }
@@ -857,12 +861,17 @@ function pdfSheet(wb: Workbook, page: Page, r: [Addr, Addr] | null, setup?: Page
   // "1:2": sheet rows 1 and 2 (those not hidden).
   const t = /^(\d+):(\d+)$/.exec(page.layout.titles);
   const titleRows = t ? Array.from({ length: Math.abs(Number(t[2]) - Number(t[1])) + 1 }, (_, i) => Math.min(Number(t[1]), Number(t[2])) - 1 + i).filter((x) => !page.hiddenRows.has(x)) : [];
+  // "A:B": sheet columns A and B (those not hidden).
+  const tc = /^([A-Z]+):([A-Z]+)$/.exec(page.layout.titleCols);
+  const titleColIdx = tc ? Array.from({ length: Math.abs(colOf(tc[2])! - colOf(tc[1])!) + 1 }, (_, i) => Math.min(colOf(tc[1])!, colOf(tc[2])!) + i).filter((x) => !page.hiddenCols.has(x)) : [];
+  const colWidthOf = (c: number) => (page.widths.get(c) ?? PDF_COLUMN_PX) * 0.75;
   return {
     name: page.name, rows: rows.length, cols: cols.length, firstRow: r0, firstCol: c0,
     rowBreaks: page.breaks.rows.map((x) => rows.indexOf(x)).filter((i) => i > 0), colBreaks: page.breaks.cols.map((x) => cols.indexOf(x)).filter((i) => i > 0),
     colWidth: (c) => (page.widths.get(cols[c]) ?? PDF_COLUMN_PX) * 0.75, rowHeight: (x) => (page.heights.get(rows[x]) ?? PDF_ROW_PX) * 0.75,
     cells: (ri, ci) => cellAt(rows[ri], cols[ci]),
-    sheetRow: (ri) => rows[ri],
+    sheetRow: (ri) => rows[ri], sheetCol: (ci) => cols[ci],
+    ...(titleColIdx.length ? { titleCols: { widths: titleColIdx.map(colWidthOf), cell: (ri: number, i: number) => cellAt(rows[ri], titleColIdx[i]), corner: (ti: number, i: number) => cellAt(titleRows[ti], titleColIdx[i]), index: titleColIdx, last: titleColIdx[titleColIdx.length - 1] } } : {}),
     ...(titleRows.length ? { titles: { heights: titleRows.map((x) => (page.heights.get(x) ?? PDF_ROW_PX) * 0.75), cell: (i: number, ci: number) => cellAt(titleRows[i], cols[ci]), last: titleRows[titleRows.length - 1] } } : {}),
     ...(setup ? { setup } : {}),
   };
@@ -870,7 +879,8 @@ function pdfSheet(wb: Workbook, page: Page, r: [Addr, Addr] | null, setup?: Page
 const PDF_COLUMN_PX = 80, PDF_ROW_PX = 24;
 
 // A page setup as words: "page setup: letter, landscape, margin 54, scale 80%, area A1:B10, ...".
-const layoutSaid = (l: PageLayout): string => `page setup: ${[l.paper, l.landscape ? "landscape" : "portrait", `margin ${l.margin}`, `scale ${l.scale}%`, l.area && `area ${l.area}`, l.titles && `titles ${l.titles}`,
+const fitSaid = (l: PageLayout): string => (l.fitWide > 0 || l.fitTall > 0 ? `fit ${l.fitWide || "automatic"} wide by ${l.fitTall || "automatic"} tall` : "");
+const layoutSaid = (l: PageLayout): string => `page setup: ${[l.paper, l.landscape ? "landscape" : "portrait", `margin ${l.margin}`, `scale ${l.scale}%`, fitSaid(l), l.area && `area ${l.area}`, l.titles && `titles ${l.titles}`, l.titleCols && `title columns ${l.titleCols}`,
   l.header && `header ${l.header}`, l.footer && `footer ${l.footer}`, l.gridlines && "gridlines", l.headings && "headings"].filter((x) => x).join(", ")}`;
 
 // A sheet's manual breaks, as words: "row 10, row 20, column D", or "none".
@@ -878,7 +888,10 @@ const breaksSaid = (page: Page): string => [...page.breaks.rows.map((r) => `row 
 
 // The ranges a sheet prints as, page by page (down, then over), under its page
 // setup (or the paper and orientation given): "A1:F45", ...
-function printedPages(wb: Workbook, page: Page, params: Params = {}): string[] {
+function printedPages(wb: Workbook, page: Page, params: Params = {}): string[] { return printed(wb, page, params).pages; }
+
+// And the scale they print at, and whether the sheet is fitted to pages (its manual breaks then ignored).
+function printed(wb: Workbook, page: Page, params: Params = {}): { pages: string[]; scale: number; fitted: boolean } {
   const setup = setupOf(page, params, wb.name), sh = pdfSheet(wb, page, null, setup);
   const area = page.layout.area ? parseRange(page.layout.area) : null;
   const used = page.sheet.keys().map((k) => cellAddr(k)!);
@@ -886,18 +899,19 @@ function printedPages(wb: Workbook, page: Page, params: Params = {}): string[] {
   const c0 = Math.min(a.col, b.col), r0 = Math.min(a.row, b.row);
   const cols = Array.from({ length: Math.abs(a.col - b.col) + 1 }, (_, i) => c0 + i).filter((c) => !page.hiddenCols.has(c));
   const rows = Array.from({ length: Math.abs(a.row - b.row) + 1 }, (_, i) => r0 + i).filter((x) => !page.hiddenRows.has(x) && !page.filtered?.has(x));
-  const { rowPages, colPages } = pagination(sh, setup);
-  return colPages.flatMap(([c1, c2]) => rowPages.map(([r1, r2]) => `${keyOf({ col: cols[c1], row: rows[r1] })}:${keyOf({ col: cols[c2], row: rows[r2] })}`));
+  const { rowPages, colPages, scale } = pagination(sh, setup);
+  return { pages: colPages.flatMap(([c1, c2]) => rowPages.map(([r1, r2]) => `${keyOf({ col: cols[c1], row: rows[r1] })}:${keyOf({ col: cols[c2], row: rows[r2] })}`)), scale, fitted: !!setup.fit };
 }
 
 // Where Page Break Preview draws: for each printed page's last row and
 // last column, whether a manual break follows it (heavier) or not.
 export function pageEdges(wb: Workbook, page: Page): { rows: Map<number, boolean>; cols: Map<number, boolean> } {
   const rows = new Map<number, boolean>(), cols = new Map<number, boolean>();
-  for (const r of printedPages(wb, page)) {
+  const { pages, fitted } = printed(wb, page);
+  for (const r of pages) {
     const [a, b] = parseRange(r)!;
-    rows.set(b.row, page.breaks.rows.includes(b.row + 1));
-    cols.set(b.col, page.breaks.cols.includes(b.col + 1));
+    rows.set(b.row, !fitted && page.breaks.rows.includes(b.row + 1));
+    cols.set(b.col, !fitted && page.breaks.cols.includes(b.col + 1));
   }
   return { rows, cols };
 }
@@ -3807,7 +3821,7 @@ const SPECS: readonly Spec[] = [
     // file; &L &C &R for left, centre and right), gridlines=1 and headings=1 to
     // print them. Kept with the sheet, undoable; Print, Export PDF and Page
     // Breaks lay the sheet out by it unless they are told otherwise.
-    id: "page.setup", label: "Page Setup", params: [], optional: ["paper", "landscape", "margin", "scale", "area", "titles", "header", "footer", "gridlines", "headings"], journaled: true, effect: "edit",
+    id: "page.setup", label: "Page Setup", params: [], optional: ["paper", "landscape", "margin", "scale", "fitWide", "fitTall", "fit", "area", "titles", "titleCols", "header", "footer", "gridlines", "headings"], journaled: true, effect: "edit",
     run: async (wb, p) => {
       const page = wb.page(wb.active)!, l = page.layout;
       const paper = p.paper === undefined ? l.paper : p.paper.trim().toLowerCase();
@@ -3822,12 +3836,31 @@ const SPECS: readonly Spec[] = [
         if (none(p.area)) area = "";
         else { const r = parseRange(p.area.trim()); if (!r) refuse(`${p.area} is not a range`); area = rangeName(r!); }
       }
+      // Fit to pages: fitWide= and fitTall= (0: as many as it takes, to 99), fit=none for neither; a scale
+      // given on its own is Excel's "Adjust to": it takes the fit away.
+      let { fitWide, fitTall } = l;
+      const pages = (v: string) => { const n = Number(v); if (!/^\s*\d+\s*$/.test(v) || n > 99) refuse(`${v} is not a number of pages (0 for as many as it needs, to 99)`); return n; };
+      if (p.fit !== undefined) { if (!none(p.fit)) refuse(`${p.fit} is not a fit (none, or fitWide= and fitTall=)`); fitWide = 0; fitTall = 0; }
+      else if (p.scale !== undefined && p.fitWide === undefined && p.fitTall === undefined) { fitWide = 0; fitTall = 0; }
+      if (p.fitWide !== undefined) fitWide = pages(p.fitWide);
+      if (p.fitTall !== undefined) fitTall = pages(p.fitTall);
+      let titleCols = l.titleCols;
+      if (p.titleCols !== undefined) {
+        if (none(p.titleCols)) titleCols = "";
+        else {
+          const m = /^([A-Za-z]{1,3}):([A-Za-z]{1,3})$/.exec(p.titleCols.trim());
+          if (!m) refuse(`${p.titleCols} is not columns to repeat (A:B, or none)`);
+          const c1 = colOf(m![1]), c2 = colOf(m![2]);
+          if (c1 === null || c2 === null) refuse(`${p.titleCols} is not columns to repeat (A:B, or none)`);
+          titleCols = `${colName(Math.min(c1!, c2!))}:${colName(Math.max(c1!, c2!))}`;
+        }
+      }
       let titles = l.titles;
       if (p.titles !== undefined) {
         if (none(p.titles)) titles = "";
         else { const m = /^(\d+):(\d+)$/.exec(p.titles.trim()); if (!m || Number(m[1]) < 1 || Number(m[2]) < 1) refuse(`${p.titles} is not rows to repeat (1:2, or none)`); titles = `${m![1]}:${m![2]}`; }
       }
-      page.layout = { paper: paper as "a4" | "letter", landscape: p.landscape === undefined ? l.landscape : flag(p.landscape), margin, scale, area, titles,
+      page.layout = { paper: paper as "a4" | "letter", landscape: p.landscape === undefined ? l.landscape : flag(p.landscape), margin, scale, fitWide, fitTall, area, titles, titleCols,
         header: p.header === undefined ? l.header : p.header, footer: p.footer === undefined ? l.footer : p.footer,
         gridlines: p.gridlines === undefined ? l.gridlines : flag(p.gridlines), headings: p.headings === undefined ? l.headings : flag(p.headings) };
       return changedBy(wb, [], layoutSaid(page.layout));
@@ -3847,8 +3880,8 @@ const SPECS: readonly Spec[] = [
     // range, and where the breaks fall; the manual ones listed apart.
     id: "page.breaks", label: "Page Breaks", params: [], optional: ["paper", "landscape", "scale", "margin"], journaled: false, effect: "query",
     run: async (wb, p) => {
-      const pages = printedPages(wb, wb.page(wb.active)!, p);
-      return { ok: true, message: `${pages.length} page${pages.length === 1 ? "" : "s"}: ${pages.join(", ")}; manual breaks: ${breaksSaid(wb.page(wb.active)!)}`, changed: [], output: pages };
+      const { pages, scale, fitted } = printed(wb, wb.page(wb.active)!, p);
+      return { ok: true, message: `${pages.length} page${pages.length === 1 ? "" : "s"}: ${pages.join(", ")}; manual breaks: ${breaksSaid(wb.page(wb.active)!)}${fitted ? `; scale ${scale}%` : ""}`, changed: [], output: pages };
     },
   },
   {
@@ -3923,6 +3956,34 @@ const SPECS: readonly Spec[] = [
       else refuse("view.zoom needs percent= or by=in|out");
       wb.zoom = z;
       return { ok: true, message: `zoom ${z}%`, changed: wb.sheet.keys(), output: z };
+    },
+  },
+  {
+    // The bytes the page's JS heap holds (the engine's, garbage not yet collected
+    // included), where the host says (performance.memoryUsed), and the callbacks the
+    // host holds for its widgets (performance.handlesHeld). watch=1 samples both
+    // every quarter second from now on and keeps the most of each, so a spec can ask
+    // for the peak of a long run once, at its end, without touching the page between
+    // cases (a command typed into the command bar moves the focus, and on GTK the
+    // page scrolls to it). watch=0 stops sampling. `call` says which time this is.
+    id: "app.heap", label: "Heap size", params: [], optional: ["watch"], journaled: false, effect: "query",
+    run: async (wb, p) => {
+      const g = globalThis as unknown as { performance?: { memoryUsed?: () => number; handlesHeld?: () => number }; setInterval?: (f: () => void, ms: number) => number; clearInterval?: (id: number) => void };
+      const perf = g.performance;
+      const bytes = () => (perf && perf.memoryUsed ? Math.round(perf.memoryUsed()) : 0);
+      const held = () => (perf && perf.handlesHeld ? Math.round(perf.handlesHeld()) : 0);
+      const sample = () => { heapPeak = Math.max(heapPeak, bytes()); handlesPeak = Math.max(handlesPeak, held()); };
+      if (p.watch !== undefined) {
+        if (heapTimer !== null && g.clearInterval) { g.clearInterval(heapTimer); heapTimer = null; }
+        if (p.watch !== "0" && g.setInterval) { heapPeak = 0; handlesPeak = 0; heapTimer = g.setInterval(sample, 250); }
+      }
+      sample();
+      // And what the workbook holds, to say where a growth is: its sheets and their
+      // cells, and the undo history (steps, and the entries they keep).
+      const names = wb.sheetNames();
+      const cells = names.reduce((t, n) => t + (wb.page(n)?.sheet.keys().length ?? 0), 0);
+      const h = wb.historyCost();
+      return { ok: true, message: `heap ${bytes()} (peak ${heapPeak}, call ${++heapCalls}, handles ${held()}, handles peak ${handlesPeak}, sheets ${names.length}, cells ${cells}, undo ${h.undo}, redo ${h.redo}, entries ${h.entries}, snapshots ${h.snapshots})`, changed: [], output: bytes() };
     },
   },
   {
