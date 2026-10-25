@@ -12,7 +12,25 @@ import type { Value } from "./sheet/values.ts";
 import { parse } from "./sheet/parser.ts";
 import { eq } from "./lib/check.ts";
 
-const env = { get: (_k: string): Value => null };
+// A small sheet for the functions that read cells: A1:A4 are 1, 2, 3 and "x" (A5 empty), B1:B3 10, 20, 30,
+// C1 holds =A1+4, D1 and D2 a boolean and an error, E1:F3 a key and a value column; H1:J5 is a table of
+// trees (header row, then four records) with its criteria in L1:L2; PRICES!A1 is a cell of the second sheet.
+const cells = new Map<string, Value>([
+  ["A1", 1], ["A2", 2], ["A3", 3], ["A4", "x"],
+  ["B1", 10], ["B2", 20], ["B3", 30],
+  ["C1", 5], ["D1", true], ["D2", new CellError("#DIV/0!", "divide by zero")],
+  ["E1", "a"], ["E2", "b"], ["E3", "c"], ["F1", 100], ["F2", 200], ["F3", 300],
+  ["H1", "Tree"], ["I1", "Height"], ["J1", "Profit"],
+  ["H2", "Apple"], ["I2", 10], ["J2", 100], ["H3", "Pear"], ["I3", 20], ["J3", 80],
+  ["H4", "Apple"], ["I4", 15], ["J4", 120], ["H5", "Pear"], ["I5", 12], ["J5", 60],
+  ["L1", "Tree"], ["L2", "Apple"], ["N1", "Height"], ["N2", 20], ["P1", "Tree"], ["P2", "Plum"], ["PRICES!A1", 7],
+]);
+const inputs = new Map<string, string>([["C1", "=A1+4"]]);
+const env = {
+  get: (k: string): Value => cells.get(k) ?? null,
+  input: (k: string): string => inputs.get(k) ?? (cells.has(k) ? String(cells.get(k)) : ""),
+  book: () => ({ sheets: ["Data", "Prices"], here: 0 }),
+};
 type Want = number | string | boolean;
 // function: [example, boundary ...], each [formula, expected]
 const CASES: Record<string, [string, Want][]> = {
@@ -304,6 +322,36 @@ const CASES: Record<string, [string, Want][]> = {
   WEIBULL: [["WEIBULL(1, 1, 1, TRUE)", 1 - Math.exp(-1)], ["WEIBULL(0, 1, 1, TRUE)", 0]],
   "Z.TEST": [["Z.TEST({1, 2, 3, 4, 5}, 3, 1)", 0.5], ["Z.TEST({1, 2, 3, 4, 5}, 4, 1)", 0.9873263406612659]],
   ZTEST: [["ZTEST({1, 2, 3, 4, 5}, 3, 1)", 0.5], ["ZTEST({3, 3}, 3)", "#DIV/0!"]],
+  CLEAN: [["CLEAN(\"a\" & CHAR(7) & \"b\")", "ab"], ["CLEAN(\"\")", ""], ["CLEAN(\"abc\")", "abc"]],
+  CONCATENATE: [["CONCATENATE(\"a\", 1, TRUE)", "a1TRUE"], ["CONCATENATE(\"\", \"\")", ""], ["CONCATENATE(\"x\", 1 / 0)", "#DIV/0!"]],
+  DOLLAR: [["DOLLAR(1234.567, 2)", "$1,234.57"], ["DOLLAR(1234.567, -2)", "$1,200"], ["DOLLAR(-5, 0)", "($5)"], ["DOLLAR(\"a\")", "#VALUE!"]],
+  NUMBERVALUE: [["NUMBERVALUE(\"1.234,5\", \",\", \".\")", 1234.5], ["NUMBERVALUE(\"12%\")", 0.12], ["NUMBERVALUE(\"\")", 0], ["NUMBERVALUE(\"abc\")", "#VALUE!"]],
+  TEXTAFTER: [["TEXTAFTER(\"a-b-c\", \"-\")", "b-c"], ["TEXTAFTER(\"a-b-c\", \"-\", 2)", "c"], ["TEXTAFTER(\"a-b-c\", \"-\", -1)", "c"], ["TEXTAFTER(\"a-b-c\", \"x\")", "#N/A"]],
+  TEXTBEFORE: [["TEXTBEFORE(\"a-b-c\", \"-\")", "a"], ["TEXTBEFORE(\"a-b-c\", \"-\", 2)", "a-b"], ["TEXTBEFORE(\"a-b-c\", \"-\", -1)", "a-b"], ["TEXTBEFORE(\"a-b-c\", \"x\")", "#N/A"]],
+  TEXTSPLIT: [["INDEX(TEXTSPLIT(\"a,b,c\", \",\"), 1, 3)", "c"], ["ROWS(TEXTSPLIT(\"a,b;c,d\", \",\", \";\"))", 2], ["COLUMNS(TEXTSPLIT(\"a,b;c,d\", \",\", \";\"))", 2], ["INDEX(TEXTSPLIT(\"abc\", \",\"), 1, 1)", "abc"]],
+  UNICHAR: [["UNICHAR(65)", "A"], ["UNICHAR(8364)", "€"], ["UNICHAR(0)", "#VALUE!"]],
+  UNICODE: [["UNICODE(\"A\")", 65], ["UNICODE(\"€\")", 8364], ["UNICODE(\"\")", "#VALUE!"]],
+  VALUETOTEXT: [["VALUETOTEXT(\"a\")", "a"], ["VALUETOTEXT(1.5)", "1.5"], ["VALUETOTEXT(\"a\", 1)", "\"a\""], ["VALUETOTEXT(TRUE)", "TRUE"]],
+  ARRAYTOTEXT: [["ARRAYTOTEXT({1, 2; 3, 4})", "1, 2; 3, 4"], ["ARRAYTOTEXT({1, 2; 3, 4}, 1)", "{1,2;3,4}"], ["ARRAYTOTEXT({5})", "5"]],
+  REGEXEXTRACT: [["REGEXEXTRACT(\"abc123\", \"[0-9]+\")", "123"], ["REGEXEXTRACT(\"abc\", \"[0-9]+\")", "#N/A"]],
+  REGEXREPLACE: [["REGEXREPLACE(\"abc123\", \"[0-9]\", \"#\")", "abc###"], ["REGEXREPLACE(\"abc\", \"x\", \"y\")", "abc"], ["REGEXREPLACE(\"\", \"a\", \"b\")", ""]],
+  REGEXTEST: [["REGEXTEST(\"abc123\", \"[0-9]\")", true], ["REGEXTEST(\"abc\", \"[0-9]\")", false], ["REGEXTEST(\"\", \"^$\")", true]],
+  "ERROR.TYPE": [["ERROR.TYPE(1 / 0)", 2], ["ERROR.TYPE(NA())", 7], ["ERROR.TYPE(SQRT(-1))", 6], ["ERROR.TYPE(1)", "#N/A"]],
+  TRUE: [["TRUE()", true], ["NOT(TRUE())", false]],
+  FALSE: [["FALSE()", false], ["NOT(FALSE())", true]],
+  FORMULATEXT: [["FORMULATEXT(C1)", "=A1+4"], ["FORMULATEXT(A1)", "#N/A"], ["FORMULATEXT(1)", "#VALUE!"]],
+  ISFORMULA: [["ISFORMULA(C1)", true], ["ISFORMULA(A1)", false], ["ISFORMULA(\"C1\")", "#VALUE!"]],
+  ISBLANK: [["ISBLANK(A5)", true], ["ISBLANK(A1)", false], ["ISBLANK(\"\")", false]],
+  ISERR: [["ISERR(1 / 0)", true], ["ISERR(NA())", false], ["ISERR(1)", false]],
+  ISLOGICAL: [["ISLOGICAL(TRUE)", true], ["ISLOGICAL(1)", false], ["ISLOGICAL(\"TRUE\")", false]],
+  ISNA: [["ISNA(NA())", true], ["ISNA(1 / 0)", false], ["ISNA(1)", false]],
+  ISNONTEXT: [["ISNONTEXT(1)", true], ["ISNONTEXT(\"a\")", false], ["ISNONTEXT(A5)", true]],
+  ISODD: [["ISODD(3)", true], ["ISODD(2)", false], ["ISODD(-3)", true], ["ISODD(\"a\")", "#VALUE!"]],
+  ISREF: [["ISREF(A1)", true], ["ISREF(A1:B2)", true], ["ISREF(1)", false], ["ISREF(\"A1\")", false]],
+  TYPE: [["TYPE(1)", 1], ["TYPE(\"a\")", 2], ["TYPE(TRUE)", 4], ["TYPE(1 / 0)", 16], ["TYPE({1, 2})", 64]],
+  SHEET: [["SHEET()", 1], ["SHEET(Prices!A1)", 2], ["SHEET(\"prices\")", 2], ["SHEET(\"Nope\")", "#N/A"]],
+  SHEETS: [["SHEETS()", 2], ["SHEETS(Prices!A1:B2)", 1], ["SHEETS(7)", "#VALUE!"]],
+  HYPERLINK: [["HYPERLINK(\"http://x\", \"name\")", "name"], ["HYPERLINK(\"http://x\")", "http://x"]],
 };
 // BIN2DEC of ten ones is the 10-bit two's complement -1.
 
