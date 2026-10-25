@@ -195,7 +195,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "N!B20": "we-error",
   },
   "INFORMATION/error_broadcast.xlsx": {
-    "Sheet1!E64": "excel-error",
     "Sheet1!E68": "value",
     "Sheet1!E76": "we-error",
   },
