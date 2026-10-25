@@ -28,13 +28,14 @@ const x = parseXml('<?xml version="1.0"?><!-- c --><r a="1" b=\'two &amp; three\
 eq("XML: attributes, prefixes, entities, CDATA", [x.name, attr(x, "b"), all(x, "c").map(textOf), textOf(x)], ["r", "two & three", ["t<1"], "t<1<raw>"]);
 
 const read = readXlsx(fromBase64(BASIC), "Shop.xlsx");
-eq("the report: what was left out", read.report, ["Print_Area (a print setting) left out"]);
+eq("the report: nothing left out (the print area is read, as the sheet's page setup)", read.report, []);
 const wb = new Workbook();
 const cmds = new Commands(wb);
 const o = await cmds.run(`file.importXlsx name=Shop.xlsx base64=${BASIC}`);
 const v = (k: string) => show(wb.sheet.value(k));
 eq("opened: its sheets, the first active", [o.ok, o.message, wb.pages().map((p) => p.name), wb.page("Notes & more")!.hiddenSheet, wb.name],
-  [true, "opened Shop: 18 cells, Excel formulas; left out: Print_Area (a print setting) left out", ["Sales", "Notes & more"], true, "Shop"]);
+  [true, "opened Shop: 18 cells, Excel formulas", ["Sales", "Notes & more"], true, "Shop"]);
+eq("and its print area is the first sheet's page setup", [wb.page("Sales")!.layout.area, wb.page("Notes & more")!.layout.area], ["A1:D4", ""]);
 eq("strings shared, rich and inline; booleans; text like a number kept text", [v("A1"), v("A2"), v("A3"), v("C1"), v("A4"), wb.sheet.input("D4"), v("D4")], ["Item", "pens", "ink & nib", "Total", "TRUE", "'007", "007"]);
 eq("formulas, a shared one moved, names", [wb.sheet.input("C2"), wb.sheet.input("C3"), v("C3"), wb.sheet.input("B4"), v("B4"), wb.names().map(([n]) => n).sort()],
   ["=B2*(1+$D$1)", "=B3*(1+$D$1)", "1.8", "=SUM(QTY)", "4.5", ["DOUBLE", "QTY"]]);
@@ -50,15 +51,16 @@ eq("stored entries, 1904 dates", [o2.message, wb.dateSystem, show(wb.sheet.value
 eq("not an XLSX", (await cmds.run("file.importXlsx base64=aGVsbG8=")).message, "not a ZIP archive (an XLSX or ODS file is one)");
 const said: string[] = [];
 await cmds.script(`SAY OPENXLSX("${BASIC}", "Again.xlsx")\nr = FILEREPORT()\nSAY r.0 r.1`, (l) => said.push(l));
-eq("OPENXLSX and FILEREPORT from REXX", said, ["opened Again: 18 cells, Excel formulas; left out: Print_Area (a print setting) left out", "1 Print_Area (a print setting) left out"]);
+eq("OPENXLSX and FILEREPORT from REXX", said, ["opened Again: 18 cells, Excel formulas", "0 R.1"]);
 
 // expect: ok CRC-32
 // expect: ok deflate then inflate gives it back, smaller
 // expect: ok Python's deflate (dynamic codes, long matches) inflated
 // expect: ok an archive written and read back
 // expect: ok XML: attributes, prefixes, entities, CDATA
-// expect: ok the report: what was left out
+// expect: ok the report: nothing left out (the print area is read, as the sheet's page setup)
 // expect: ok opened: its sheets, the first active
+// expect: ok and its print area is the first sheet's page setup
 // expect: ok strings shared, rich and inline; booleans; text like a number kept text
 // expect: ok formulas, a shared one moved, names
 // expect: ok number formats: the file's own and built in

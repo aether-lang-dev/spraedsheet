@@ -74,8 +74,30 @@ XLSX/XLS/ODS paths with loss reports (5.x); accessibility and localization
    2026-10-24: a screen-reader pass over the toolbar and all fifteen panels (spec_sheet
    "every control ... has an accessible name": no visible button, field, slider or
    toggle lacks an accessible name, and the audit sees at least five controls in each
-   panel); it found nothing to fix. Not done: a keyboard-only pass (focus order
-   and reaching every panel control by Tab), print/layout, larger-grid
-   interaction; each is aether-ui/sae work on four backends.
+   panel); it found nothing to fix. Done 2026-10-25, with no new aether-ui capability
+   needed (so nothing to add on the four backends):
+   - **Keyboard-only:** spec_sheet "keyboard only: every control in the toolbar and in
+     each of the fifteen panels takes the keyboard focus": each shown control is given the
+     keyboard focus by the driver and `/focus` must name it. F6 through the panels, the
+     focus in each, was already tested. Not done: the *order* Tab visits them in.
+     aether-ui's driver has no "move focus as Tab does" route (`/focus` reads, a widget's
+     `/focus` sets); a real-Tab walk needs one on each backend (GTK `gtk_widget_child_focus`,
+     AppKit `selectNextKeyView`, Win32 `GetNextDlgTabItem`, UIKit's focus system, Android
+     `focusSearch`) and is the next step if Paul wants the order itself asserted.
+     `real_keys_x11` already sends real Tab and Shift+Tab to the grid on the Linux lane.
+   - **Print/layout:** Page Setup is the sheet's own (`page.setup` / `page.layout`,
+     PAGESETUP / GETPAGESETUP, and a row in the File panel): paper, orientation, margin,
+     scale (10 to 400 percent), print area, rows to repeat at the top of each page after
+     theirs, header and footer (&P &N &A &F, &L &C &R sections), gridlines and headings.
+     It is undoable (a journal entry), saved in the file and in XLSX (`pageSetup`,
+     `pageMargins`, `printOptions`, `headerFooter`, `_xlnm.Print_Area`, `_xlnm.Print_Titles`),
+     and Print, Export PDF and Page Breaks lay the sheet out by it unless told otherwise.
+     Headless `sheet_pagesetup`. Left: columns to repeat; fit to N pages wide; the File
+     panel's Export PDF and Print buttons still pass `gridlines` themselves (a decision
+     for Paul, TODO.md).
+   - **Larger grid:** `spec_sheet_large` (a page of its own: spec_sheet's is full of sixty sheets by
+     its end): over 20,000 rows Ctrl+Down, Ctrl+Up,
+     Ctrl+Shift+Down (counted in the status bar), Ctrl+End and Ctrl+Home land where
+     Excel's do.
 7. **Stable record identity, relations, saved views** (the object/table
    contract): see Grist.md and Airtable.md.

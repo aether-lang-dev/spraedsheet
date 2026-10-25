@@ -3453,28 +3453,6 @@ main() {
             focusable_controls("the lists panel")
             g.command("view.panel name=none")
         }
-        spec.it("a large column: Ctrl+Down jumps the 20,000 rows, Ctrl+Shift+Down selects them and the status bar counts them, Ctrl+End and Ctrl+Home come back") callback {
-            // LibreOffice action 6: larger-grid interaction, by the keyboard alone.
-            g.command("sheet.add name=Large")
-            g.command("sheet.activate name=Large")
-            g.command("cell.set cell=A1 input=1")
-            g.command("cell.set cell=A2 input=2")
-            g.command("edit.fillSeries range=A1:A20000")
-            sleep(500)
-            g.goto("A1")
-            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "the column starts at A1")
-            g.key("Ctrl+Down")
-            spec.assert_true(b.wait_for_text("A20000: 20000 → 20000"), "Ctrl+Down: the last row of the data")
-            g.key("Ctrl+Up")
-            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "Ctrl+Up: back to the first")
-            g.key("Ctrl+Shift+Down")
-            spec.assert_true(b.wait_for_text("Count: 20000"), "Ctrl+Shift+Down: the whole column selected, counted in the status bar")
-            g.key("Ctrl+End")
-            spec.assert_true(b.wait_for_text("A20000: 20000 → 20000"), "Ctrl+End: the last cell used")
-            g.key("Ctrl+Home")
-            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "Ctrl+Home: A1")
-            g.command("sheet.activate name=Sheet1")
-        }
         spec.it("the app stayed small: after the whole run its RSS is under 1.5 GB (on macOS it had reached 5.8 GB when the driver's /widgets polls leaked)") callback {
             // The page asks the driver, a hundred widgets at a time, for
             // everything it checks; the macOS server thread once leaked what

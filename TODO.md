@@ -36,18 +36,39 @@ plus the 0842 override). Lane: `/work/aether-0842-m6`, built with `/work/lane-bu
   data_completion or aggregation. Noted, not changed: dates before 1900-03-01 are one day off Excel's serials (documented in
   `dates.ts`); `PRICEMAT` with settlement equal to issue is #NUM!; `INFO("numfile")` is the sheet count.
 
+**Done 2026-10-25 (the larger actions, later in the day):**
+- Univer 5, the mutation journal (`docs/mutation_journal.md`, `journal.ts`): a step of undo is a list of entries, each a
+  kind of state with what it was and became; cells, notes, a sheet's names, formulas and tables, the workbook's names and
+  cell styles, and widths, heights, pivots and outline levels as the keys that changed. A one-cell edit on 2,000 cells held
+  2,021 map entries, now 1; a script of fifty edits 3,043, now 50 (`sheet_historycost`, `sheet_journal`). Saved files are untouched
+  (memory only).
+- VisiData 3 (typed group keys, `groupkey.ts`, `sheet_groupkeys`) and LibreOffice 4 (row lineage and grouping explanations:
+  LINEAGE(), EXPLAIN(), `group.explain` / GROUPEXPLAIN, `sheet_lineage`).
+- LibreOffice 6 in part: Page Setup kept with the sheet (`page.setup`, `page.layout`, PAGESETUP, the File panel's row; in the
+  file and in XLSX; `sheet_pagesetup`), a keyboard reachability pass over every control, a large-column key pass. No new aether-ui
+  capability was needed, so nothing to add on the four backends; what would need one is below.
+
 **Done 2026-10-24:** see the commits on main; in short, the wedged Turns queue, Univer 1, IronCalc 4 and 5, HyperFormula 1, 4 and 5,
 Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/comparisons/` strikes each).
 
 **Not done, and why:**
-- Univer 5 (mutation journal): replaces `Saved` for every kind of state, one change to every undo; the
-  measurement and `sheet_historycost` are in for it. Recording and MCP discovery do not read `effect` yet.
-- LibreOffice 4 (row lineage, grouping explanations: wait on VisiData 3's typed group keys), 6 (keyboard-only
-  pass, print/layout, larger-grid interaction: aether-ui/sae work on four backends).
+- Univer 5 follow-ups: record at the mutation (the journal's diff is taken when a command is done, not as each mutation is
+  made, so a command still copies a changed map once); the remaining kinds still kept whole (rules, charts, merges, hidden rows).
+  Recording and MCP discovery do not read `effect` yet (Univer 1).
+- LibreOffice 6: the Tab *order* (a driver route to move focus as Tab does, on GTK4, AppKit, Win32, UIKit and Android: see
+  `docs/comparisons/LIBREOFFICE.md` action 6), columns to repeat and fit-to-pages in Page Setup.
 - Gnumeric 1: a generated status document (the examples and boundary tests are done for all 478 functions, see Done above).
 - IronCalc: the 47 calc_tests workbooks with more differences (`COMPATIBILITY.md`'s ledger).
 
-**Decisions needed from Paul (not built):**
+**Decisions needed from Paul (not built; the conservative choice was kept):**
+- Undo of view changes: freezing panes, hiding rows, widths, gridlines are steps of undo here (they were in the snapshot, so
+  they are in the journal). Excel does not undo a scroll or a split but does undo a hide and a width. Kept as before.
+- Typed group keys (VisiData 3): a blank is a group of its own (not 0, not ""), text groups without regard to case, 1 and "1"
+  are two groups. GROUPBY and PIVOTBY used `=`'s comparison (a blank equals 0 and "" but those two differ, so the answer
+  depended on row order). Say if a blank should group with "" as Excel's pivot tables do.
+- The File panel's Export PDF and Print buttons pass `gridlines=1` themselves, as they always have, so Page Setup's gridlines
+  governs scripts and the bus but not those buttons. Should the buttons follow the sheet's setup (no gridlines by default)?
+- The Tab order assertion (above) needs a new driver route on five backends; wanted?
 - Grist 1 to 4, Airtable 1 to 3, VisiData 1 and 4, LibreOffice 7 (and the record form and batch-wide unique keys
   of LibreOffice 3): a record model (stable record IDs independent of row position, reference fields, saved
   views, keyed reconcile). Wanted, and how far (an ID column plus references on tables, or a full relations layer)?
