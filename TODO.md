@@ -27,8 +27,14 @@ plus the 0842 override). Lane: `/work/aether-0842-m6`, built with `/work/lane-bu
   on the old code on the lane). The other backends already read the control's own text.
 - sae floors on Aether 0.842.0, the first release with aether #3126 (sae 21a2b91): the local `extern qjs_function` is gone.
 - `LOGEST` (headless `sheet_logest`; Excel's stored values for `LINEST_LOGEST.xlsx` now agree).
-- Gnumeric 1 in part: `sheet_examples`, 139 functions with a worked example and boundary cases (300-odd); it found `SUBSTITUTE`
-  lacked its instance argument (fixed).
+- Gnumeric 1 (examples and boundary tests): `sheet_examples` now covers all 478 functions, 1,300-odd cases (2026-10-25 to 26, eight
+  batches: maths and trig, statistics, distributions and tests, text and information, lookup and arrays, dates and databases,
+  engineering, finance and the rest). The test fails if a function has none. Bugs found and fixed, each case failing on the old
+  code first: `SUBSTITUTE` lacked its instance argument; `NEGBINOM.DIST` refused p = 1 (and multiplied 0 by -infinity);
+  `Z.TEST` of a flat sample answered #NUM! (Excel: #DIV/0!); `TIME(0,0,-1)` and `HOUR`/`MINUTE`/`SECOND` of a negative serial
+  answered a number (now #NUM!); `IMPOWER` of a whole power carried 1e-16 of noise (now exact); `FORECAST.ETS` ignored a bad
+  data_completion or aggregation. Noted, not changed: dates before 1900-03-01 are one day off Excel's serials (documented in
+  `dates.ts`); `PRICEMAT` with settlement equal to issue is #NUM!; `INFO("numfile")` is the sheet count.
 
 **Done 2026-10-24:** see the commits on main; in short, the wedged Turns queue, Univer 1, IronCalc 4 and 5, HyperFormula 1, 4 and 5,
 Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/comparisons/` strikes each).
@@ -38,7 +44,7 @@ Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/com
   measurement and `sheet_historycost` are in for it. Recording and MCP discovery do not read `effect` yet.
 - LibreOffice 4 (row lineage, grouping explanations: wait on VisiData 3's typed group keys), 6 (keyboard-only
   pass, print/layout, larger-grid interaction: aether-ui/sae work on four backends).
-- Gnumeric 1: examples and boundary tests for the other ~440 functions (add to `sheet_examples`'s table), and a generated status document.
+- Gnumeric 1: a generated status document (the examples and boundary tests are done for all 478 functions, see Done above).
 - IronCalc: the 47 calc_tests workbooks with more differences (`COMPATIBILITY.md`'s ledger).
 
 **Decisions needed from Paul (not built):**

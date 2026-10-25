@@ -277,7 +277,6 @@ const CASES: Record<string, [string, Want][]> = {
   CHIDIST: [["CHIDIST(2, 2)", Math.exp(-1)], ["CHIDIST(0, 2)", 1], ["CHIDIST(-1, 2)", "#NUM!"]],
   CHIINV: [["CHIINV(EXP(-1), 2)", 2], ["CHIINV(1, 2)", 0], ["CHIINV(0.5, 0)", "#NUM!"]],
   "CHISQ.DIST": [["CHISQ.DIST(2, 2, TRUE)", 1 - Math.exp(-1)], ["CHISQ.DIST(2, 2, FALSE)", 0.5 * Math.exp(-1)], ["CHISQ.DIST(-1, 2, TRUE)", "#NUM!"]],
-  "CHISQ.DIST.RT": [["CHISQ.DIST.RT(2, 2)", Math.exp(-1)], ["CHISQ.DIST.RT(0, 3)", 1]],
   "CHISQ.INV": [["CHISQ.INV(1 - EXP(-1), 2)", 2], ["CHISQ.INV(0, 2)", 0], ["CHISQ.INV(1.5, 2)", "#NUM!"]],
   "CHISQ.INV.RT": [["CHISQ.INV.RT(EXP(-1), 2)", 2], ["CHISQ.INV.RT(1, 2)", 0]],
   "CHISQ.TEST": [["CHISQ.TEST({10, 20; 30, 40}, {12, 18; 28, 42})", 0.37299848361348664], ["CHISQ.TEST({10, 20; 30, 40}, {10, 20; 30, 40})", 1], ["CHISQ.TEST({1, 2}, {1})", "#N/A"]],
@@ -457,6 +456,62 @@ const CASES: Record<string, [string, Want][]> = {
   BESSELJ: [["BESSELJ(1, 0)", 0.765197687], ["BESSELJ(1, 1)", 0.440050586], ["BESSELJ(0, 0)", 1], ["BESSELJ(1, -1)", "#NUM!"]],
   BESSELK: [["BESSELK(1, 0)", 0.421024438], ["BESSELK(1, 1)", 0.60190723], ["BESSELK(0, 0)", "#NUM!"]],
   BESSELY: [["BESSELY(1, 0)", 0.088256964], ["BESSELY(1, 1)", -0.781212821], ["BESSELY(0, 0)", "#NUM!"]],
+  EFFECT: [["EFFECT(0.12, 12)", Math.pow(1.01, 12) - 1], ["EFFECT(0.1, 1)", 0.1], ["EFFECT(0.1, 0)", "#NUM!"]],
+  NOMINAL: [["NOMINAL(EFFECT(0.12, 12), 12)", 0.12], ["NOMINAL(0.1, 1)", 0.1], ["NOMINAL(0.1, 0)", "#NUM!"]],
+  RRI: [["RRI(2, 100, 200)", Math.SQRT2 - 1], ["RRI(1, 100, 100)", 0], ["RRI(0, 100, 200)", "#NUM!"]],
+  PDURATION: [["PDURATION(0.1, 100, 121)", 2], ["PDURATION(0.1, 100, 100)", 0], ["PDURATION(0, 100, 121)", "#NUM!"]],
+  FVSCHEDULE: [["FVSCHEDULE(100, {0.1, 0.2})", 132], ["FVSCHEDULE(100, {0})", 100], ["FVSCHEDULE(100, {-1})", 0]],
+  SYD: [["SYD(10000, 1000, 5, 1)", 3000], ["SYD(10000, 1000, 5, 5)", 600], ["SYD(10000, 1000, 5, 6)", "#NUM!"], ["SYD(10000, 1000, 0, 1)", "#NUM!"]],
+  DB: [["DB(10000, 1000, 5, 1)", 3690], ["DB(10000, 1000, 5, 1, 6)", 1845], ["DB(10000, 1000, 5, 6)", "#NUM!"]],
+  DDB: [["DDB(10000, 1000, 5, 1)", 4000], ["DDB(10000, 1000, 5, 2)", 2400], ["DDB(10000, 1000, 5, 5)", 296], ["DDB(10000, 1000, 5, 6)", "#NUM!"]],
+  VDB: [["VDB(10000, 1000, 5, 0, 1)", 4000], ["VDB(10000, 1000, 5, 0, 5)", 9000], ["VDB(10000, 1000, 5, 2, 2)", 0]],
+  ISPMT: [["ISPMT(0.1, 1, 4, 1000)", -75], ["ISPMT(0.1, 0, 4, 1000)", -100], ["ISPMT(0.1, 4, 4, 1000)", 0]],
+  IPMT: [["IPMT(0.1, 1, 3, 1000)", -100], ["IPMT(0.1, 1, 3, 1000, 0, 1)", 0], ["IPMT(0.1, 4, 3, 1000)", "#NUM!"]],
+  PPMT: [["PPMT(0.1, 1, 3, 1000)", -(1000 * 0.1 / (1 - Math.pow(1.1, -3)) - 100)], ["PPMT(0.1, 4, 3, 1000)", "#NUM!"]],
+  CUMIPMT: [["CUMIPMT(0.1, 3, 1000, 1, 3, 0)", -(3 * 1000 * 0.1 / (1 - Math.pow(1.1, -3)) - 1000)], ["CUMIPMT(0.1, 3, 1000, 1, 1, 0)", -100], ["CUMIPMT(0.1, 3, 1000, 0, 3, 0)", "#NUM!"]],
+  CUMPRINC: [["CUMPRINC(0.1, 3, 1000, 1, 3, 0)", -1000], ["CUMPRINC(0.1, 3, 1000, 4, 4, 0)", "#NUM!"]],
+  RATE: [["RATE(3, -1000 * 0.1 / (1 - 1.1 ^ -3), 1000)", 0.1], ["RATE(0, -100, 1000)", "#NUM!"]],
+  MIRR: [["MIRR({-100, 50, 60}, 0.1, 0.12)", Math.sqrt(1.16) - 1], ["MIRR({100, 50}, 0.1, 0.12)", "#DIV/0!"]],
+  XNPV: [["XNPV(0.1, {-1000, 1100}, {0, 365})", 0], ["XNPV(0, {-1000, 1100}, {0, 365})", 100], ["XNPV(0.1, {-1000, 1100}, {0})", "#NUM!"]],
+  XIRR: [["XIRR({-1000, 1100}, {0, 365})", 0.1], ["XIRR({-1000, 1210}, {0, 730})", 0.1], ["XIRR({1000, 1100}, {0, 365})", "#NUM!"]],
+  DOLLARDE: [["DOLLARDE(1.02, 16)", 1.125], ["DOLLARDE(1.3, 4)", 1.75], ["DOLLARDE(1.5, 0)", "#DIV/0!"]],
+  DOLLARFR: [["DOLLARFR(1.125, 16)", 1.02], ["DOLLARFR(1, 8)", 1], ["DOLLARFR(1.125, 0)", "#DIV/0!"]],
+  DISC: [["DISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 97, 100)", 0.06], ["DISC(DATE(2024, 7, 1), DATE(2024, 1, 1), 97, 100)", "#NUM!"]],
+  INTRATE: [["INTRATE(DATE(2024, 1, 1), DATE(2024, 7, 1), 97, 100)", 3 / 97 * 2], ["INTRATE(DATE(2024, 1, 1), DATE(2024, 7, 1), 0, 100)", "#NUM!"]],
+  RECEIVED: [["RECEIVED(DATE(2024, 1, 1), DATE(2024, 7, 1), 97, 0.06)", 100], ["RECEIVED(DATE(2024, 1, 1), DATE(2024, 7, 1), 97, 0)", "#NUM!"]],
+  PRICEDISC: [["PRICEDISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 100)", 97], ["PRICEDISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 100, 2)", 100 - 100 * 0.06 * 182 / 360], ["PRICEDISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 0, 100)", "#NUM!"]],
+  YIELDDISC: [["YIELDDISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 97, 100)", 3 / 97 * 2], ["YIELDDISC(DATE(2024, 7, 1), DATE(2024, 1, 1), 97, 100)", "#NUM!"]],
+  TBILLPRICE: [["TBILLPRICE(DATE(2024, 1, 1), DATE(2024, 3, 1), 0.05)", 100 * (1 - 0.05 * 60 / 360)], ["TBILLPRICE(DATE(2024, 1, 1), DATE(2025, 3, 1), 0.05)", "#NUM!"]],
+  TBILLYIELD: [["TBILLYIELD(DATE(2024, 1, 1), DATE(2024, 3, 1), 99)", (100 - 99) / 99 * 360 / 60], ["TBILLYIELD(DATE(2024, 3, 1), DATE(2024, 1, 1), 99)", "#NUM!"]],
+  TBILLEQ: [["TBILLEQ(DATE(2024, 1, 1), DATE(2024, 3, 1), 0.05)", 365 * 0.05 / (360 - 0.05 * 60)], ["TBILLEQ(DATE(2024, 1, 1), DATE(2024, 3, 1), 0)", "#NUM!"]],
+  ACCRINTM: [["ACCRINTM(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 1000, 0)", 30], ["ACCRINTM(DATE(2024, 7, 1), DATE(2024, 1, 1), 0.06, 1000, 0)", "#NUM!"]],
+  ACCRINT: [["ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0.06, 1000, 2)", 15], ["ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0, 1000, 2)", "#NUM!"]],
+  PRICEMAT: [["PRICEMAT(DATE(2024, 4, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 0.05, 0)", (100 + 100 * 0.06) / (1 + 270 / 360 * 0.05) - 90 / 360 * 6], ["PRICEMAT(DATE(2025, 2, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 0.05, 0)", "#NUM!"]],
+  YIELDMAT: [["YIELDMAT(DATE(2024, 4, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 100.5, 0)", ((106) - (100.5 + 1.5)) / (100.5 + 1.5) * 360 / 270], ["YIELDMAT(DATE(2025, 2, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 100.5, 0)", "#NUM!"]],
+  PRICE: [["PRICE(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 100, 2)", 100], ["PRICE(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.05, 100, 1)", [1, 2, 3, 4, 5].reduce((s, t) => s + 6 / Math.pow(1.05, t), 0) + 100 / Math.pow(1.05, 5)], ["PRICE(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.05, 100, 3)", "#NUM!"]],
+  YIELD: [["YIELD(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 100, 100, 2)", 0.06], ["YIELD(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 100, 100, 5)", "#NUM!"]],
+  COUPNUM: [["COUPNUM(DATE(2024, 1, 1), DATE(2029, 1, 1), 2)", 10], ["COUPNUM(DATE(2024, 1, 1), DATE(2029, 1, 1), 1)", 5], ["COUPNUM(DATE(2024, 1, 1), DATE(2029, 1, 1), 3)", "#NUM!"]],
+  COUPPCD: [["COUPPCD(DATE(2024, 3, 15), DATE(2029, 1, 1), 2)", 45292], ["COUPPCD(DATE(2029, 1, 1), DATE(2024, 3, 15), 2)", "#NUM!"]],
+  COUPNCD: [["COUPNCD(DATE(2024, 3, 15), DATE(2029, 1, 1), 2)", 45474], ["COUPNCD(DATE(2029, 1, 1), DATE(2024, 3, 15), 2)", "#NUM!"]],
+  COUPDAYS: [["COUPDAYS(DATE(2024, 3, 15), DATE(2029, 1, 1), 2, 0)", 180], ["COUPDAYS(DATE(2024, 3, 15), DATE(2029, 1, 1), 4, 0)", 90]],
+  COUPDAYBS: [["COUPDAYBS(DATE(2024, 3, 15), DATE(2029, 1, 1), 2, 0)", 74], ["COUPDAYBS(DATE(2024, 1, 1), DATE(2029, 1, 1), 2, 0)", 0]],
+  COUPDAYSNC: [["COUPDAYSNC(DATE(2024, 3, 15), DATE(2029, 1, 1), 2, 0)", 106], ["COUPDAYSNC(DATE(2024, 3, 15), DATE(2029, 1, 1), 2, 9)", "#NUM!"]],
+  DURATION: [["DURATION(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 1)", 4.465105612699657], ["DURATION(DATE(2024, 1, 1), DATE(2029, 1, 1), 0, 0.06, 1)", 5], ["DURATION(DATE(2029, 1, 1), DATE(2024, 1, 1), 0.06, 0.06, 1)", "#NUM!"]],
+  MDURATION: [["MDURATION(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 1)", 4.465105612699657 / 1.06], ["MDURATION(DATE(2029, 1, 1), DATE(2024, 1, 1), 0.06, 0.06, 1)", "#NUM!"]],
+  ODDLPRICE: [["ODDLPRICE(DATE(2024, 2, 1), DATE(2024, 5, 1), DATE(2024, 1, 1), 0.06, 0.05, 100, 2, 0)", 102 / 1.0125 - 0.5], ["ODDLPRICE(DATE(2024, 6, 1), DATE(2024, 5, 1), DATE(2024, 1, 1), 0.06, 0.05, 100, 2, 0)", "#NUM!"]],
+  ODDLYIELD: [["ODDLYIELD(DATE(2024, 2, 1), DATE(2024, 5, 1), DATE(2024, 1, 1), 0.06, 102 / 1.0125 - 0.5, 100, 2, 0)", 0.05], ["ODDLYIELD(DATE(2024, 6, 1), DATE(2024, 5, 1), DATE(2024, 1, 1), 0.06, 100, 100, 2, 0)", "#NUM!"]],
+  ODDFPRICE: [["ODDFPRICE(DATE(2024, 2, 15), DATE(2025, 1, 1), DATE(2024, 1, 15), DATE(2024, 7, 1), 0.06, 0.05, 100, 2, 0)", 100.845948647226], ["ODDFPRICE(DATE(2025, 2, 15), DATE(2025, 1, 1), DATE(2024, 1, 15), DATE(2024, 7, 1), 0.06, 0.05, 100, 2, 0)", "#NUM!"]],
+  ODDFYIELD: [["ODDFYIELD(DATE(2024, 2, 15), DATE(2025, 1, 1), DATE(2024, 1, 15), DATE(2024, 7, 1), 0.06, 100.845948647226, 100, 2, 0)", 0.05], ["ODDFYIELD(DATE(2025, 2, 15), DATE(2025, 1, 1), DATE(2024, 1, 15), DATE(2024, 7, 1), 0.06, 100, 100, 2, 0)", "#NUM!"]],
+  "FORECAST.ETS": [["FORECAST.ETS(5, {10, 20, 30, 40}, {1, 2, 3, 4})", 50], ["FORECAST.ETS(6, {5, 5, 5, 5}, {1, 2, 3, 4})", 5], ["FORECAST.ETS(5, {10, 20, 30, 40}, {1, 2, 3, 4}, 1, 1, 9)", "#NUM!"]],
+  "FORECAST.ETS.CONFINT": [["FORECAST.ETS.CONFINT(5, {10, 20, 30, 40}, {1, 2, 3, 4})", 0], ["FORECAST.ETS.CONFINT(5, {10, 20, 30, 40}, {1, 2, 3, 4}, 2)", "#NUM!"]],
+  "FORECAST.ETS.SEASONALITY": [["FORECAST.ETS.SEASONALITY({1, 5, 1, 5, 1, 5, 1, 5}, {1, 2, 3, 4, 5, 6, 7, 8})", 2], ["FORECAST.ETS.SEASONALITY({10, 20, 30, 40}, {1, 2, 3, 4})", 1]],
+  "FORECAST.ETS.STAT": [["FORECAST.ETS.STAT({10, 20, 30, 40}, {1, 2, 3, 4}, 7)", 0], ["FORECAST.ETS.STAT({10, 20, 30, 40}, {1, 2, 3, 4}, 8)", 1], ["FORECAST.ETS.STAT({10, 20, 30, 40}, {1, 2, 3, 4}, 9)", "#NUM!"]],
+  GROUPBY: [["INDEX(GROUPBY({\"a\"; \"b\"; \"a\"}, {1; 2; 3}, SUM, 0, 0), 1, 2)", 4], ["INDEX(GROUPBY({\"a\"; \"b\"; \"a\"}, {1; 2; 3}, SUM, 0, 0), 2, 1)", "b"], ["ROWS(GROUPBY({\"a\"; \"b\"; \"a\"}, {1; 2; 3}, SUM, 0, 0))", 2], ["GROUPBY({\"a\"}, {1; 2}, SUM)", "#VALUE!"]],
+  PIVOTBY: [["INDEX(PIVOTBY({\"a\"; \"b\"; \"a\"}, {\"x\"; \"x\"; \"y\"}, {1; 2; 3}, SUM, 0, 0, 0, 0), 2, 3)", 3], ["INDEX(PIVOTBY({\"a\"; \"b\"; \"a\"}, {\"x\"; \"x\"; \"y\"}, {1; 2; 3}, SUM, 0, 0, 0, 0), 3, 2)", 2], ["INDEX(PIVOTBY({\"a\"; \"b\"; \"a\"}, {\"x\"; \"x\"; \"y\"}, {1; 2; 3}, SUM, 0, 0, 0, 0), 1, 2)", "x"]],
+  IMAGE: [["IMAGE(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\", \"dot\")", "dot"], ["IMAGE(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\")", ""], ["IMAGE(\"https://example.com/a.png\")", "#VALUE!"]],
+  SPARKLINE: [["SPARKLINE({1, 2, 3})", "▁▅█"], ["SPARKLINE({0, 10})", "▁█"], ["SPARKLINE({1, 2, 3}, \"zz\")", "#VALUE!"]],
+  INFO: [["INFO(\"recalc\")", "Automatic"], ["INFO(\"numfile\")", 2], ["INFO(\"zzz\")", "#VALUE!"]],
+  ISOMITTED: [["LAMBDA(x, [y], ISOMITTED(y))(1)", true], ["LAMBDA(x, [y], ISOMITTED(y))(1, 2)", false], ["ISOMITTED(A1)", false], ["LAMBDA(x, x)()", "#VALUE!"]],
 };
 // BIN2DEC of ten ones is the 10-bit two's complement -1.
 
@@ -474,9 +529,9 @@ for (const fn of Object.keys(CASES)) {
   }
 }
 eq("every example and boundary comes out as its definition says", bad, []);
-eq("the cases are many enough to mean something", checked >= 300, true);
-eq("how many functions have examples and boundaries", `${Object.keys(CASES).length} of ${names().length}`, `${Object.keys(CASES).length} of ${names().length}`);
+eq("the cases are many enough to mean something", checked >= 1200, true);
+eq("every function in the library has an example and boundary cases", names().filter((n) => !(n in CASES)), []);
 
 // expect: ok every example and boundary comes out as its definition says
 // expect: ok the cases are many enough to mean something
-// expect: ok how many functions have examples and boundaries
+// expect: ok every function in the library has an example and boundary cases

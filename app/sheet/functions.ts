@@ -979,7 +979,15 @@ const etsModel = (name: string, ys: number[], season: number | undefined) => {
   try { return fitEts(ys, season); } catch (e) { return fail("#NUM!", `${name}: ${(e as Error).message}`); }
 };
 const etsSeason = (args: readonly Arg[], i: number): number | undefined => (absent(args, i) ? undefined : num(args, i, 1) === 0 ? 1 : num(args, i, 1));
+// data_completion is 0 or 1 and aggregation 1 to 7 (average, count, counta, max, median, min, sum).
+const etsOptions = (name: string, args: readonly Arg[], completion: number, aggregation: number): Result | null => {
+  if (!absent(args, completion) && ![0, 1].includes(Math.trunc(num(args, completion)))) return fail("#NUM!", `${name}'s data_completion is 0 or 1`);
+  if (!absent(args, aggregation) && !(Math.trunc(num(args, aggregation)) >= 1 && Math.trunc(num(args, aggregation)) <= 7)) return fail("#NUM!", `${name}'s aggregation is 1 to 7`);
+  return null;
+};
 def("FORECAST.ETS", 3, 6, (args) => {
+  const bad = etsOptions("FORECAST.ETS", args, 4, 5);
+  if (bad) return bad;
   const { ys, ts, step } = etsSeries("FORECAST.ETS", args, 1, 2), m = etsModel("FORECAST.ETS", ys, etsSeason(args, 3)), at = num(args, 0);
   const h = (at - ts[ts.length - 1]) / step;
   if (h <= 0) return fail("#NUM!", "FORECAST.ETS forecasts past the timeline's end");

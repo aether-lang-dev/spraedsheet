@@ -13,12 +13,14 @@ Seek, and Solver including GRG nonlinear and evolutionary (TODO 6.8b); the
    `described.ts` and the function tables. Shares work with HyperFormula 4.~~ Done
    in part 2026-10-24 with HyperFormula 4: each function's record (implemented,
    arity, volatile, known deviations as a count of cells that differ from Excel's
-   stored values) from `formulas.functionStatus`. Reference examples and boundary tests in part, 2026-10-25
-   (headless `sheet_examples`): 139 of the library's functions have a worked example
-   (known from the definition, never another spreadsheet's output) and their boundary
-   cases, 300-odd cases in all; the test states the count. It found `SUBSTITUTE`
-   lacked its instance argument (fixed). Not done: the other ~440 functions, and a
-   generated status document.
+   stored values) from `formulas.functionStatus`. Reference examples and boundary tests, 2026-10-25 to 26
+   (headless `sheet_examples`): all 478 of the library's functions have a worked example
+   (known from the definition, hand or Python, never another spreadsheet's output) and their
+   boundary cases, 1,300-odd cases in all; the test fails if a function has none. They found
+   `SUBSTITUTE` lacked its instance argument, `NEGBINOM.DIST` refused p = 1, `Z.TEST` of a flat
+   sample answered #NUM! (Excel's #DIV/0!), `TIME`/`HOUR`/`MINUTE`/`SECOND` accepted a negative
+   time, `IMPOWER` left 1e-16 of noise on a whole power, and `FORECAST.ETS` ignored a bad
+   data_completion or aggregation (all fixed). Not done: a generated status document.
 2. ~~**Numerical acceptance suite.** Extreme tails, inverses near boundaries,
    near-constant data, ill-conditioned regression, financial roots, convergence
    failure. Original fixtures from published datasets or high-precision values;
