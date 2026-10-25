@@ -209,6 +209,16 @@ export function cPow(z: Complex, n: number): Complex {
     if (n <= 0) throw new RangeError("0 to a power that is not positive");
     return C(0, 0, z.unit);
   }
+  // A whole power is repeated multiplication (by squaring), so (1+i)^2 is
+  // 2i and not 2i with 1e-16 of real part left by the detour through polar form.
+  if (Number.isInteger(n) && Math.abs(n) <= 1024) {
+    let result = ONE(z.unit), base = z;
+    for (let k = Math.abs(n); k > 0; k = Math.floor(k / 2)) {
+      if (k % 2 === 1) result = cMul(result, base);
+      base = cMul(base, base);
+    }
+    return n < 0 ? cDiv(ONE(z.unit), result) : result;
+  }
   const r = cAbs(z) ** n, t = cArg(z) * n;
   return C(r * Math.cos(t), r * Math.sin(t), z.unit);
 }
