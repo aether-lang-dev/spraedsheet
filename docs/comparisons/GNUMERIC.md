@@ -13,8 +13,12 @@ Seek, and Solver including GRG nonlinear and evolutionary (TODO 6.8b); the
    `described.ts` and the function tables. Shares work with HyperFormula 4.~~ Done
    in part 2026-10-24 with HyperFormula 4: each function's record (implemented,
    arity, volatile, known deviations as a count of cells that differ from Excel's
-   stored values) from `formulas.functionStatus`. Not done: reference examples and
-   boundary tests per function, and a generated status document.
+   stored values) from `formulas.functionStatus`. Reference examples and boundary tests in part, 2026-10-25
+   (headless `sheet_examples`): 139 of the library's functions have a worked example
+   (known from the definition, never another spreadsheet's output) and their boundary
+   cases, 300-odd cases in all; the test states the count. It found `SUBSTITUTE`
+   lacked its instance argument (fixed). Not done: the other ~440 functions, and a
+   generated status document.
 2. ~~**Numerical acceptance suite.** Extreme tails, inverses near boundaries,
    near-constant data, ill-conditioned regression, financial roots, convergence
    failure. Original fixtures from published datasets or high-precision values;

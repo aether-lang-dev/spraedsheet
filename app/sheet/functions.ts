@@ -507,9 +507,21 @@ def("FIND", 2, 3, (args) => {
   const needle = str(args, 0), hay = str(args, 1), at = hay.indexOf(needle, num(args, 2, 1) - 1);
   return at < 0 ? fail("#VALUE!", `'${needle}' is not in '${hay}'`) : at + 1;
 });
-def("SUBSTITUTE", 3, 3, (args) => {
-  const old = str(args, 1);
-  return old === "" ? str(args, 0) : str(args, 0).split(old).join(str(args, 2));
+// SUBSTITUTE(text, old, new, [instance]): every old becomes new, or only the
+// instance-th one (counting from 1; fewer than that many leaves the text alone,
+// an instance under 1 is #VALUE!).
+def("SUBSTITUTE", 3, 4, (args) => {
+  const text = str(args, 0), old = str(args, 1), by = str(args, 2);
+  if (absent(args, 3)) return old === "" ? text : text.split(old).join(by);
+  const n = Math.trunc(num(args, 3));
+  if (n < 1) return fail("#VALUE!", `SUBSTITUTE instance ${n}: not 1 or more`);
+  if (old === "") return text;
+  let at = -1;
+  for (let i = 0; i < n; i++) {
+    at = text.indexOf(old, at < 0 ? 0 : at + old.length);
+    if (at < 0) return text;
+  }
+  return text.slice(0, at) + by + text.slice(at + old.length);
 });
 def("REPT", 2, 2, (args) => {
   const n = Math.trunc(num(args, 1));
