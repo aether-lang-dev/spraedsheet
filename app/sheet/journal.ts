@@ -47,7 +47,7 @@ const BOOK = ["names", "name", "setupScript", "styles", "theme", "bookProtection
 // The kinds of state that are maps and are journaled as the keys that changed,
 // not whole (the rest are set whole): "book:" a workbook's own, "sheet:" a
 // sheet's. Each kind moved here is one step of docs/mutation_journal.md.
-const PATCHED = new Set<string>(["sheet:inputs"]);
+const PATCHED = new Set<string>(["sheet:widths", "sheet:heights", "sheet:pivots", "sheet:rowLevels", "sheet:colLevels", "sheet:inputs", "sheet:notes", "sheet:names", "sheet:formulas", "sheet:tables", "book:names", "book:styles"]);
 const patched = (slot: Slot) => PATCHED.has(`${slot.page ? "sheet" : "book"}:${slot.key}`);
 
 const sizeOf = (v: unknown): number => v instanceof Map || v instanceof Set ? v.size : Array.isArray(v) ? v.length : 1;

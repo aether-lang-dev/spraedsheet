@@ -52,18 +52,22 @@ costs what it changed, is the later step and needs no change to the journal's en
 
 ## Migration, one kind at a time
 
-Every step keeps all existing undo tests green and adds to `sheet_journal.ts`.
-`PATCHED` in `journal.ts` lists the map slots kept as the keys that changed; the rest
-are `set` whole until moved.
+Every step keeps all existing undo tests green and adds to `sheet_journal.ts` and
+`sheet_historycost.ts`. `PATCHED` in `journal.ts` lists the map slots kept as the keys
+that changed; the rest are `set` whole.
 
-1. The journal, with `set` for every slot, and **cells** (a sheet's inputs) as `map`.
-2. Notes (and so looks, comments, links, conditional styles).
-3. A sheet's names, formulas and tables.
-4. The workbook's names and cell styles.
-5. The sheet's view maps (widths, heights, pivots, outline levels).
+1. Done 2026-10-25: the journal, with `set` for every slot, and **cells** (a sheet's
+   inputs) as `map`.
+2. Done: **notes** (and so looks, comments, links, conditional styles).
+3. Done: a sheet's **names, formulas and tables**.
+4. Done: the workbook's **names** and **cell styles**.
+5. Done: the sheet's view maps: **widths, heights, pivots, outline levels**.
 
 What stays `set` for good is a container a command replaces whole and that is small
-(rules, charts, merges, scenarios, drawings, slicers), and the scalar kinds.
+(rules, charts, merges, scenarios, drawings, slicers, edit ranges), a set of hidden
+rows, and the scalar kinds (name, setup script, theme, protection, tab colour ...).
+The active sheet is not an entry: undo goes to the sheet the change was made on,
+and redo to the one undo was made from, swapped with each (`Step.active`).
 
 ## Decisions kept as today
 
@@ -77,17 +81,24 @@ What stays `set` for good is a container a command replaces whole and that is sm
 
 ## Measurement
 
-`sheet_historycost`, N = 2,000 cells, map entries held by one step:
+`sheet_historycost`, N = 2,000 cells, map entries held by one step, the snapshot
+(HEAD before the journal) against the journal:
 
 | change | snapshot | journal |
 |---|---|---|
 | one-cell edit | 2,021 | 1 |
-| next one-cell edit | 2,022 | 1 |
-| look over ten cells, after one | 31 | see the test |
-| a 1,000-cell paste | 31 | 1,030 |
-| an inserted row (every cell moves) | 3,043 | 3,034 |
+| the next one-cell edit | 2,022 | 1 |
+| a look over ten cells, after one | 31 | 10 |
+| a 1,000-cell paste (with ten notes) | 31 | 1,010 |
+| an inserted row (every cell moves) | 3,043 | 3,008 |
 | a script of fifty edits | 3,043 | 50 |
-| a hundred one-cell steps | 200,000 | under 1,000 |
+| a hundred one-cell steps | about 200,000 | 100 |
+| a defined cell style (21 in the gallery) | 43 | 1 |
+| a second name, a second table | 3 each | 1 each |
+| a column widened or a row made taller | 7 | 1 |
 
-A structural edit that moves every cell is the one case that stays about the size of
-the sheet, as the cells did move; the paste is the cells it set.
+(The paste's 31 was the snapshot sharing the cells with the step before; the journal
+counts the 1,000 cells it set.) A structural edit that moves every cell is the one
+case that stays about the size of the sheet, as the cells did move. The history
+budget (`HISTORY_ENTRIES`) is kept for it: twenty inserted rows on 2,000 cells
+keep the newest four or five steps under a budget of 10,000.

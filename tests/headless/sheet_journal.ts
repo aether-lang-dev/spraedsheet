@@ -82,6 +82,17 @@ eq("redoing step by step meets each later state exactly", [fwdOk, j, wrong], [tr
   ], [false, "2"]);
 }
 
+// A look is the notes of the cells it touched, as the keys that changed.
+{
+  const w = new Workbook(), c = new Commands(w);
+  await c.run("formulas.use language=Excel");
+  await c.run("cell.set cell=A1 input=1");
+  const before = w.saved();
+  await c.run("format.fill range=A1:A3 color=red");
+  const step = stepOf(before, w.saved(), "x");
+  eq("a look over three cells is one entry for the notes holding three keys", [step.entries.map((e) => `${e.kind}:${e.slot?.key}`), step.entries[0].changes!.map((x) => x[0])], [["map:notes"], ["A1", "A2", "A3"]]);
+}
+
 // Undo does not disturb what the step did not touch: a change made outside the
 // journal (a command that is not a step) stays when a different step is undone.
 {
@@ -100,4 +111,5 @@ eq("redoing step by step meets each later state exactly", [fwdOk, j, wrong], [tr
 // expect: ok redoing step by step meets each later state exactly
 // expect: ok a one-cell edit is one entry, for the sheet's cells, with that cell
 // expect: ok applied backwards and forwards it moves between the two states
+// expect: ok a look over three cells is one entry for the notes holding three keys
 // expect: ok an undo takes back the step's cell and leaves one set outside the journal

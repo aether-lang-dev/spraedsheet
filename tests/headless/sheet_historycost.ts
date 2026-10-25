@@ -35,18 +35,41 @@ eq("and so does the next", was() - before, 1);
 await cmds.run("format.fill range=A1:A10 color=yellow");
 before = was();
 await cmds.run("format.fill range=A1:A10 color=red");
-eq("a look after a look keeps the notes of the ten cells, was and became", was() - before, 20);
+eq("a look after a look keeps the ten cells' notes, as they were and became", was() - before, 10);
 
 // A large paste.
 await cmds.run("edit.copy range=A1:A1000");
 before = was();
 await cmds.run("edit.paste at=D1");
-eq("a large paste keeps the cells it set and the notes", was() - before, 1000 + 30);
+eq("a large paste keeps the cells it set and the ten notes it added", was() - before, 1000 + 10);
 
 // A structural edit.
 before = was();
 await cmds.run("rows.insert at=5 count=1");
-eq("an inserted row after a paste: every cell that moved, where it was and where it went", was() - before, 3034);
+eq("an inserted row after a paste: every cell that moved, where it was and where it went", was() - before, 3008);
+
+// A cell style, a name and a table: each the one entry that changed.
+before = was();
+await cmds.run("style.define name=Mine bold=1");
+eq("a defined cell style keeps that style, not the workbook's whole gallery", was() - before, 1);
+await cmds.run("names.define name=FIRST range=F1:F9");
+before = was();
+await cmds.run("names.define name=TOTAL range=F1:F9");
+eq("a second defined name keeps that name, not the first again", was() - before, 1);
+await cmds.run("table.define name=Orders range=D1:D10 headers=0");
+before = was();
+await cmds.run("table.define name=Sales range=E1:E10 headers=0");
+eq("a second defined table keeps that table", was() - before, 1);
+
+// Widths and heights: the columns and rows that changed.
+await cmds.run("columns.width range=A:C width=12");
+before = was();
+await cmds.run("columns.width range=D1 width=20");
+eq("a column widened keeps that column, not every width of the sheet", was() - before, 1);
+await cmds.run("rows.height range=1:3 height=30");
+before = was();
+await cmds.run("rows.height range=4:4 height=40");
+eq("a row made taller keeps that row", was() - before, 1);
 
 // A scripted group is one step.
 before = was();
@@ -86,9 +109,14 @@ eq("steps are bounded, and a hundred one-cell steps hold a hundred cells' worth,
 // expect: ok a sheet of 2,000 cells opened by a bulk set is one step holding nothing (the set was not a step)
 // expect: ok a one-cell edit keeps that cell: what it was and became
 // expect: ok and so does the next
-// expect: ok a look after a look keeps the notes of the ten cells, was and became
-// expect: ok a large paste keeps the cells it set and the notes
+// expect: ok a look after a look keeps the ten cells' notes, as they were and became
+// expect: ok a large paste keeps the cells it set and the ten notes it added
 // expect: ok an inserted row after a paste: every cell that moved, where it was and where it went
+// expect: ok a defined cell style keeps that style, not the workbook's whole gallery
+// expect: ok a second defined name keeps that name, not the first again
+// expect: ok a second defined table keeps that table
+// expect: ok a column widened keeps that column, not every width of the sheet
+// expect: ok a row made taller keeps that row
 // expect: ok a script of fifty changes is one step holding the fifty cells
 // expect: ok undo moves a step to redo; the entries held are the same
 // expect: ok steps are bounded, and a hundred one-cell steps hold a hundred cells' worth, not a hundred sheets
