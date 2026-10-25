@@ -36,17 +36,18 @@ plus the 0842 override). Lane: `/work/aether-0842-m6`, built with `/work/lane-bu
   data_completion or aggregation. Noted, not changed: dates before 1900-03-01 are one day off Excel's serials (documented in
   `dates.ts`); `PRICEMAT` with settlement equal to issue is #NUM!; `INFO("numfile")` is the sheet count.
 
-**Done 2026-10-25 (the larger actions, later in the day):**
+**Done 2026-10-25 (the larger actions, later in the day; `./run-tests.sh` green on macOS, 9 passed, and aether-linux, 10 passed with `real_keys_x11`, at 0ecfe87):**
 - Univer 5, the mutation journal (`docs/mutation_journal.md`, `journal.ts`): a step of undo is a list of entries, each a
   kind of state with what it was and became; cells, notes, a sheet's names, formulas and tables, the workbook's names and
   cell styles, and widths, heights, pivots and outline levels as the keys that changed. A one-cell edit on 2,000 cells held
   2,021 map entries, now 1; a script of fifty edits 3,043, now 50 (`sheet_historycost`, `sheet_journal`). Saved files are untouched
-  (memory only).
+  (memory only). 4d3a307, 4bb2871.
 - VisiData 3 (typed group keys, `groupkey.ts`, `sheet_groupkeys`) and LibreOffice 4 (row lineage and grouping explanations:
-  LINEAGE(), EXPLAIN(), `group.explain` / GROUPEXPLAIN, `sheet_lineage`).
+  LINEAGE(), EXPLAIN(), `group.explain` / GROUPEXPLAIN, `sheet_lineage`). b6637f1.
 - LibreOffice 6 in part: Page Setup kept with the sheet (`page.setup`, `page.layout`, PAGESETUP, the File panel's row; in the
   file and in XLSX; `sheet_pagesetup`), a keyboard reachability pass over every control, a large-column key pass. No new aether-ui
-  capability was needed, so nothing to add on the four backends; what would need one is below.
+  capability was needed, so nothing to add on the four backends; what would need one is below. 37217b4, 0ecfe87 (`spec_sheet`'s
+  "keyboard only" case, the new `spec_sheet_large`; XLSX print areas are read now, so `sheet_xlsx`'s report no longer names one).
 
 **Done 2026-10-24:** see the commits on main; in short, the wedged Turns queue, Univer 1, IronCalc 4 and 5, HyperFormula 1, 4 and 5,
 Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/comparisons/` strikes each).
