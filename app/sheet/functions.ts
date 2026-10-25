@@ -1300,7 +1300,7 @@ defDist("HYPGEOM.DIST", 5, 5, (args) => {
 defDist("NEGBINOM.DIST", 4, 4, (args) => {
   const f = Math.trunc(num(args, 0)), s = Math.trunc(num(args, 1)), p = num(args, 2);
   need(f >= 0 && s >= 1, `${f} failures, ${s} successes`);
-  probability(p);
+  probability(p, false);
   if (!flag(args, 3)) return D.negativeBinomialMass(f, s, p);
   let total = 0;
   for (let i = 0; i <= f; i++) total += D.negativeBinomialMass(i, s, p);
@@ -1386,6 +1386,7 @@ defDist("Z.TEST", 2, 3, (args) => {
   const ns = numbersIn(args[0].values), x = num(args, 1);
   if (ns.length < (absent(args, 2) ? 2 : 1)) return fail("#N/A", "Z.TEST needs numbers");
   const sigma = absent(args, 2) ? Math.sqrt(variance(ns)) : num(args, 2);
+  if (absent(args, 2) && sigma === 0) return fail("#DIV/0!", "Z.TEST: the sample has no spread to stand in for sigma");
   positive(sigma, "sigma");
   return 1 - D.normalCdf((mean(ns) - x) / (sigma / Math.sqrt(ns.length)));
 });

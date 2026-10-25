@@ -216,4 +216,4 @@ export function hypergeometricMass(s: number, n: number, m: number, pop: number)
 
 // f failures before the s-th success, each trial a success with p.
 export const negativeBinomialMass = (f: number, s: number, p: number): number =>
-  Math.exp(lnChoose(f + s - 1, s - 1) + s * Math.log(p) + f * Math.log(1 - p));
+  p === 1 ? (f === 0 ? 1 : 0) : Math.exp(lnChoose(f + s - 1, s - 1) + s * Math.log(p) + f * Math.log(1 - p));
