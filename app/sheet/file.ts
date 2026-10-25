@@ -46,6 +46,8 @@ import type { Allow, BookProtection, EditRange, SheetProtection } from "./protec
 import type { Trigger } from "./recorder.ts";
 import { checksOf } from "./checks.ts";
 import type { Check } from "./checks.ts";
+import { DEFAULT_LAYOUT } from "./pdf.ts";
+import type { PageLayout } from "./pdf.ts";
 import { AUTOMATIC } from "./sheet.ts";
 import type { Calc } from "./sheet.ts";
 import type { Aggregate } from "./pivot.ts";
@@ -67,6 +69,7 @@ export interface FileSheet {
     readonly gridlines: boolean;
     readonly headings: boolean;
     readonly breaks: { readonly rows: readonly number[]; readonly cols: readonly number[] };
+    readonly layout: PageLayout;
   };
   readonly merges: readonly string[];
   readonly slicers: readonly Slicer[];
@@ -210,7 +213,17 @@ function viewOf(v: any): FileSheet["view"] {
     rowLevels: sizes(v?.rowLevels).filter(([, l]) => l <= 8), colLevels: sizes(v?.colLevels).filter(([, l]) => l <= 8),
     tabColor: /^#[0-9a-f]{6}$/i.test(String(v?.tabColor ?? "")) ? String(v.tabColor).toLowerCase() : null, hidden: v?.hidden === true,
     gridlines: v?.gridlines !== false, headings: v?.headings !== false,
-    breaks: { rows: indexes(v?.breaks?.rows).filter((n) => n > 0), cols: indexes(v?.breaks?.cols).filter((n) => n > 0) } };
+    breaks: { rows: indexes(v?.breaks?.rows).filter((n) => n > 0), cols: indexes(v?.breaks?.cols).filter((n) => n > 0) },
+    layout: layoutOf(v?.layout) };
+}
+
+// A sheet's page setup as the file has it: what is not given or not valid is the default.
+function layoutOf(l: any): PageLayout {
+  const d = DEFAULT_LAYOUT, text = (x: unknown, or: string) => (typeof x === "string" ? x : or), flag = (x: unknown, or: boolean) => (typeof x === "boolean" ? x : or);
+  const num = (x: unknown, or: number, lo: number, hi: number) => (typeof x === "number" && x >= lo && x <= hi ? x : or);
+  return { paper: l?.paper === "letter" ? "letter" : "a4", landscape: flag(l?.landscape, d.landscape), margin: num(l?.margin, d.margin, 0, 144), scale: num(l?.scale, d.scale, 10, 400),
+    area: parseRange(text(l?.area, "")) ? text(l?.area, "") : "", titles: /^\d+:\d+$/.test(text(l?.titles, "")) ? text(l?.titles, "") : "", header: text(l?.header, ""), footer: text(l?.footer, ""),
+    gridlines: flag(l?.gridlines, d.gridlines), headings: flag(l?.headings, d.headings) };
 }
 
 // Tables as written ({ name, range, headers, columns }), read back.
@@ -359,6 +372,7 @@ const viewIn = (page: Page) => ({
   ...(page.tabColor ? { tabColor: page.tabColor } : {}), ...(page.hiddenSheet ? { hidden: true } : {}),
   ...(page.gridlines ? {} : { gridlines: false }), ...(page.headings ? {} : { headings: false }),
   ...(page.breaks.rows.length || page.breaks.cols.length ? { breaks: { rows: [...page.breaks.rows], cols: [...page.breaks.cols] } } : {}),
+  ...(JSON.stringify(page.layout) === JSON.stringify(DEFAULT_LAYOUT) ? {} : { layout: page.layout }),
 });
 
 // A sheet's parts as the file has them.

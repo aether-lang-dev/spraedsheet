@@ -35,7 +35,7 @@ const sequence = [
   "view.freezeRows count=1", "rows.insert at=2", "columns.insert at=B",
   "sheet.add name=Costs", "cell.set cell=A1 input=5", "sheet.rename name=Costs to=Prices",
   "sheet.move name=Prices to=1", "style.define name=Mine bold=1", "theme.set name=Office",
-  "rows.hide range=A3", "cells.merge range=C1:D1", "protect.sheet password=x",
+  "rows.hide range=A3", "cells.merge range=C1:D1", "page.setup paper=letter scale=80", "protect.sheet password=x",
   "sheet.delete name=Prices", "sheet.activate name=Sheet1",
 ];
 const prints: string[] = [fingerprint(wb)];

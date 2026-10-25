@@ -329,6 +329,28 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
     // Its manual page breaks.
     const brks = (tag: string) => (kid(ws, tag) ? kids(kid(ws, tag)!, "brk") : []).filter((b) => ["1", "true"].includes(attr(b, "man") ?? "1")).map((b) => Number(attr(b, "id") ?? 0) | 0).filter((n) => n > 0);
     if (kid(ws, "rowBreaks") || kid(ws, "colBreaks")) view.breaks = { rows: brks("rowBreaks"), cols: brks("colBreaks") };
+    // Its page setup: paper, orientation, scale, margin, what prints and the header and footer
+    // (the print area and the rows to repeat are defined names, read below).
+    {
+      const ps = kid(ws, "pageSetup"), pm = kid(ws, "pageMargins"), po = kid(ws, "printOptions"), hf = kid(ws, "headerFooter");
+      if (ps || pm || po || hf) {
+        const layout: Record<string, unknown> = {};
+        const size = attr(ps ?? { name: "", attrs: {}, children: [] }, "paperSize");
+        if (size === "1") layout.paper = "letter";
+        else if (size && size !== "9") report.push(`${name}: paper size ${size} read as A4`);
+        if (ps && attr(ps, "orientation") === "landscape") layout.landscape = true;
+        const scale = Number(attr(ps ?? { name: "", attrs: {}, children: [] }, "scale") ?? 100);
+        if (scale >= 10 && scale <= 400) layout.scale = scale;
+        if (pm && Number.isFinite(Number(attr(pm, "left")))) layout.margin = Math.min(144, Math.max(0, Math.round(Number(attr(pm, "left")) * 72)));
+        if (po && ["1", "true"].includes(attr(po, "gridLines") ?? "")) layout.gridlines = true;
+        if (po && ["1", "true"].includes(attr(po, "headings") ?? "")) layout.headings = true;
+        // A part of the header or footer with no section is the centre's: written with &C.
+        const part = (tag: string) => { const t = hf && kid(hf, tag) ? textOf(kid(hf, tag)!) : ""; return /^&C/.test(t) && !/&[LR]/.test(t.slice(2)) ? t.slice(2) : t; };
+        if (part("oddHeader")) layout.header = part("oddHeader");
+        if (part("oddFooter")) layout.footer = part("oddFooter");
+        view.layout = layout;
+      }
+    }
     // Its view: gridlines and headings shown or not.
     const sv = all(ws, "sheetView")[0];
     if (sv && ["0", "false"].includes(attr(sv, "showGridLines") ?? "")) view.gridlines = false;
@@ -429,8 +451,19 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
   const bookNames: Record<string, string> = {};
   for (const dn of all(wb, "definedName")) {
     const n = attr(dn, "name") ?? "", text = textOf(dn).trim();
-    if (!n || n.startsWith("_xlnm.") || n.startsWith("_")) { if (n.startsWith("_xlnm.")) report.push(`${n.slice(6)} (a print setting) left out`); continue; }
     const local = attr(dn, "localSheetId");
+    // A sheet's print area and the rows to repeat belong to its page setup.
+    if ((n === "_xlnm.Print_Area" || n === "_xlnm.Print_Titles") && local !== undefined && sheets[Number(local)]) {
+      const layout = ((sheets[Number(local)].view as Record<string, unknown>).layout ??= {}) as Record<string, unknown>;
+      const first = text.split(",")[0].slice(text.indexOf("!") + 1).replace(/\$/g, "");
+      if (n === "_xlnm.Print_Area" && /^[A-Z]{1,3}\d+(:[A-Z]{1,3}\d+)?$/i.test(first)) layout.area = first.toUpperCase();
+      else if (n === "_xlnm.Print_Titles") {
+        const rows = text.split(",").map((t) => t.slice(t.indexOf("!") + 1).replace(/\$/g, "")).find((t) => /^\d+:\d+$/.test(t));
+        if (rows) layout.titles = rows; else report.push("Print_Titles (columns to repeat) left out");
+      } else report.push(`${n.slice(6)} (not a single range) left out`);
+      continue;
+    }
+    if (!n || n.startsWith("_xlnm.") || n.startsWith("_")) { if (n.startsWith("_xlnm.")) report.push(`${n.slice(6)} (a print setting) left out`); continue; }
     const range = /^(?:'[^']+'|[^'!]+)!\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?$/i.test(text) ? nameRange(text) : null;
     if (local !== undefined && sheets[Number(local)]) {
       if (range) (sheets[Number(local)].names as Record<string, string>)[n] = range.slice(range.indexOf("!") + 1);

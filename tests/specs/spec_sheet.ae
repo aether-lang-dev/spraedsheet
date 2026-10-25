@@ -198,6 +198,37 @@ shown_controls() -> int {
     return n
 }
 
+// The visible controls that cannot be reached from the keyboard: each is
+// given the keyboard focus (what Tab stops at) and /focus must name it.
+// "type:id:text" for each that did not take it.
+unfocusable_controls() -> string {
+    v, _jerr = json.parse(uidriver.get_body("/widgets"))
+    if v == null { return "no /widgets" }
+    out = ""
+    i = 0
+    while i < json.json_array_size(v) {
+        w = json.json_array_get_raw(v, i)
+        t = uidriver.field_str(w, "type")
+        cls = uidriver.field_str(w, "classes")
+        if (string.equals(t, "button") == 1 || string.equals(t, "textfield") == 1 || string.equals(t, "slider") == 1 || string.equals(t, "toggle") == 1 || string.equals(t, "checkbox") == 1) && shown_(w) == 1 && string.contains(cls, "aui-grid") == 0 {
+            id = uidriver.field_int(w, "id")
+            uidriver.focus_widget(id)
+            sleep(30)
+            if uidriver.focused_widget() != id { out = "${out}${t}:${id}:${uidriver.field_str(w, "text")} " }
+        }
+        i = i + 1
+    }
+    json.json_free(v)
+    return string.trim(out)
+}
+
+// Asserts every shown control takes the keyboard focus, printing the ones that do not.
+focusable_controls(what: string) {
+    bad = unfocusable_controls()
+    if string.length(bad) > 0 { println("  controls the keyboard cannot reach, ${what}: ${bad}") }
+    spec.assert_true(string.length(bad) == 0, "${what}: every control takes the keyboard focus")
+}
+
 // Asserts there is no control without a name, printing the ones there are.
 named_controls(what: string) {
     bad = unnamed_controls()
@@ -3370,6 +3401,79 @@ main() {
             sleep(300)
             named_controls("the lists panel")
             g.command("view.panel name=none")
+        }
+        spec.it("keyboard only: every control in the toolbar and in each of the fifteen panels takes the keyboard focus") callback {
+            // LibreOffice action 6: a keyboard-only pass. A control that cannot
+            // take the focus is one Tab never stops at.
+            focusable_controls("the toolbar and the bars, no panel open")
+            g.command("view.panel name=edit")
+            sleep(300)
+            focusable_controls("the edit panel")
+            g.command("view.panel name=looks")
+            sleep(300)
+            focusable_controls("the looks panel")
+            g.command("view.panel name=view")
+            sleep(300)
+            focusable_controls("the view panel")
+            g.command("view.panel name=names")
+            sleep(300)
+            focusable_controls("the names panel")
+            g.command("view.panel name=rules")
+            sleep(300)
+            focusable_controls("the rules panel")
+            g.command("view.panel name=validation")
+            sleep(300)
+            focusable_controls("the validation panel")
+            g.command("view.panel name=editors")
+            sleep(300)
+            focusable_controls("the editors panel")
+            g.command("view.panel name=data")
+            sleep(300)
+            focusable_controls("the data panel")
+            g.command("view.panel name=find")
+            sleep(300)
+            focusable_controls("the find panel")
+            g.command("view.panel name=audit")
+            sleep(300)
+            focusable_controls("the audit panel")
+            g.command("view.panel name=insert")
+            sleep(300)
+            focusable_controls("the insert panel")
+            g.command("view.panel name=chart")
+            sleep(300)
+            focusable_controls("the chart panel")
+            g.command("view.panel name=file")
+            sleep(300)
+            focusable_controls("the file panel")
+            g.command("view.panel name=script")
+            sleep(300)
+            focusable_controls("the script panel")
+            g.command("view.panel name=lists")
+            sleep(300)
+            focusable_controls("the lists panel")
+            g.command("view.panel name=none")
+        }
+        spec.it("a large column: Ctrl+Down jumps the 20,000 rows, Ctrl+Shift+Down selects them and the status bar counts them, Ctrl+End and Ctrl+Home come back") callback {
+            // LibreOffice action 6: larger-grid interaction, by the keyboard alone.
+            g.command("sheet.add name=Large")
+            g.command("sheet.activate name=Large")
+            g.command("cell.set cell=A1 input=1")
+            g.command("cell.set cell=A2 input=2")
+            g.command("edit.fillSeries range=A1:A20000")
+            sleep(500)
+            g.goto("A1")
+            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "the column starts at A1")
+            g.key("Ctrl+Down")
+            spec.assert_true(b.wait_for_text("A20000: 20000 → 20000"), "Ctrl+Down: the last row of the data")
+            g.key("Ctrl+Up")
+            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "Ctrl+Up: back to the first")
+            g.key("Ctrl+Shift+Down")
+            spec.assert_true(b.wait_for_text("Count: 20000"), "Ctrl+Shift+Down: the whole column selected, counted in the status bar")
+            g.key("Ctrl+End")
+            spec.assert_true(b.wait_for_text("A20000: 20000 → 20000"), "Ctrl+End: the last cell used")
+            g.key("Ctrl+Home")
+            spec.assert_true(b.wait_for_text("A1: 1 → 1"), "Ctrl+Home: A1")
+            g.command("sheet.activate name=Sheet1")
         }
         spec.it("the app stayed small: after the whole run its RSS is under 1.5 GB (on macOS it had reached 5.8 GB when the driver's /widgets polls leaked)") callback {
             // The page asks the driver, a hundred widgets at a time, for

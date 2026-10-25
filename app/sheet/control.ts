@@ -388,6 +388,10 @@ export const CONTROL: Readonly<Record<string, Control>> = {
   PREVIEWMACRO: async (exec, n, a) => (await must(exec, "macro.preview", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
   FUNCTIONINFO: async (exec, n) => (await must(exec, "formulas.functionInfo", { name: text(n) })).message,
   GROUPEXPLAIN: async (exec, range, by, agg, value, key) => (await must(exec, "group.explain", { range: text(range), by: text(by), ...(text(agg) ? { agg: text(agg) } : {}), ...(text(value) ? { value: text(value) } : {}), ...(text(key) ? { key: text(key) } : {}) })).message,
+  // Page Setup: PAGESETUP("paper=letter;landscape=1;margin=54;scale=80;area=A1:F40;titles=1:1;header=...;footer=Page &P of &N"),
+  // GETPAGESETUP(): the active sheet's.
+  PAGESETUP: async (exec, opts) => (await must(exec, "page.setup", pairs(opts))).message,
+  GETPAGESETUP: async (exec) => (await must(exec, "page.layout")).message,
   PROFILE: async (exec, on) => (await must(exec, "formulas.profile", text(on) === "" ? {} : { on: text(on) })).message,
   RUNMACRO: async (exec, n, a) => (await must(exec, "macro.run", { name: text(n), ...(text(a) ? { args: text(a) } : {}) })).message,
   // A macro run on open, or after a change to a range: ONOPEN("Setup"),

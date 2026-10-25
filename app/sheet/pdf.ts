@@ -38,6 +38,14 @@ export interface PdfSheet {
   // begins at.
   readonly rowBreaks?: readonly number[];
   readonly colBreaks?: readonly number[];
+  // Rows printed again at the top of each page after the one they first appear
+  // on (Page Setup > Rows to repeat at top): their heights and cells, and the
+  // sheet row (0-based) of the last of them; `sheetRow` is the sheet row of a
+  // printed row, to tell which pages come after.
+  readonly titles?: { readonly heights: readonly number[]; readonly cell: (i: number, col: number) => PdfCell | null; readonly last: number };
+  readonly sheetRow?: (row: number) => number;
+  // This sheet's own setup, when it is not the one the whole file is written with.
+  readonly setup?: PageSetup;
 }
 
 export interface PageSetup {
@@ -46,7 +54,29 @@ export interface PageSetup {
   readonly margin: number;          // pt
   readonly gridlines: boolean;
   readonly headings: boolean;
+  // Percent of full size (100 when left out), and the header and footer text
+  // (&P page, &N pages, &A sheet, &F file, &L &C &R sections), none when left out.
+  readonly scale?: number;
+  readonly header?: string;
+  readonly footer?: string;
+  readonly fileName?: string;
 }
+
+// What a sheet keeps of its page setup (Page.layout): the PageSetup's parts,
+// and the print area ("" for the used range) and the rows to repeat ("1:2", or "").
+export interface PageLayout {
+  readonly paper: "a4" | "letter";
+  readonly landscape: boolean;
+  readonly margin: number;
+  readonly scale: number;
+  readonly area: string;
+  readonly titles: string;
+  readonly header: string;
+  readonly footer: string;
+  readonly gridlines: boolean;
+  readonly headings: boolean;
+}
+export const DEFAULT_LAYOUT: PageLayout = { paper: "a4", landscape: false, margin: 36, scale: 100, area: "", titles: "", header: "", footer: "", gridlines: false, headings: false };
 export const PAPER: Readonly<Record<string, [number, number]>> = { a4: [595, 842], letter: [612, 792] };
 
 const colName = (c: number): string => { let s = ""; for (let n = c + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
@@ -57,65 +87,106 @@ const n = (x: number) => (Math.round(x * 100) / 100).toString();
 
 // The pages: each a run of rows and of columns that fit, down then over;
 // a manual break (an index in `breaks`) begins a page there whatever fits.
-export function paginate(sizes: readonly number[], room: number, breaks: readonly number[] = []): [number, number][] {
+export function paginate(sizes: readonly number[], room: number | ((start: number) => number), breaks: readonly number[] = []): [number, number][] {
   const out: [number, number][] = [];
   let start = 0, used = 0;
   const forced = new Set(breaks);
+  const roomAt = (at: number) => (typeof room === "number" ? room : room(at));
   sizes.forEach((s, i) => {
-    if ((used + s > room || forced.has(i)) && i > start) { out.push([start, i - 1]); start = i; used = 0; }
+    if ((used + s > roomAt(start) || forced.has(i)) && i > start) { out.push([start, i - 1]); start = i; used = 0; }
     used += s;
   });
   if (sizes.length) out.push([start, sizes.length - 1]);
   return out;
 }
 
-export function writePdf(sheets: readonly PdfSheet[], setup: PageSetup): { bytes: Uint8Array; pages: number } {
-  const [pw0, ph0] = PAPER[setup.paper], [pw, ph] = setup.landscape ? [ph0, pw0] : [pw0, ph0];
+// A page's width and height in points.
+export const pageSize = (setup: PageSetup): [number, number] => { const [w, h] = PAPER[setup.paper]; return setup.landscape ? [h, w] : [w, h]; };
+
+// How a sheet falls on pages under a setup: the scaled sizes of its columns and rows, and its pages
+// (a run of rows, a run of columns), down then over. `repeats(start)`: a page beginning at printed
+// row `start` has the sheet's title rows at its top.
+export function pagination(sh: PdfSheet, setup: PageSetup) {
+  const [pw, ph] = pageSize(setup), k = (setup.scale ?? 100) / 100;
   const head = setup.headings ? 24 : 0, foot = 18;
+  const widths = Array.from({ length: sh.cols }, (_, c) => sh.colWidth(c) * k), heights = Array.from({ length: sh.rows }, (_, r) => sh.rowHeight(r) * k);
+  const titleHeights = (sh.titles?.heights ?? []).map((h) => h * k), titleTotal = titleHeights.reduce((t, h) => t + h, 0);
+  const sheetRow = sh.sheetRow ?? ((r: number) => sh.firstRow + r);
+  const full = ph - 2 * setup.margin - foot - (setup.headings ? 14 : 0);
+  // A page after the rows to repeat first appear has them at its top, and that much less room.
+  const repeats = (start: number) => !!sh.titles && titleTotal > 0 && sheetRow(start) > sh.titles.last;
+  const rowPages = paginate(heights, (start) => full - (repeats(start) ? titleTotal : 0), sh.rowBreaks), colPages = paginate(widths, pw - 2 * setup.margin - head, sh.colBreaks);
+  return { widths, heights, titleHeights, sheetRow, repeats, rowPages, colPages };
+}
+
+// A header or footer's text with its codes worked out, in its left, centre and
+// right parts (text before any &L, &C or &R is the centre's).
+export function headerParts(text: string, page: number, pages: number, sheet: string, file: string): [string, string, string] {
+  const parts: [string, string, string] = ["", "", ""];
+  let at = 1;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch !== "&" || i + 1 >= text.length) { parts[at] += ch; continue; }
+    const c = text[++i].toUpperCase();
+    if (c === "L") at = 0; else if (c === "C") at = 1; else if (c === "R") at = 2;
+    else if (c === "P") parts[at] += String(page); else if (c === "N") parts[at] += String(pages);
+    else if (c === "A") parts[at] += sheet; else if (c === "F") parts[at] += file; else if (c === "&") parts[at] += "&";
+  }
+  return parts;
+}
+
+export function writePdf(sheets: readonly PdfSheet[], base: PageSetup): { bytes: Uint8Array; pages: number } {
   const streams: string[] = [];
+  const pageInfo: { name: string; setup: PageSetup }[] = [];
+  const sizes: [number, number][] = [];
   for (const sh of sheets) {
-    const widths = Array.from({ length: sh.cols }, (_, c) => sh.colWidth(c)), heights = Array.from({ length: sh.rows }, (_, r) => sh.rowHeight(r));
-    const rowPages = paginate(heights, ph - 2 * setup.margin - foot - (setup.headings ? 14 : 0), sh.rowBreaks), colPages = paginate(widths, pw - 2 * setup.margin - head, sh.colBreaks);
+    const setup = sh.setup ?? base;
+    const [pw, ph] = pageSize(setup), k = (setup.scale ?? 100) / 100, head = setup.headings ? 24 : 0;
+    const { widths, heights, titleHeights, sheetRow, repeats, rowPages, colPages } = pagination(sh, setup);
     for (const [c1, c2] of colPages) for (const [r1, r2] of rowPages) {
       const ops: string[] = [];
       const x0 = setup.margin + head, top = ph - setup.margin - (setup.headings ? 14 : 0);
       const xs = [x0], ys = [top];
       for (let c = c1; c <= c2; c++) xs.push(xs[xs.length - 1] + widths[c]);
-      for (let r = r1; r <= r2; r++) ys.push(ys[ys.length - 1] - heights[r]);
+      // The lines of the page: the repeated rows, then the page's own.
+      const lines: { h: number; cell: (c: number) => PdfCell | null; label: number }[] = [];
+      if (repeats(r1)) titleHeights.forEach((h, i) => lines.push({ h, cell: (c) => sh.titles!.cell(i, c), label: -1 }));
+      for (let r = r1; r <= r2; r++) lines.push({ h: heights[r], cell: (c) => sh.cells(r, c), label: sheetRow(r) + 1 });
+      for (const l of lines) ys.push(ys[ys.length - 1] - l.h);
       const line = (a: number, b: number, c: number, d: number, colour: string, w = 0.5) => ops.push(`${rgb(colour)} RG ${w} w ${n(a)} ${n(b)} m ${n(c)} ${n(d)} l S`);
       // Fills first, then the gridlines, then the borders and the text.
-      for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) {
-        const cell = sh.cells(r, c), x = xs[c - c1], y = ys[r - r1 + 1];
-        if (cell?.fill) ops.push(`${rgb(cell.fill)} rg ${n(x)} ${n(y)} ${n(widths[c])} ${n(heights[r])} re f`);
-      }
+      lines.forEach((l, li) => { for (let c = c1; c <= c2; c++) {
+        const cell = l.cell(c), x = xs[c - c1], y = ys[li + 1];
+        if (cell?.fill) ops.push(`${rgb(cell.fill)} rg ${n(x)} ${n(y)} ${n(widths[c])} ${n(l.h)} re f`);
+      } });
       if (setup.gridlines) {
         for (const x of xs) line(x, ys[0], x, ys[ys.length - 1], "#d0d0d0", 0.25);
         for (const y of ys) line(xs[0], y, xs[xs.length - 1], y, "#d0d0d0", 0.25);
       }
       if (setup.headings) {
         for (let c = c1; c <= c2; c++) { const s = colName(sh.firstCol + c), x = xs[c - c1] + (widths[c] - textWidth(s, 8)) / 2; ops.push(`BT /F1 8 Tf 0.4 0.4 0.4 rg ${n(x)} ${n(top + 4)} Td ${pdfText(s)} Tj ET`); }
-        for (let r = r1; r <= r2; r++) { const s = String(sh.firstRow + r + 1), y = ys[r - r1 + 1] + (heights[r] - 8) / 2 + 1; ops.push(`BT /F1 8 Tf 0.4 0.4 0.4 rg ${n(x0 - 4 - textWidth(s, 8))} ${n(y)} Td ${pdfText(s)} Tj ET`); }
+        lines.forEach((l, li) => { if (l.label < 0) return; const s = String(l.label), y = ys[li + 1] + (l.h - 8) / 2 + 1; ops.push(`BT /F1 8 Tf 0.4 0.4 0.4 rg ${n(x0 - 4 - textWidth(s, 8))} ${n(y)} Td ${pdfText(s)} Tj ET`); });
       }
-      for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) {
-        const cell = sh.cells(r, c);
+      lines.forEach((l, li) => { for (let c = c1; c <= c2; c++) {
+        const cell = l.cell(c);
         if (!cell) continue;
-        const x = xs[c - c1], y = ys[r - r1 + 1], w = widths[c], h = heights[r], b = cell.borders ?? {};
+        const x = xs[c - c1], y = ys[li + 1], w = widths[c], h = l.h, b = cell.borders ?? {};
         if (b.top) line(x, y + h, x + w, y + h, b.top);
         if (b.bottom) line(x, y, x + w, y, b.bottom);
         if (b.left) line(x, y, x, y + h, b.left);
         if (b.right) line(x + w, y, x + w, y + h, b.right);
         if (!cell.text) continue;
-        const size = cell.size ?? 10, font = cell.bold && cell.italic ? "F4" : cell.bold ? "F2" : cell.italic ? "F3" : "F1";
+        const size = (cell.size ?? 10) * k, font = cell.bold && cell.italic ? "F4" : cell.bold ? "F2" : cell.italic ? "F3" : "F1";
         const tw = textWidth(cell.text, size, cell.bold), tx = cell.align === "end" ? x + w - 2 - tw : cell.align === "center" ? x + (w - tw) / 2 : x + 2;
         // Clipped to its cell, as the grid shows it.
         ops.push(`q ${n(x)} ${n(y)} ${n(w)} ${n(h)} re W n BT /${font} ${n(size)} Tf ${rgb(cell.color ?? "#000000")} rg ${n(tx)} ${n(y + (h - size) / 2 + size * 0.22)} Td ${pdfText(cell.text.split("\n")[0])} Tj ET Q`);
-      }
+      } });
       streams.push(ops.join("\n"));
-      // The foot: the sheet's name, the page number (filled in below).
-      streams[streams.length - 1] += `\n__FOOT__${sh.name}`;
+      pageInfo.push({ name: sh.name, setup });
+      sizes.push([pw, ph]);
     }
   }
-  if (!streams.length) streams.push("__FOOT__");
+  if (!streams.length) { streams.push(""); pageInfo.push({ name: "", setup: base }); sizes.push([PAPER[base.paper][base.landscape ? 1 : 0], PAPER[base.paper][base.landscape ? 0 : 1]]); }
   // The objects: catalog, pages, four fonts, then each page and its content.
   const objs: string[] = [];
   const total = streams.length, fontBase = 3;
@@ -123,10 +194,16 @@ export function writePdf(sheets: readonly PdfSheet[], setup: PageSetup): { bytes
   const kidsIds = streams.map((_, i) => 7 + i * 2);
   objs[2] = `<< /Type /Pages /Kids [${kidsIds.map((k) => `${k} 0 R`).join(" ")}] /Count ${total} >>`;
   ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique"].forEach((f, i) => { objs[fontBase + i] = `<< /Type /Font /Subtype /Type1 /BaseFont /${f} /Encoding /WinAnsiEncoding >>`; });
-  streams.forEach((st, i) => {
-    const [body, name] = st.split("__FOOT__");
-    const label = `${name ? `${name}  ·  ` : ""}Page ${i + 1} of ${total}`;
-    const content = `${body}\nBT /F1 8 Tf 0.4 0.4 0.4 rg ${n((pw - textWidth(label, 8)) / 2)} ${n(setup.margin / 2)} Td ${pdfText(label)} Tj ET`;
+  streams.forEach((body, i) => {
+    const { name, setup } = pageInfo[i], [pw, ph] = sizes[i], file = setup.fileName ?? "";
+    const put = (parts: [string, string, string], y: number) => parts.map((t, at) => {
+      if (!t) return "";
+      const w = textWidth(t, 8), x = at === 0 ? setup.margin : at === 1 ? (pw - w) / 2 : pw - setup.margin - w;
+      return `\nBT /F1 8 Tf 0.4 0.4 0.4 rg ${n(x)} ${n(y)} Td ${pdfText(t)} Tj ET`;
+    }).join("");
+    // The foot is the sheet's name and the page number unless the setup has a footer of its own.
+    const foot = setup.footer ? headerParts(setup.footer, i + 1, total, name, file) : ["", `${name ? `${name}  ·  ` : ""}Page ${i + 1} of ${total}`, ""] as [string, string, string];
+    const content = `${body}${setup.header ? put(headerParts(setup.header, i + 1, total, name, file), ph - setup.margin / 2 - 4) : ""}${put(foot, setup.margin / 2)}`;
     objs[7 + i * 2] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents ${8 + i * 2} 0 R >>`;
     objs[8 + i * 2] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
   });

@@ -18,8 +18,8 @@ import { readXlsx } from "./xlsx.ts";
 import { readOds } from "./ods.ts";
 import { readXls } from "./xls.ts";
 import { decryptPackage, isEncrypted } from "./encrypted.ts";
-import { PAPER, paginate, writePdf } from "./pdf.ts";
-import type { PdfSheet } from "./pdf.ts";
+import { PAPER, pagination, writePdf } from "./pdf.ts";
+import type { PageLayout, PageSetup, PdfCell, PdfSheet } from "./pdf.ts";
 import { writeXlsx } from "./xlsxwrite.ts";
 import type { XlsxRead } from "./xlsx.ts";
 import { DELIMITERS as CSV_DELIMITERS, decode, detectDelimiter, fromBase64, fromCsv, toBase64, toCsv } from "./csv.ts";
@@ -498,6 +498,7 @@ async function openParts(wb: Workbook, s: FileSheet): Promise<void> {
   page.hiddenSheet = s.view.hidden;
   page.gridlines = s.view.gridlines;
   page.breaks = s.view.breaks;
+  page.layout = s.view.layout;
   page.headings = s.view.headings;
   page.heights = new Map(s.view.rowHeights);
   page.widths = new Map(s.view.colWidths);
@@ -816,58 +817,84 @@ async function sliced(wb: Workbook, page: Page, said: string): Promise<Outcome> 
   return changedBy(wb, wb.sheet.keys(), `${said} (${rows.size} row${rows.size === 1 ? "" : "s"} hidden)`);
 }
 
-// A sheet as pdf.ts lays it out: its used range (or the one asked), each
-// cell as it shows, in its look; sizes in points (a pixel three quarters
-// of one), hidden rows and columns left out.
-function pdfSheet(wb: Workbook, page: Page, r: [Addr, Addr] | null): PdfSheet {
+// The setup a print or an export lays a sheet out with: the sheet's own page
+// setup (Page Setup), with whatever the command was given over it.
+function setupOf(page: Page, p: Params, file: string): PageSetup {
+  const l = page.layout, paper = p.paper === undefined ? l.paper : p.paper.trim().toLowerCase();
+  if (!(paper in PAPER)) refuse(`${p.paper} is not a paper size (${Object.keys(PAPER).join(", ")})`);
+  const margin = p.margin === undefined ? l.margin : Number(p.margin);
+  if (!(margin >= 0 && margin <= 144)) refuse(`${p.margin} is not a margin (0 to 144 points)`);
+  const scale = p.scale === undefined ? l.scale : Number(p.scale);
+  if (!(scale >= 10 && scale <= 400)) refuse(`${p.scale} is not a scale (10 to 400 percent)`);
+  return { paper: paper as "a4" | "letter", landscape: p.landscape === undefined ? l.landscape : flag(p.landscape), margin, scale,
+    gridlines: p.gridlines === undefined ? l.gridlines : flag(p.gridlines), headings: p.headings === undefined ? l.headings : flag(p.headings),
+    header: l.header, footer: l.footer, fileName: file };
+}
+
+// A sheet as pdf.ts lays it out: its print area, else its used range (or the
+// one asked), each cell as it shows, in its look; sizes in points (a pixel
+// three quarters of one), hidden rows and columns left out; its title rows
+// to repeat on the pages after theirs.
+function pdfSheet(wb: Workbook, page: Page, r: [Addr, Addr] | null, setup?: PageSetup): PdfSheet {
   const used = page.sheet.keys().map((k) => cellAddr(k)!);
-  const [a, b] = r ?? [{ col: 0, row: 0 }, { col: Math.max(0, ...used.map((x) => x.col)), row: Math.max(0, ...used.map((x) => x.row)) }];
+  const area = r ?? (page.layout.area ? parseRange(page.layout.area) : null);
+  const [a, b] = area ?? [{ col: 0, row: 0 }, { col: Math.max(0, ...used.map((x) => x.col)), row: Math.max(0, ...used.map((x) => x.row)) }];
   const c0 = Math.min(a.col, b.col), r0 = Math.min(a.row, b.row);
   const cols = Array.from({ length: Math.abs(a.col - b.col) + 1 }, (_, i) => c0 + i).filter((c) => !page.hiddenCols.has(c));
   const rows = Array.from({ length: Math.abs(a.row - b.row) + 1 }, (_, i) => r0 + i).filter((x) => !page.hiddenRows.has(x) && !page.filtered?.has(x));
   const was = wb.active;
+  const cellAt = (row: number, col: number): PdfCell | null => {
+    const key = keyOf({ col, row }), note = page.notes.get(key), look = wb.lookOf(note) ?? {}, v = page.sheet.value(key);
+    if (was !== page.name) wb.activate(page.name);
+    const text = wb.textOf(key);
+    if (was !== page.name) wb.activate(was);
+    if (!text && !look.fill && !look.borders) return null;
+    const line = (s?: string) => (s ? borderLine(s).split(" ").pop() : undefined);
+    return { text, bold: look.bold, italic: look.italic, size: look.size ? look.size * 0.75 : undefined, color: look.color ? resolved(look.color) : v instanceof CellError ? "#c0392b" : undefined,
+      fill: look.fill ? resolved(look.fill) : undefined, align: look.align ?? (typeof v === "number" ? "end" : "start"),
+      borders: look.borders ? { top: line(look.borders.top), right: line(look.borders.right), bottom: line(look.borders.bottom), left: line(look.borders.left) } : undefined };
+  };
+  // "1:2": sheet rows 1 and 2 (those not hidden).
+  const t = /^(\d+):(\d+)$/.exec(page.layout.titles);
+  const titleRows = t ? Array.from({ length: Math.abs(Number(t[2]) - Number(t[1])) + 1 }, (_, i) => Math.min(Number(t[1]), Number(t[2])) - 1 + i).filter((x) => !page.hiddenRows.has(x)) : [];
   return {
     name: page.name, rows: rows.length, cols: cols.length, firstRow: r0, firstCol: c0,
     rowBreaks: page.breaks.rows.map((x) => rows.indexOf(x)).filter((i) => i > 0), colBreaks: page.breaks.cols.map((x) => cols.indexOf(x)).filter((i) => i > 0),
     colWidth: (c) => (page.widths.get(cols[c]) ?? PDF_COLUMN_PX) * 0.75, rowHeight: (x) => (page.heights.get(rows[x]) ?? PDF_ROW_PX) * 0.75,
-    cells: (ri, ci) => {
-      const key = keyOf({ col: cols[ci], row: rows[ri] }), note = page.notes.get(key), look = wb.lookOf(note) ?? {}, v = page.sheet.value(key);
-      if (was !== page.name) wb.activate(page.name);
-      const text = wb.textOf(key);
-      if (was !== page.name) wb.activate(was);
-      if (!text && !look.fill && !look.borders) return null;
-      const line = (s?: string) => (s ? borderLine(s).split(" ").pop() : undefined);
-      return { text, bold: look.bold, italic: look.italic, size: look.size ? look.size * 0.75 : undefined, color: look.color ? resolved(look.color) : v instanceof CellError ? "#c0392b" : undefined,
-        fill: look.fill ? resolved(look.fill) : undefined, align: look.align ?? (typeof v === "number" ? "end" : "start"),
-        borders: look.borders ? { top: line(look.borders.top), right: line(look.borders.right), bottom: line(look.borders.bottom), left: line(look.borders.left) } : undefined };
-    },
+    cells: (ri, ci) => cellAt(rows[ri], cols[ci]),
+    sheetRow: (ri) => rows[ri],
+    ...(titleRows.length ? { titles: { heights: titleRows.map((x) => (page.heights.get(x) ?? PDF_ROW_PX) * 0.75), cell: (i: number, ci: number) => cellAt(titleRows[i], cols[ci]), last: titleRows[titleRows.length - 1] } } : {}),
+    ...(setup ? { setup } : {}),
   };
 }
 const PDF_COLUMN_PX = 80, PDF_ROW_PX = 24;
 
+// A page setup as words: "page setup: letter, landscape, margin 54, scale 80%, area A1:B10, ...".
+const layoutSaid = (l: PageLayout): string => `page setup: ${[l.paper, l.landscape ? "landscape" : "portrait", `margin ${l.margin}`, `scale ${l.scale}%`, l.area && `area ${l.area}`, l.titles && `titles ${l.titles}`,
+  l.header && `header ${l.header}`, l.footer && `footer ${l.footer}`, l.gridlines && "gridlines", l.headings && "headings"].filter((x) => x).join(", ")}`;
+
 // A sheet's manual breaks, as words: "row 10, row 20, column D", or "none".
 const breaksSaid = (page: Page): string => [...page.breaks.rows.map((r) => `row ${r + 1}`), ...page.breaks.cols.map((c) => `column ${colName(c)}`)].join(", ") || "none";
 
-// The ranges a sheet prints as, page by page (down, then over), with
-// file.exportPdf's margins: "A1:F45", ...
-function printedPages(wb: Workbook, page: Page, paper: string, landscape: boolean): string[] {
-  const sh = pdfSheet(wb, page, null);
-  if (!(paper in PAPER)) refuse(`${paper} is not a paper size (${Object.keys(PAPER).join(", ")})`);
-  const [w0, h0] = PAPER[paper], [pw, ph] = landscape ? [h0, w0] : [w0, h0], margin = 36;
+// The ranges a sheet prints as, page by page (down, then over), under its page
+// setup (or the paper and orientation given): "A1:F45", ...
+function printedPages(wb: Workbook, page: Page, params: Params = {}): string[] {
+  const setup = setupOf(page, params, wb.name), sh = pdfSheet(wb, page, null, setup);
+  const area = page.layout.area ? parseRange(page.layout.area) : null;
   const used = page.sheet.keys().map((k) => cellAddr(k)!);
-  const lastCol = Math.max(0, ...used.map((x) => x.col)), lastRow = Math.max(0, ...used.map((x) => x.row));
-  const cols = Array.from({ length: lastCol + 1 }, (_, i) => i).filter((c) => !page.hiddenCols.has(c));
-  const rows = Array.from({ length: lastRow + 1 }, (_, i) => i).filter((x) => !page.hiddenRows.has(x) && !page.filtered?.has(x));
-  const rp = paginate(Array.from({ length: sh.rows }, (_, i) => sh.rowHeight(i)), ph - 2 * margin - 18, sh.rowBreaks);
-  const cp = paginate(Array.from({ length: sh.cols }, (_, i) => sh.colWidth(i)), pw - 2 * margin, sh.colBreaks);
-  return cp.flatMap(([c1, c2]) => rp.map(([r1, r2]) => `${keyOf({ col: cols[c1], row: rows[r1] })}:${keyOf({ col: cols[c2], row: rows[r2] })}`));
+  const [a, b] = area ?? [{ col: 0, row: 0 }, { col: Math.max(0, ...used.map((x) => x.col)), row: Math.max(0, ...used.map((x) => x.row)) }];
+  const c0 = Math.min(a.col, b.col), r0 = Math.min(a.row, b.row);
+  const cols = Array.from({ length: Math.abs(a.col - b.col) + 1 }, (_, i) => c0 + i).filter((c) => !page.hiddenCols.has(c));
+  const rows = Array.from({ length: Math.abs(a.row - b.row) + 1 }, (_, i) => r0 + i).filter((x) => !page.hiddenRows.has(x) && !page.filtered?.has(x));
+  const { rowPages, colPages } = pagination(sh, setup);
+  return colPages.flatMap(([c1, c2]) => rowPages.map(([r1, r2]) => `${keyOf({ col: cols[c1], row: rows[r1] })}:${keyOf({ col: cols[c2], row: rows[r2] })}`));
 }
 
 // Where Page Break Preview draws: for each printed page's last row and
 // last column, whether a manual break follows it (heavier) or not.
 export function pageEdges(wb: Workbook, page: Page): { rows: Map<number, boolean>; cols: Map<number, boolean> } {
   const rows = new Map<number, boolean>(), cols = new Map<number, boolean>();
-  for (const r of printedPages(wb, page, "a4", false)) {
+  for (const r of printedPages(wb, page)) {
     const [a, b] = parseRange(r)!;
     rows.set(b.row, page.breaks.rows.includes(b.row + 1));
     cols.set(b.col, page.breaks.cols.includes(b.col + 1));
@@ -3773,12 +3800,54 @@ const SPECS: readonly Spec[] = [
     },
   },
   {
+    // Page Setup (Page Layout > Page Setup): this sheet's paper (a4 or letter),
+    // landscape=1, margin= (points), scale= (10 to 400 percent), area= the print
+    // area (none: the used range), titles= the rows to repeat at the top of each
+    // page ("1:2", or none), header= and footer= (&P page, &N pages, &A sheet, &F
+    // file; &L &C &R for left, centre and right), gridlines=1 and headings=1 to
+    // print them. Kept with the sheet, undoable; Print, Export PDF and Page
+    // Breaks lay the sheet out by it unless they are told otherwise.
+    id: "page.setup", label: "Page Setup", params: [], optional: ["paper", "landscape", "margin", "scale", "area", "titles", "header", "footer", "gridlines", "headings"], journaled: true, effect: "edit",
+    run: async (wb, p) => {
+      const page = wb.page(wb.active)!, l = page.layout;
+      const paper = p.paper === undefined ? l.paper : p.paper.trim().toLowerCase();
+      if (!(paper in PAPER)) refuse(`${p.paper} is not a paper size (${Object.keys(PAPER).join(", ")})`);
+      const margin = p.margin === undefined ? l.margin : Number(p.margin);
+      if (!(margin >= 0 && margin <= 144)) refuse(`${p.margin} is not a margin (0 to 144 points)`);
+      const scale = p.scale === undefined ? l.scale : Number(p.scale);
+      if (!(scale >= 10 && scale <= 400)) refuse(`${p.scale} is not a scale (10 to 400 percent)`);
+      const none = (v: string) => ["", "none"].includes(v.trim().toLowerCase());
+      let area = l.area;
+      if (p.area !== undefined) {
+        if (none(p.area)) area = "";
+        else { const r = parseRange(p.area.trim()); if (!r) refuse(`${p.area} is not a range`); area = rangeName(r!); }
+      }
+      let titles = l.titles;
+      if (p.titles !== undefined) {
+        if (none(p.titles)) titles = "";
+        else { const m = /^(\d+):(\d+)$/.exec(p.titles.trim()); if (!m || Number(m[1]) < 1 || Number(m[2]) < 1) refuse(`${p.titles} is not rows to repeat (1:2, or none)`); titles = `${m![1]}:${m![2]}`; }
+      }
+      page.layout = { paper: paper as "a4" | "letter", landscape: p.landscape === undefined ? l.landscape : flag(p.landscape), margin, scale, area, titles,
+        header: p.header === undefined ? l.header : p.header, footer: p.footer === undefined ? l.footer : p.footer,
+        gridlines: p.gridlines === undefined ? l.gridlines : flag(p.gridlines), headings: p.headings === undefined ? l.headings : flag(p.headings) };
+      return changedBy(wb, [], layoutSaid(page.layout));
+    },
+  },
+  {
+    // This sheet's page setup, as page.setup sets it.
+    id: "page.layout", label: "Page Layout", params: [], journaled: false, effect: "query",
+    run: async (wb) => {
+      const l = wb.page(wb.active)!.layout;
+      return { ok: true, message: layoutSaid(l), changed: [], output: { ...l } };
+    },
+  },
+  {
     // The pages the sheet prints as (the used range, A4 portrait, as
     // file.exportPdf's defaults, or its paper= landscape=): each page's
     // range, and where the breaks fall; the manual ones listed apart.
-    id: "page.breaks", label: "Page Breaks", params: [], optional: ["paper", "landscape"], journaled: false, effect: "query",
+    id: "page.breaks", label: "Page Breaks", params: [], optional: ["paper", "landscape", "scale", "margin"], journaled: false, effect: "query",
     run: async (wb, p) => {
-      const pages = printedPages(wb, wb.page(wb.active)!, (p.paper ?? "a4").trim().toLowerCase(), flag(p.landscape));
+      const pages = printedPages(wb, wb.page(wb.active)!, p);
       return { ok: true, message: `${pages.length} page${pages.length === 1 ? "" : "s"}: ${pages.join(", ")}; manual breaks: ${breaksSaid(wb.page(wb.active)!)}`, changed: [], output: pages };
     },
   },
@@ -4687,7 +4756,7 @@ const SPECS: readonly Spec[] = [
     // File > Print: the sheet as file.exportPdf lays it out (range=, paper=,
     // landscape=, gridlines=, headings=, margin=, sheets=all), handed to the
     // system's print dialog, the job named for the workbook.
-    id: "file.print", label: "Print", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin"], journaled: false, effect: "external",
+    id: "file.print", label: "Print", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin", "scale"], journaled: false, effect: "external",
     run: async (wb, p) => {
       const pdf = await BY_ID.get("file.exportPdf")!.run(wb, p, memoryStore());
       if (!pdf.ok) return pdf;
@@ -4700,17 +4769,14 @@ const SPECS: readonly Spec[] = [
     // The sheet (or every sheet shown, sheets=all) as a PDF (pdf.ts): its
     // used range or range=, on paper= a4 or letter, landscape=1, with
     // gridlines=1 and headings=1 when asked; the bytes as base64.
-    id: "file.exportPdf", label: "Export PDF", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin"], journaled: false, effect: "query",
+    id: "file.exportPdf", label: "Export PDF", params: [], optional: ["range", "sheets", "paper", "landscape", "gridlines", "headings", "margin", "scale"], journaled: false, effect: "query",
     run: async (wb, p) => {
-      const paper = (p.paper ?? "a4").trim().toLowerCase();
-      if (!(paper in PAPER)) refuse(`${p.paper} is not a paper size (${Object.keys(PAPER).join(", ")})`);
-      const margin = p.margin === undefined ? 36 : Number(p.margin);
-      if (!(margin >= 0 && margin <= 144)) refuse(`${p.margin} is not a margin (0 to 144 points)`);
       const all = (p.sheets ?? "").trim().toLowerCase() === "all";
       if (all && p.range !== undefined) refuse("a range is the active sheet's: not with sheets=all");
       const pages = all ? wb.pages().filter((x) => !x.hiddenSheet) : [wb.page(wb.active)!];
-      const sheets = pages.map((page) => pdfSheet(wb, page, p.range === undefined ? null : rangeOf(p.range)));
-      const { bytes, pages: n } = writePdf(sheets, { paper: paper as "a4" | "letter", landscape: flag(p.landscape), margin, gridlines: flag(p.gridlines), headings: flag(p.headings) });
+      // Each sheet laid out by its own page setup, whatever the command was given over it.
+      const sheets = pages.map((page) => pdfSheet(wb, page, p.range === undefined ? null : rangeOf(p.range), setupOf(page, p, wb.name)));
+      const { bytes, pages: n } = writePdf(sheets, setupOf(wb.page(wb.active)!, p, wb.name));
       return { ok: true, message: `${wb.name}.pdf: ${n} page${n === 1 ? "" : "s"}, ${bytes.length} bytes`, changed: [], output: toBase64(bytes) };
     },
   },

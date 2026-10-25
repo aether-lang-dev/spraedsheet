@@ -53,6 +53,7 @@ export function fileBar(v: SheetView): void {
     });
   });
   bind(ui.text_wrapped("", 720), shown);
+  pageSetupRow(v);
   if (typeof documents !== "undefined") documentsRow(v);
   ui.wrap(() => {
     v.btn("Paste example", () => v.run("example.paste"));
@@ -63,6 +64,35 @@ export function fileBar(v: SheetView): void {
     v.btn("Home", () => browserContext.changePage("/"));
   });
   listed();
+}
+
+// Page Setup for the active sheet (page.setup): the paper and orientation by a
+// button each, the rest by fields applied together; what the sheet is set to
+// is said beside them. Print and Export PDF follow it (the buttons above pass
+// gridlines themselves, as they always have).
+function pageSetupRow(v: SheetView): void {
+  const said = state(""), margin = state(""), scale = state(""), area = state(""), titles = state(""), header = state(""), footer = state("");
+  const refresh = async () => { said.set((await v.cmds.execute("page.layout")).message); };
+  const set = async (p: Record<string, string>) => { await v.run("page.setup", p); await refresh(); };
+  ui.wrap(() => {
+    v.btn("Paper A4", () => set({ paper: "a4" }));
+    v.btn("Paper Letter", () => set({ paper: "letter" }));
+    v.btn("Portrait", () => set({ landscape: "0" }));
+    v.btn("Landscape", () => set({ landscape: "1" }));
+    bind(ui.textfield("margin points", () => {}), margin);
+    bind(ui.textfield("scale percent", () => {}), scale);
+    bind(ui.textfield("print area", () => {}), area);
+    bind(ui.textfield("rows to repeat", () => {}), titles);
+    bind(ui.textfield("header", () => {}), header);
+    bind(ui.textfield("footer", () => {}), footer);
+    v.btn("Apply page setup", () => {
+      const p: Record<string, string> = {};
+      for (const [k, f] of [["margin", margin], ["scale", scale], ["area", area], ["titles", titles], ["header", header], ["footer", footer]] as const) if (f.value.trim()) p[k] = f.value.trim();
+      return set(p);
+    });
+    bind(ui.text(""), said);
+  });
+  refresh();
 }
 
 // Open file, Save file and Export CSV file, through the person's picker.

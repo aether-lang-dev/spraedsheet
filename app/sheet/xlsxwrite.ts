@@ -24,6 +24,7 @@ import { chartExXml, chartXml, isEx } from "./xlsxcharts.ts";
 import type { ChartIn } from "./xlsxcharts.ts";
 import { ROLES } from "./themes.ts";
 import { rangeName } from "./rules.ts";
+import { DEFAULT_LAYOUT } from "./pdf.ts";
 
 // A colour as SpreadsheetML writes one: a theme's role by its number (Excel
 // numbers its first four light, dark, light, dark), else ARGB.
@@ -133,6 +134,12 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
       const prefix = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(p.name) ? `${p.name}!` : `'${p.name.replace(/'/g, "''")}'!`;
       names.push(`<definedName name="${escapeXml(n)}" localSheetId="${i}">${escapeXml(r.startsWith("=") ? r.slice(1) : absolute(prefix + r))}</definedName>`);
     }
+  });
+  pages.forEach((p, i) => {
+    const prefix = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(p.name) ? `${p.name}!` : `'${p.name.replace(/'/g, "''")}'!`;
+    const dollar = (a: string) => a.split(":").map((c) => c.replace(/^([A-Z]+)(\d+)$/i, "$$$1$$$2")).join(":");
+    if (p.layout.area) names.push(`<definedName name="_xlnm.Print_Area" localSheetId="${i}">${escapeXml(prefix + dollar(p.layout.area.toUpperCase()))}</definedName>`);
+    if (p.layout.titles) names.push(`<definedName name="_xlnm.Print_Titles" localSheetId="${i}">${escapeXml(prefix + p.layout.titles.split(":").map((r) => `$${r}`).join(":"))}</definedName>`);
   });
   const book = `${HEAD}<workbook xmlns="${MAIN}" xmlns:r="${REL}"><workbookPr${wb.dateSystem === 1904 ? ' date1904="1"' : ""}/>${
     wb.bookProtection ? `<workbookProtection${wb.bookProtection.hash ? ` workbookPassword="${wb.bookProtection.hash}"` : ""} lockStructure="1"/>` : ""}<sheets>${
@@ -297,13 +304,25 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
   const drawingRid = page.drawings.length || page.charts.length ? relBase + tables.length + urls.length : 0;
   const threadRid = threads.length ? relBase + tables.length + urls.length + (drawingRid ? 1 : 0) : 0;
   const xml = `${HEAD}<worksheet xmlns="${MAIN}" xmlns:r="${REL}"><sheetViews><sheetView${page.gridlines ? "" : ' showGridLines="0"'}${page.headings ? "" : ' showRowColHeaders="0"'} workbookViewId="0">${pane}</sheetView></sheetViews>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rowXml}</sheetData>${protectionXml(page)}${
-    merges ? `<mergeCells count="${page.merges.length}">${merges}</mergeCells>` : ""}${cf}${dvs.length ? `<dataValidations count="${dvs.length}">${dvs.join("")}</dataValidations>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}${breaksXml(page)}${drawingRid ? `<drawing r:id="rId${drawingRid}"/>` : ""}${comments.length ? '<legacyDrawing r:id="rId2"/>' : ""}${
+    merges ? `<mergeCells count="${page.merges.length}">${merges}</mergeCells>` : ""}${cf}${dvs.length ? `<dataValidations count="${dvs.length}">${dvs.join("")}</dataValidations>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}${layoutXml(page)}${breaksXml(page)}${drawingRid ? `<drawing r:id="rId${drawingRid}"/>` : ""}${comments.length ? '<legacyDrawing r:id="rId2"/>' : ""}${
     tables.length ? `<tableParts count="${tables.length}">${tables.map((_, i) => `<tablePart r:id="rId${relBase + i}"/>`).join("")}</tableParts>` : ""}</worksheet>`;
   return { xml, comments, tables, relBase, sparks, urls, drawingRid, threads, threadRid };
 }
 
 // Manual page breaks: a page begins above row id and left of column id
 // (both 0-based in the file, as here).
+// A sheet's page setup (printOptions, pageMargins, pageSetup, headerFooter): none for the default.
+function layoutXml(page: Page): string {
+  const l = page.layout;
+  if (JSON.stringify(l) === JSON.stringify(DEFAULT_LAYOUT)) return "";
+  const inches = (l.margin / 72).toFixed(4).replace(/\.?0+$/, "");
+  // Text with no section of its own is written in the centre's (&C).
+  const hf = (t: string) => (/&[LCR]/i.test(t) ? t : `&C${t}`);
+  return `${l.gridlines || l.headings ? `<printOptions${l.headings ? ' headings="1"' : ""}${l.gridlines ? ' gridLines="1"' : ""}/>` : ""}<pageMargins left="${inches}" right="${inches}" top="${inches}" bottom="${inches}" header="${inches}" footer="${inches}"/>` +
+    `<pageSetup paperSize="${l.paper === "letter" ? 1 : 9}"${l.scale !== 100 ? ` scale="${l.scale}"` : ""} orientation="${l.landscape ? "landscape" : "portrait"}"/>` +
+    (l.header || l.footer ? `<headerFooter>${l.header ? `<oddHeader>${escapeXml(hf(l.header))}</oddHeader>` : ""}${l.footer ? `<oddFooter>${escapeXml(hf(l.footer))}</oddFooter>` : ""}</headerFooter>` : "");
+}
+
 function breaksXml(page: Page): string {
   const { rows, cols } = page.breaks;
   const brk = (ids: readonly number[], max: number) => ids.map((i) => `<brk id="${i}" max="${max}" man="1"/>`).join("");

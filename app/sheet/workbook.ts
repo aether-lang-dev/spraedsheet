@@ -34,6 +34,8 @@ import { AUTOMATIC, Sheet, Turns } from "./sheet.ts";
 import type { Work } from "./sheet.ts";
 import type { Calc, Context, SavedSheet } from "./sheet.ts";
 import { applyStep, stepOf } from "./journal.ts";
+import { DEFAULT_LAYOUT } from "./pdf.ts";
+import type { PageLayout } from "./pdf.ts";
 import type { Step } from "./journal.ts";
 import { CellError } from "./values.ts";
 import type { Value } from "./values.ts";
@@ -149,6 +151,8 @@ export interface Page {
   // Allow Edit Ranges: ranges whose cells may be changed while it is
   // protected (by a password of their own, when they have one).
   editRanges: EditRange[];
+  // Page Setup: paper, orientation, margin, scale, print area, rows to repeat, header and footer (pdf.ts).
+  layout: PageLayout;
 }
 
 export interface Scenario {
@@ -252,7 +256,7 @@ const viewOf = (p: Omit<Page, "name" | "sheet" | "notes">): Omit<Page, "name" | 
   rules: [...p.rules], charts: [...p.charts], hiddenRows: new Set(p.hiddenRows), hiddenCols: new Set(p.hiddenCols),
   filtered: p.filtered && new Set(p.filtered), filter: p.filter, frozen: p.frozen, frozenCols: p.frozenCols, merges: [...p.merges],
   heights: new Map(p.heights), widths: new Map(p.widths), autoId: p.autoId, pivots: new Map(p.pivots),
-  tabColor: p.tabColor, hiddenSheet: p.hiddenSheet, rowLevels: new Map(p.rowLevels), colLevels: new Map(p.colLevels), slicers: [...p.slicers], scenarios: [...p.scenarios], drawings: [...p.drawings], gridlines: p.gridlines, headings: p.headings, breaks: p.breaks, protection: p.protection, editRanges: [...p.editRanges],
+  tabColor: p.tabColor, hiddenSheet: p.hiddenSheet, rowLevels: new Map(p.rowLevels), colLevels: new Map(p.colLevels), slicers: [...p.slicers], scenarios: [...p.scenarios], drawings: [...p.drawings], gridlines: p.gridlines, headings: p.headings, breaks: p.breaks, protection: p.protection, editRanges: [...p.editRanges], layout: p.layout,
 });
 
 // A name for the whole workbook: a range of one of its sheets, or a
@@ -551,7 +555,7 @@ export class Workbook {
       keys.add(key);
     };
     page = { name, sheet: new Sheet({ changed }, language, context), notes: new CellNotes(), rules: [], charts: [],
-      hiddenRows: new Set(), hiddenCols: new Set(), filtered: null, filter: null, frozen: 0, frozenCols: 0, merges: [], heights: new Map(), widths: new Map(), autoId: null, pivots: new Map(), tabColor: null, hiddenSheet: false, rowLevels: new Map(), colLevels: new Map(), slicers: [], scenarios: [], drawings: [], gridlines: true, headings: true, breaks: { rows: [], cols: [] }, protection: null, editRanges: [] };
+      hiddenRows: new Set(), hiddenCols: new Set(), filtered: null, filter: null, frozen: 0, frozenCols: 0, merges: [], heights: new Map(), widths: new Map(), autoId: null, pivots: new Map(), tabColor: null, hiddenSheet: false, rowLevels: new Map(), colLevels: new Map(), slicers: [], scenarios: [], drawings: [], gridlines: true, headings: true, breaks: { rows: [], cols: [] }, protection: null, editRanges: [], layout: DEFAULT_LAYOUT };
     return page;
   }
 
