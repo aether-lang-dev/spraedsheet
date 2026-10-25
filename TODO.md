@@ -13,38 +13,33 @@ What came before (demo 18's To do 1 to 15) is in
 `docs/spreadsheet_demo_done_and_todo.md`.
 
 
-## Paused here (2026-10-24)
+## Paused here (2026-10-25)
 
-Resumed 2026-10-23's pause while the GPU side was idle (quote work blocked on Nic); paused again at Paul's
-request. **NOT pushed to main**: the work is on origin branch `resume-2026-10-24` (local main is ahead of origin/main by
-the same commits). The full `./run-tests.sh` is green on macOS (8 passed, 0 failed) but RED on the aether-linux lane:
-only spec_sheet's new case "every control ... has an accessible name" (see Resume point). Each step was test first. Toolchain: the 0.841 dev tree at `/Volumes/Mini2/claude-scratch/aether-v0841` first on PATH
-with `sae/target/toolchain` (aeb v0.333), `AETHER_HOME` unset (`/Volumes/Mini2/claude-scratch/env841.sh`).
+Resumed 2026-10-24's pause. 2026-10-25: the 21 commits of `resume-2026-10-24` are on origin main (`resume-2026-10-24` and
+`ironcalc2-wip` deleted); `./run-tests.sh` green on macOS (8 passed) and aether-linux (9 passed, GTK 4.6), both on Aether 0.842.0.
+Toolchain: the 0.842 dev tree at `/Volumes/Mini2/claude-scratch/aether-v0842` (a worktree of the 0841 one) first on PATH with
+`SAE_AETHER_HOME` set to it and `sae/target/toolchain` (aeb v0.333), `AETHER_HOME` unset (`/Volumes/Mini2/claude-scratch/env841.sh`
+plus the 0842 override). Lane: `/work/aether-0842-m6`, built with `/work/lane-build842.sh`. Each step test first.
 
-**Done:**
-- aether-ui `./ci.sh` at c8bf9018 (the autorelease-pool fix): all phases passed on macOS and on aether-linux
-  (arm64 22.04); nothing needed fixing. Two transitions specs SKIP on both (Pillow/numpy absent for their
-  pixel reads), unchanged.
-- The wedged Turns queue (sheet.ts): an interrupted job (page time limit) fails its turn with
-  "interrupted: why" and the queue goes on; `Commands.stopped("interrupted")` does it. Headless `sheet_turns`.
-- `ironcalc2-wip` merged (it had fallen behind main by three commits, so a merge commit) and deleted.
-- docs/comparisons/ actions (each struck in its doc): Univer 1 (every command's `effect`; read view refuses
-  exactly the edits), IronCalc 4 (history cost; `HISTORY_ENTRIES` bound, a 100,000-cell sheet ran out of memory
-  at the 47th edit) and 5 (corpus round trip; two bugs: array formulas saved as arrays, volatile formulas
-  settled on open), HyperFormula 1 (work counters; the dependents walk was recursive and overran the call stack
-  at a 1,000-row running total), 4 and 5 (one function record, `COMPATIBILITY.md`), Gnumeric 1 to 5 (the normal's
-  and chi-square's far tails were 0, `NORM.S.INV` good to 5e-9, `LINEST` took one predictor only; `sheet --json`),
-  VisiData 2 (`macro.preview`), LibreOffice 2 (counters), 3 (validation policy per entry path), 4 in part
-  (`formulas.profile`), 5 (`file.interchange`), 6 in part (an accessible-name audit of the toolbar and every
-  panel).
+**Done 2026-10-25:**
+- The five unnamed GTK `toggle` widgets: the root was aether-ui's GTK driver reading an a11y name from a button or a text only,
+  and a `GtkCheckButton` is neither (aether-ui ec66d596, spec `a11y_demo` "a toggle's own label is its accessible name", failed
+  on the old code on the lane). The other backends already read the control's own text.
+- sae floors on Aether 0.842.0, the first release with aether #3126 (sae 21a2b91): the local `extern qjs_function` is gone.
+- `LOGEST` (headless `sheet_logest`; Excel's stored values for `LINEST_LOGEST.xlsx` now agree).
+- Gnumeric 1 in part: `sheet_examples`, 139 functions with a worked example and boundary cases (300-odd); it found `SUBSTITUTE`
+  lacked its instance argument (fixed).
+
+**Done 2026-10-24:** see the commits on main; in short, the wedged Turns queue, Univer 1, IronCalc 4 and 5, HyperFormula 1, 4 and 5,
+Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/comparisons/` strikes each).
 
 **Not done, and why:**
 - Univer 5 (mutation journal): replaces `Saved` for every kind of state, one change to every undo; the
   measurement and `sheet_historycost` are in for it. Recording and MCP discovery do not read `effect` yet.
 - LibreOffice 4 (row lineage, grouping explanations: wait on VisiData 3's typed group keys), 6 (keyboard-only
   pass, print/layout, larger-grid interaction: aether-ui/sae work on four backends).
-- Gnumeric 1: reference examples and boundary tests per function; `LOGEST` is missing.
-- IronCalc: the 48 calc_tests workbooks with more differences (`COMPATIBILITY.md`'s ledger).
+- Gnumeric 1: examples and boundary tests for the other ~440 functions (add to `sheet_examples`'s table), and a generated status document.
+- IronCalc: the 47 calc_tests workbooks with more differences (`COMPATIBILITY.md`'s ledger).
 
 **Decisions needed from Paul (not built):**
 - Grist 1 to 4, Airtable 1 to 3, VisiData 1 and 4, LibreOffice 7 (and the record form and batch-wide unique keys
@@ -57,13 +52,8 @@ with `sae/target/toolchain` (aeb v0.333), `AETHER_HOME` unset (`/Volumes/Mini2/c
   reads; 2,000 rows passes the 4 s a page entry gets). Prefix sums fix it but round differently from a plain
   sum (floating-point regrouping): accept a stated tolerance, or keep Excel's order and the cost?
 
-**Resume point:** on aether-linux (GTK 4.6) the accessible-name audit finds 5 unnamed `toggle` widgets (ids 1015, 1228,
-1292-1294 in the run; log in `/work/spraedsheet/target/run-tests/spec_sheet.log` in the container) in every panel state, which macOS
-does not. Find what they are (the driver's /widgets, `GET /widget/{id}/a11y`) and fix at the root (a11y_label on the page's toggle, or
-GTK naming in aether-ui), rerun `./run-tests.sh` on macOS and the lane (lane build: sync with `aelane aether-linux -C ~/scm/spraedsheet
--w sae,aether-ui,mquickjs-ae,RexxJS`, env AETHER_HOME/SAE_AETHER_HOME=/work/aether-0841-m6, PATH with /work/aeb), then
-`git checkout main && git merge --ff-only resume-2026-10-24`, push main, delete the branch locally and on origin. Then the rest of `docs/comparisons/` as listed in its README; `git pull --ff-only` spraedsheet, sae
-and aether-ui first. `touch sae/target/build/bin/sae*` after an aether-ui change that is Android-only.
+**Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui first. `touch sae/target/build/bin/sae*` after an aether-ui change that is
+Android-only. Then the rest of `docs/comparisons/` as listed in its README.
 
 ## Earlier pause (2026-10-21)
 
