@@ -33,6 +33,8 @@ import { RexxLanguage } from "./rexx.ts";
 import { AUTOMATIC, Sheet, Turns } from "./sheet.ts";
 import type { Work } from "./sheet.ts";
 import type { Calc, Context, SavedSheet } from "./sheet.ts";
+import { applyStep, stepOf } from "./journal.ts";
+import type { Step } from "./journal.ts";
 import { CellError } from "./values.ts";
 import type { Value } from "./values.ts";
 import { applied } from "./rules.ts";
@@ -445,8 +447,8 @@ export class Workbook {
   #watches: { readonly page: Page; readonly cell: string }[] = [];
   // Undo: the workbook as it was before each change, and as it was before
   // each undo, to redo.
-  readonly #undo: Saved[] = [];
-  readonly #redo: Saved[] = [];
+  readonly #undo: Step[] = [];
+  readonly #redo: Step[] = [];
   // A group of changes made one step (a script): the workbook before it,
   // the lowest the undo stack went while it ran (an UNDO in it may take
   // back steps from before it), and the labels of the changes it made.
@@ -719,7 +721,7 @@ export class Workbook {
   // A change, `label`, was made since `before` was saved: one step to
   // undo, and nothing left to redo.
   changed(before: Saved, label: string): void {
-    this.#undo.push({ ...before, label });
+    this.#undo.push(stepOf(before, this.saved(), label));
     this.#trimHistory();
     this.#redo.length = 0;
     this.#group?.labels.push(label);
@@ -746,7 +748,7 @@ export class Workbook {
     if (!always && !g.labels.length && !g.undone) return false;
     if (!always && !g.labels.length && !whole) return false;
     this.#undo.length = Math.min(g.low, this.#undo.length);
-    this.#undo.push({ ...g.before, label: g.labels.length === 1 && !g.undone ? g.labels[0] : "Script" });
+    this.#undo.push(stepOf(g.before, this.saved(), g.labels.length === 1 && !g.undone ? g.labels[0] : "Script"));
     this.#trimHistory();
     this.#redo.length = 0;
     return true;
@@ -772,29 +774,17 @@ export class Workbook {
 
   #trimHistory(): void {
     if (this.#undo.length > HISTORY) this.#undo.shift();
-    // Counting walks every step: only worth it when a step is big.
-    if (this.#undo.length < 2 || this.#undo.at(-1)!.pages.reduce((n, pg) => n + pg.sheet.inputs.size, 0) * this.#undo.length < this.historyEntries / 4) return;
+    // The oldest steps go while the history holds too much.
     while (this.#undo.length > 1 && this.historyCost().entries > this.historyEntries) this.#undo.shift();
   }
 
   // What the history holds, counted (docs/comparisons/IRONCALC.md action 4):
-  // the steps to undo and redo, and the entries of the maps they keep (a
-  // cell's input, a formula, a name, a table, a note), each saved map once
-  // however many steps share it. A step is a whole snapshot, so a one-cell
-  // edit keeps as many entries as the sheet has cells.
+  // the steps to undo and redo, and the entries they keep: what each change
+  // was and became (journal.ts).
   historyCost(): { undo: number; redo: number; snapshots: number; entries: number } {
-    const seen = new Set<object>();
-    let entries = 0;
-    const count = (m: ReadonlyMap<unknown, unknown>) => { if (!seen.has(m)) { seen.add(m); entries += m.size; } };
-    for (const step of [...this.#undo, ...this.#redo]) {
-      count(step.names);
-      count(step.styles);
-      for (const pg of step.pages) {
-        count(pg.sheet.inputs); count(pg.sheet.names); count(pg.sheet.formulas); count(pg.sheet.tables);
-        count(pg.notes);
-      }
-    }
-    return { undo: this.#undo.length, redo: this.#redo.length, snapshots: seen.size, entries };
+    let entries = 0, snapshots = 0;
+    for (const step of [...this.#undo, ...this.#redo]) { entries += step.cost; snapshots += step.entries.length; }
+    return { undo: this.#undo.length, redo: this.#redo.length, snapshots, entries };
   }
 
   get canUndo(): boolean { return this.#undo.length > 0; }
@@ -809,15 +799,16 @@ export class Workbook {
   undo(): Promise<string[]> { return this.#step(this.#undo, this.#redo); }
   redo(): Promise<string[]> { return this.#step(this.#redo, this.#undo); }
 
-  async #step(from: Saved[], to: Saved[]): Promise<string[]> {
+  async #step(from: Step[], to: Step[]): Promise<string[]> {
     const step = from.pop();
     if (!step) return [];
-    to.push({ ...this.saved(), label: step.label });
+    const target = applyStep(step, this.saved(), from === this.#undo);
+    to.push(step);
     if (this.#group) {
       this.#group.undone++;
       this.#group.low = Math.min(this.#group.low, this.#undo.length);
     }
-    return this.#apply(step);
+    return this.#apply(target);
   }
 
   // The workbook put back as `step` saved it, with no step of undo: a
