@@ -45,7 +45,8 @@ the number-format cases, the series-detection cases.
    MONTH, DAY, EDATE, EOMONTH), and 22 of text read as a number ("8%", "€100"):
    13 of values typed into SUM, COUNT and the like, and 38 of logical, LOG, SEQUENCE,
    SUMSQ and base-conversion edges, and 17 of wildcard lookups and DROP/TAKE:
-   and 9 more of typed arguments (SMALL, MINA ...): 232 left in 64 workbooks; the cells looked at
+   9 more of typed arguments (SMALL, MINA ...), and 17 of error values and logical
+   text as cells hold them: 215 left in 62 workbooks; the cells looked at
    and kept, with why, are in COMPATIBILITY.md.
 3. **Small ports, only where a test shows a gap:** a routine from
    `base/src/formatter/` for `numfmt.ts` (the cases are in; no code ported yet).

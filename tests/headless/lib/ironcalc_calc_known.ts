@@ -72,12 +72,8 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!R11": "excel-error",
   },
   "INFORMATION/ERROR.TYPE.xlsx": {
-    "Sheet1!B3": "we-error",
-    "Sheet1!B4": "we-error",
-    "Sheet1!B6": "we-error",
-    "Sheet1!B8": "we-error",
-    "Sheet1!B13": "we-error",
-    "Sheet1!B14": "we-error",
+    "Sheet1!B8": "value",
+    "Sheet1!B14": "value",
   },
   "INFORMATION/FORMULATEXT.xlsx": {
     "Sheet1!E1": "we-error",
@@ -105,18 +101,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   },
   "INFORMATION/ISREF_ISFORMULA_ISODD_ISEVEN.xlsx": {
     "ISREF_ISFORMULA!F8": "we-error",
-  },
-  "INFORMATION/IS_INFORMATION.xlsx": {
-    "Sheet1!C10": "value",
-    "Sheet1!D10": "value",
-    "Sheet1!H10": "value",
-    "Sheet1!C11": "value",
-    "Sheet1!D11": "value",
-    "Sheet1!H11": "value",
-    "Sheet1!C13": "value",
-    "Sheet1!F13": "value",
-    "Sheet1!G13": "value",
-    "Sheet1!H13": "value",
   },
   "INFORMATION/N.xlsx": {
     "N!B20": "we-error",
@@ -156,8 +140,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   },
   "LOOKUP_AND_REFERENCE/MATCH.xlsx": {
     "Sheet1!C18": "we-error",
-    "Sheet1!G24": "excel-error",
-    "Sheet1!G28": "excel-error",
   },
   "LOOKUP_AND_REFERENCE/SORT.xlsx": {
     "Sheet1!E1": "excel-error",
@@ -344,9 +326,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!B9": "we-error",
     "Sheet1!B10": "we-error",
     "Sheet1!B11": "we-error",
-  },
-  "logical.xlsx": {
-    "XOR!E14": "excel-error",
   },
   "percentage.xlsx": {
     "Sheet1!B3": "we-error",

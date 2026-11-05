@@ -21,7 +21,7 @@
 // references came to are linked as its reads after each run, so what it
 // read orders it next time (and the auditor sees it).
 import { COLS, ROWS, addrOf, cellAddr, keyOf, order, splitKey } from "./address.ts";
-import { CellError, isArray } from "./values.ts";
+import { CellError, TYPED_ERRORS, isArray } from "./values.ts";
 import type { ArrayValue, Result, Value } from "./values.ts";
 import { EXCEL } from "./excel.ts";
 import { Overlay, snapshot } from "./overlay.ts";
@@ -51,6 +51,9 @@ export function compile(input: string, language: Language = EXCEL, names?: Names
   if (input.startsWith("'")) return { kind: "constant", value: input.slice(1) };
   // TRUE and FALSE typed in a cell are the logical values, in any case.
   if (/^(?:true|false)$/i.test(input)) return { kind: "constant", value: input.toLowerCase() === "true" };
+  // So are the error values: #N/A typed is the error (ISNA is TRUE of it).
+  const error = TYPED_ERRORS.get(input.trim().toUpperCase());
+  if (error) return { kind: "constant", value: new CellError(error, `${error} typed into the cell`) };
   return { kind: "constant", value: NUMERIC.test(input) ? Number(input) : input };
 }
 

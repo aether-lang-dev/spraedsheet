@@ -16,6 +16,7 @@ import type { Addr } from "./address.ts";
 import { moved } from "./excel.ts";
 import type { Look } from "./formats.ts";
 import { ALLOWS } from "./protection.ts";
+import { TYPED_ERRORS } from "./values.ts";
 import { PASS_THROUGH, cfRulesOf, readThreads, tableOf, unmodelled } from "./xlsxparts.ts";
 import { readDrawings } from "./xlsxdrawings.ts";
 import { readCharts } from "./xlsxcharts.ts";
@@ -311,7 +312,7 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
           else if (t === "str" || t === "e") input = raw;
           else input = raw;
           // Text that the sheet would read as a number, or a formula, kept text.
-          if ((t === "s" || t === "inlineStr" || t === "str") && (NUMERIC.test(input) || input.startsWith("=") || input.startsWith("'"))) input = `'${input}`;
+          if ((t === "s" || t === "inlineStr" || t === "str") && (NUMERIC.test(input) || input.startsWith("=") || input.startsWith("'") || /^\s*(?:true|false)\s*$/i.test(input) || TYPED_ERRORS.has(input.trim().toUpperCase()))) input = `'${input}`;
         }
         const si = Number(attr(c, "s") ?? 0), format = formats[si] ?? "", look: Look = { ...(looks[si] ?? {}), ...(format && format !== "General" ? { number: format } : {}) };
         if (!key) { if (input !== "") off++; continue; }

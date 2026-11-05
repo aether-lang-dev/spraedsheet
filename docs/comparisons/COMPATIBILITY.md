@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 89 | this app gives an error where Excel stored a value |
-| `excel-error` | 52 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 53 | both give a value, and they differ |
+| `we-error` | 83 | this app gives an error where Excel stored a value |
+| `excel-error` | 49 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 45 | both give a value, and they differ |
 
-Counted 2026-11-05 (232 cells with the 38 `legacy`, in 64 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-05 (215 cells with the 38 `legacy`, in 62 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -86,6 +86,13 @@ nothing are #VALUE! (the earlier cases and `sheet_more` said #CALC!, this app's 
 2026-11-05, 9 cells: the typed-argument rule reaches SMALL, LARGE and RANK (`SMALL("3.4", 1)` is
 3.4, `SMALL("Hello", 1)` #VALUE!) and the A forms (`MINA(4, "-1", TRUE)` is -1,
 `MINA(1, "Hola")` #VALUE!).
+
+2026-11-05, 17 cells: an error value typed into a cell is that error (`#N/A` typed is NA()'s, in any
+case; `#NULL!` and `#GETTING_DATA` are Excel's too, ERROR.TYPE 1 and 8), and the XLSX importer keeps
+text that reads as TRUE, FALSE or an error as text (a cell holding the text "true" was made TRUE);
+a TRUE/FALSE argument of a function (cumulative ...) reads the text "TRUE" and "FALSE" as those.
+Headless `sheet_typederrors`. ERROR.TYPE.xlsx B8 and B14 now differ as values: Excel stored #VALUE! in
+the file for errors that are #CALC! and #SPILL! (rich values), which the file does not say.
 
 ## Intended (found while looking)
 

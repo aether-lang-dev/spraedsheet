@@ -490,7 +490,7 @@ def("TYPE", 1, 1, (args) => {
 // not one. #CYCLE! and #ERROR! (a formula that does not parse) are this
 // app's: numbered past Excel's.
 const ERROR_TYPES: Readonly<Record<string, number>> = {
-  "#DIV/0!": 2, "#VALUE!": 3, "#REF!": 4, "#NAME?": 5, "#NUM!": 6, "#N/A": 7, "#SPILL!": 9, "#CALC!": 14, "#CYCLE!": 101, "#ERROR!": 102,
+  "#NULL!": 1, "#DIV/0!": 2, "#VALUE!": 3, "#REF!": 4, "#NAME?": 5, "#NUM!": 6, "#N/A": 7, "#GETTING_DATA": 8, "#SPILL!": 9, "#CALC!": 14, "#CYCLE!": 101, "#ERROR!": 102,
 };
 def("ERROR.TYPE", 1, 1, (args) => {
   const v = val(args, 0);
@@ -1188,7 +1188,13 @@ const defDist = (name: string, min: number, max: number, fn: Fn): void => {
 const need = (ok: boolean, what: string): void => {
   if (!ok) throw new RangeError(what);
 };
-const flag = (args: readonly Arg[], i: number): boolean => toNumber(val(args, i)) !== 0;
+// A TRUE/FALSE argument (cumulative ...): the text "TRUE" or "FALSE" is that
+// logical, as Excel reads it there (EXPON.DIST(0.2, 10, "TRUE")).
+const flag = (args: readonly Arg[], i: number): boolean => {
+  const v = scalar(val(args, i));
+  const t = typeof v === "string" ? truthText(v) : null;
+  return t !== null ? t : toNumber(v) !== 0;
+};
 const probability = (p: number, open = true): void => need(open ? p > 0 && p < 1 : p >= 0 && p <= 1, `a probability is between 0 and 1, not ${p}`);
 const positive = (x: number, what: string): void => need(x > 0, `${what} must be positive, not ${x}`);
 const degrees = (args: readonly Arg[], i: number, least = 1): number => {

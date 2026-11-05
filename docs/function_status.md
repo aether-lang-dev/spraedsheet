@@ -7,7 +7,7 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 fails while this page is not what the script prints (`function_status`).
 
 486 functions and forms; 486 with an example and boundary cases (1411 cases, 1411 passing);
-64 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (278, a cell counted for each function its workbook names).
+64 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (272, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -151,7 +151,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ERF.PRECISE | function | 1 value | passes | 3 | `ERF.PRECISE(1)` = 0.84270079295 |  | TRUE/FALSE refused |
 | ERFC | function | 1 value | passes | 3 | `ERFC(0)` = 1 |  | TRUE/FALSE refused |
 | ERFC.PRECISE | function | 1 value | passes | 2 | `ERFC.PRECISE(1)` = 0.15729920705 |  | TRUE/FALSE refused |
-| ERROR.TYPE | function | 1 value | passes | 4 | `ERROR.TYPE(1 / 0)` = 2 | 6 |  |
+| ERROR.TYPE | function | 1 value | passes | 4 | `ERROR.TYPE(1 / 0)` = 2 | 2 |  |
 | EVEN | function | 1 value | passes | 3 | `EVEN(3)` = 4 | 3 |  |
 | EXACT | function | 2 values | passes | 2 | `EXACT("a", "a")` = true |  |  |
 | EXP | function | 1 value | passes | 3 | `EXP(1)` = 2.71828182846 | 2 |  |
@@ -284,7 +284,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | LOWER | function | 1 value | passes | 2 | `LOWER("aBc")` = "abc" |  |  |
 | MAKEARRAY | special form | (its own) | passes | 3 | `INDEX(MAKEARRAY(2, 3, LAMBDA(r, c, r * c)), 2, 3)` = 6 |  |  |
 | MAP | special form | (its own) | passes | 2 | `INDEX(MAP({1, 2, 3}, LAMBDA(x, x * 2)), 1, 3)` = 6 |  |  |
-| MATCH | function | 2 or 3 values | passes | 6 | `MATCH(3, {1, 2, 3}, 0)` = 3 | 3 |  |
+| MATCH | function | 2 or 3 values | passes | 6 | `MATCH(3, {1, 2, 3}, 0)` = 3 | 1 |  |
 | MAX | function | at least 1 value | passes | 4 | `MAX({1, 5, 3})` = 5 | 3 |  |
 | MAXA | function | at least 1 value | passes | 3 | `MAXA({1, TRUE, "a"})` = 1 |  |  |
 | MAXIFS | function | at least 3 values | passes | 2 | `MAXIFS(B1:B3, A1:A3, "<3")` = 20 |  |  |

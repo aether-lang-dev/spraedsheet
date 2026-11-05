@@ -3,7 +3,12 @@
 // through whatever reads it, so a cell that sums a #DIV/0! shows #DIV/0!.
 import { parseDate, parseTime } from "./dates.ts";
 
-export type ErrorCode = "#DIV/0!" | "#VALUE!" | "#REF!" | "#NAME?" | "#NUM!" | "#N/A" | "#CYCLE!" | "#ERROR!" | "#CALC!" | "#SPILL!";
+export type ErrorCode = "#DIV/0!" | "#VALUE!" | "#REF!" | "#NAME?" | "#NUM!" | "#N/A" | "#CYCLE!" | "#ERROR!" | "#CALC!" | "#SPILL!" | "#NULL!" | "#GETTING_DATA";
+
+// The error values a cell may hold as typed (Excel's own: #N/A typed into a
+// cell is the error, not the text), in any case.
+export const TYPED_ERRORS: ReadonlyMap<string, ErrorCode> = new Map(
+  (["#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#GETTING_DATA", "#SPILL!", "#CALC!"] as const).map((c) => [c, c]));
 
 export class CellError {
   readonly code: ErrorCode;
