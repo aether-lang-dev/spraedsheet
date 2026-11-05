@@ -42,7 +42,8 @@ the number-format cases, the series-detection cases.
    writes `@` where Excel's loader would is not done. 2026-11-05: 25 more cells
    fixed (YEARFRAC basis 1, DATEDIF, the loan functions' type and rate edges, IPMT's
    fractional period, DB of no cost), and 18 of dates out of range (YEAR,
-   MONTH, DAY, EDATE, EOMONTH): 331 left in 76 workbooks; the cells looked at
+   MONTH, DAY, EDATE, EOMONTH), and 22 of text read as a number ("8%", "€100"):
+   309 left in 74 workbooks; the cells looked at
    and kept, with why, are in COMPATIBILITY.md.
 3. **Small ports, only where a test shows a gap:** a routine from
    `base/src/formatter/` for `numfmt.ts` (the cases are in; no code ported yet).

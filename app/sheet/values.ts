@@ -1,6 +1,8 @@
 // What a cell holds once worked out, and the coercions every operator and
 // function goes through. An error is a value too (a CellError): it flows
 // through whatever reads it, so a cell that sums a #DIV/0! shows #DIV/0!.
+import { parseDate, parseTime } from "./dates.ts";
+
 export type ErrorCode = "#DIV/0!" | "#VALUE!" | "#REF!" | "#NAME?" | "#NUM!" | "#N/A" | "#CYCLE!" | "#ERROR!" | "#CALC!" | "#SPILL!";
 
 export class CellError {
@@ -50,8 +52,36 @@ export function toNumber(v: Value): number {
   if (s === null) return 0;
   if (typeof s === "number") return s;
   if (typeof s === "boolean") return s ? 1 : 0;
-  const n = s.trim() === "" ? NaN : Number(s);
-  return Number.isNaN(n) ? fail("#VALUE!", `'${s}' is not a number`) : n;
+  const n = textNumber(s);
+  return n === null ? fail("#VALUE!", `'${s}' is not a number`) : n;
+}
+
+// Text where a number goes, read as Excel reads it: a number (with thousands
+// separators, an exponent), a percentage ("8%"), an amount of money ("$100",
+// "€100", "100€"), a negative in parentheses ("(5)"), a date ("2024-01-10")
+// or a time ("10:30 PM"); null for anything else (hex, "Infinity" and the
+// other spellings JavaScript's Number takes are not numbers here).
+const NUMERAL = /^[-+]?(?:\d{1,3}(?:,\d{3})+|\d*)(?:\.\d*)?(?:[eE][-+]?\d+)?$/;
+export function textNumber(text: string): number | null {
+  let t = text.trim();
+  if (t === "") return null;
+  if (NUMERAL.test(t) && /\d/.test(t)) return Number(t.replace(/,/g, ""));
+  let sign = 1, scale = 1, money = false;
+  if (t.length > 2 && t.startsWith("(") && t.endsWith(")")) { sign = -1; t = t.slice(1, -1).trim(); }
+  if (t.endsWith("%")) { scale = 0.01; t = t.slice(0, -1).trim(); }
+  let m = /^([-+]?)\s*[$€£¥]\s*(.+)$/.exec(t);
+  if (m) { t = m[1] + m[2]; money = true; } else if ((m = /^(.+?)\s*[$€£¥]$/.exec(t))) { t = m[1]; money = true; }
+  if (NUMERAL.test(t) && /\d/.test(t)) {
+    const n = Number(t.replace(/,/g, ""));
+    if (sign < 0 && n < 0) return null;
+    return sign * scale * n;
+  }
+  // A date or time only as it stands, with no spaces round it (Excel's
+  // " 2024-01-10 " is not one, where " €100 " is an amount).
+  if (sign < 0 || scale !== 1 || money || t !== text) return null;
+  const d = parseDate(t);
+  if (d !== null) return d;
+  return parseTime(t);
 }
 
 export function toText(v: Value): string {

@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 127 | this app gives an error where Excel stored a value |
-| `excel-error` | 103 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 63 | both give a value, and they differ |
+| `we-error` | 105 | this app gives an error where Excel stored a value |
+| `excel-error` | 102 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 64 | both give a value, and they differ |
 
-Counted 2026-11-05 (331 cells with the 38 `legacy`, in 76 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-05 (309 cells with the 38 `legacy`, in 74 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -58,6 +58,18 @@ up to the one after the last; `DB` of a cost of 0 is 0 (it was NaN). Cases in
 comes to one outside it; a number written as text is that serial to the date functions
 (`EOMONTH("44987", 1)`). The bound is the 1900 system's (a 1904 workbook's last date is 1,462
 days earlier; not distinguished).
+
+2026-11-05, 22 cells: text where a number goes is read as Excel reads it (`textNumber`,
+`values.ts`): thousands separators, "8%", "$100", "€100", "100€", " €100 ", "(5)", a date or a
+time as it stands; and no longer JavaScript's spellings ("0x10", "Infinity"). A date is checked
+to be one ("30/2/2010" is not). EXP, SIGN, VALUE, `--"50%"`, CONFIDENCE and an IF over an array
+came right with it.
+
+## Intended (found while looking)
+
+- `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`): the workbook was saved where dates are
+  written day first (44,987 is 2 March 2023); this app reads m/d/y, as en-US does, so it answers
+  3 February (it was #VALUE! before text dates were read). Kept, kind `value` in the ledger.
 
 ## Examined, not changed (still on the ledger, with the reason)
 

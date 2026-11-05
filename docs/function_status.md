@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1384 cases, 1384 passing);
-82 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (425, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1392 cases, 1392 passing);
+81 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (387, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -84,7 +84,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | COMPLEX | function | 2 or 3 values | passes | 7 | `COMPLEX(3, 4)` = "3+4i" |  |  |
 | CONCAT | function | at least 1 value | passes | 2 | `CONCAT("a", 1, TRUE)` = "a1TRUE" |  |  |
 | CONCATENATE | function | at least 1 value | passes | 3 | `CONCATENATE("a", 1, TRUE)` = "a1TRUE" | 1 |  |
-| CONFIDENCE | function | 3 values | passes | 2 | `CONFIDENCE(0.05, 1, 100)` = 0.195996398454 | 2 |  |
+| CONFIDENCE | function | 3 values | passes | 2 | `CONFIDENCE(0.05, 1, 100)` = 0.195996398454 |  |  |
 | CONFIDENCE.NORM | function | 3 values | passes | 4 | `CONFIDENCE.NORM(0.05, 1, 100)` = 0.195996398454 |  |  |
 | CONFIDENCE.T | function | 3 values | passes | 2 | `CONFIDENCE.T(0.05, 1, 100)` = 0.198421695159 |  |  |
 | CONVERT | function | 3 values | passes | 2 | `CONVERT(1, "km", "m")` = 1000 |  |  |
@@ -154,7 +154,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ERROR.TYPE | function | 1 value | passes | 4 | `ERROR.TYPE(1 / 0)` = 2 | 6 |  |
 | EVEN | function | 1 value | passes | 3 | `EVEN(3)` = 4 | 3 |  |
 | EXACT | function | 2 values | passes | 2 | `EXACT("a", "a")` = true |  |  |
-| EXP | function | 1 value | passes | 2 | `EXP(1)` = 2.71828182846 | 12 |  |
+| EXP | function | 1 value | passes | 3 | `EXP(1)` = 2.71828182846 | 2 |  |
 | EXPAND | function | 2 to 4 values | passes | 3 | `INDEX(EXPAND({1, 2}, 2, 3, 0), 2, 3)` = 0 |  |  |
 | EXPON.DIST | function | 3 values | passes | 3 | `EXPON.DIST(1, 1, TRUE)` = 0.632120558829 |  |  |
 | EXPONDIST | function | 3 values | passes | 3 | `EXPONDIST(1, 1, TRUE)` = 0.632120558829 | 1 |  |
@@ -210,7 +210,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | HYPERLINK | function | 1 or 2 values | passes | 2 | `HYPERLINK("http://x", "name")` = "name" |  |  |
 | HYPGEOM.DIST | function | 5 values | passes | 3 | `HYPGEOM.DIST(1, 2, 2, 4, FALSE)` = 0.666666666667 |  |  |
 | HYPGEOMDIST | function | 4 values | passes | 2 | `HYPGEOMDIST(1, 2, 2, 4)` = 0.666666666667 |  |  |
-| IF | form | (its own) | passes | 3 | `IF(TRUE, 1, 2)` = 1 | 10 |  |
+| IF | form | (its own) | passes | 3 | `IF(TRUE, 1, 2)` = 1 | 9 |  |
 | IFERROR | function | 2 values | passes | 2 | `IFERROR(1 / 0, "x")` = "x" |  |  |
 | IFNA | function | 2 values | passes | 2 | `IFNA(NA(), 5)` = 5 |  |  |
 | IFS | function | at least 2 values | passes | 2 | `IFS(FALSE, 1, TRUE, 2)` = 2 | 5 |  |
@@ -399,7 +399,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SERIESSUM | function | 4 values | passes | 3 | `SERIESSUM(2, 0, 1, {1, 1, 1})` = 7 | 2 |  |
 | SHEET | form | (its own) | passes | 4 | `SHEET()` = 1 |  |  |
 | SHEETS | form | (its own) | passes | 3 | `SHEETS()` = 2 |  |  |
-| SIGN | function | 1 value | passes | 3 | `SIGN(-3)` = -1 | 12 |  |
+| SIGN | function | 1 value | passes | 3 | `SIGN(-3)` = -1 | 2 |  |
 | SIN | function | 1 value | passes | 2 | `SIN(PI() / 2)` = 1 |  |  |
 | SINH | function | 1 value | passes | 3 | `SINH(1)` = 1.17520119364 |  |  |
 | SKEW | function | at least 1 value | passes | 3 | `SKEW({1, 2, 4})` = 0.935219529583 |  |  |
@@ -432,7 +432,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SUMXMY2 | function | 2 values | passes | 3 | `SUMXMY2({1, 2}, {3, 5})` = 13 |  |  |
 | SWITCH | function | at least 3 values | passes | 3 | `SWITCH(2, 1, "a", 2, "b")` = "b" |  |  |
 | SYD | function | 4 values | passes | 4 | `SYD(10000, 1000, 5, 1)` = 3000 |  |  |
-| T | function | 1 value | passes | 2 | `T("x")` = "x" | 14 |  |
+| T | function | 1 value | passes | 2 | `T("x")` = "x" | 9 |  |
 | T.DIST | function | 3 values | passes | 4 | `T.DIST(0, 5, TRUE)` = 0.5 |  |  |
 | T.DIST.2T | function | 2 values | passes | 3 | `T.DIST.2T(0, 5)` = 1 |  |  |
 | T.DIST.RT | function | 2 values | passes | 3 | `T.DIST.RT(0, 5)` = 0.5 |  |  |
@@ -470,8 +470,8 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | UNICODE | function | 1 value | passes | 3 | `UNICODE("A")` = 65 |  |  |
 | UNIQUE | function | 1 to 3 values | passes | 3 | `ROWS(UNIQUE({1; 1; 2}))` = 2 |  |  |
 | UPPER | function | 1 value | passes | 2 | `UPPER("aBc")` = "ABC" |  |  |
-| VALUE | function | 1 value | passes | 3 | `VALUE("1e3")` = 1000 | 12 |  |
-| VALUETOTEXT | function | 1 or 2 values | passes | 4 | `VALUETOTEXT("a")` = "a" | 12 |  |
+| VALUE | function | 1 value | passes | 10 | `VALUE("1e3")` = 1000 | 7 |  |
+| VALUETOTEXT | function | 1 or 2 values | passes | 4 | `VALUETOTEXT("a")` = "a" | 7 |  |
 | VAR | function | at least 1 value | passes | 2 | `VAR({1, 2, 3, 4})` = 1.66666666667 |  |  |
 | VAR.P | function | at least 1 value | passes | 2 | `VAR.P({2, 4, 4, 4, 5, 5, 7, 9})` = 4 |  |  |
 | VAR.S | function | at least 1 value | passes | 2 | `VAR.S({2, 4, 4, 4, 5, 5, 7, 9})` = 4.57142857143 |  |  |

@@ -160,9 +160,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!H12": "excel-error",
     "Sheet1!N12": "excel-error",
   },
-  "LOGICAL/IF_ARRAY.xlsx": {
-    "Sheet2!F1": "we-error",
-  },
   "LOGICAL/LAMBDA.xlsx": {
     "Sheet1!F2": "we-error",
     "Sheet1!B5": "we-error",
@@ -256,18 +253,8 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "EVEN_ODD!C39": "legacy",
   },
   "MATH_AND_TRIGONOMETRY/EXP_SIGN.xlsx": {
-    "EXP_SIGN!B31": "we-error",
-    "EXP_SIGN!C31": "we-error",
-    "EXP_SIGN!B33": "excel-error",
-    "EXP_SIGN!C33": "we-error",
     "EXP_SIGN!B36": "legacy",
     "EXP_SIGN!C36": "legacy",
-    "EXP_SIGN!B49": "we-error",
-    "EXP_SIGN!C49": "we-error",
-    "EXP_SIGN!B50": "we-error",
-    "EXP_SIGN!C50": "we-error",
-    "EXP_SIGN!B54": "we-error",
-    "EXP_SIGN!C54": "we-error",
   },
   "MATH_AND_TRIGONOMETRY/LOG_LOG10_LN.xlsx": {
     "LOG!G3": "excel-error",
@@ -342,10 +329,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!F27": "value",
     "Sheet1!E28": "excel-error",
     "Sheet1!F28": "value",
-  },
-  "STATISTICAL/CONFIDENCE.xlsx": {
-    "CONFIDENCE.NORM CONFIDENCE.T!D37": "we-error",
-    "CONFIDENCE.NORM CONFIDENCE.T!E37": "we-error",
   },
   "STATISTICAL/COUNT.xlsx": {
     "Sheet1!B11": "we-error",
@@ -431,10 +414,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!E30": "we-error",
   },
   "TEXT/MINUS_MINUS.xlsx": {
-    "Sheet1!C9": "we-error",
-    "Sheet1!C10": "we-error",
-    "Sheet1!C12": "we-error",
-    "Sheet1!C13": "we-error",
     "Sheet1!A44": "we-error",
     "Sheet1!C44": "we-error",
   },
@@ -442,17 +421,12 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!H7": "excel-error",
   },
   "TEXT/T_VALUE_VALUETOTEXT.xlsx": {
-    "Sheet1!I2": "we-error",
-    "Sheet1!I3": "we-error",
-    "Sheet1!I4": "we-error",
     "Sheet1!I5": "we-error",
     "Sheet1!C6": "excel-error",
     "Sheet1!I7": "we-error",
-    "Sheet1!C9": "we-error",
-    "Sheet1!I9": "we-error",
     "Sheet1!D11": "value",
     "Sheet1!I14": "excel-error",
-    "Sheet1!C15": "we-error",
+    "Sheet1!C15": "value",
     "Sheet1!I15": "excel-error",
   },
   "arithmetic.xlsx": {

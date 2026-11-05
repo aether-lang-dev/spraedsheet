@@ -24,10 +24,12 @@ export function parts(s: number): { y: number; m: number; d: number; weekday: nu
 // Text as a date: 2024-01-15, or month first, 1/15/2024; null if not one.
 export function parseDate(text: string): number | null {
   const t = text.trim();
+  // A month of 1 to 12 and a day that month has: 30/2/2010 is no date.
+  const real = (y: number, mo: number, d: number): number | null => mo >= 1 && mo <= 12 && d >= 1 && d <= parts(serial(y, mo + 1, 0)).d ? serial(y, mo, d) : null;
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
-  if (m) return serial(Number(m[1]), Number(m[2]), Number(m[3]));
+  if (m) return real(Number(m[1]), Number(m[2]), Number(m[3]));
   m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(t);
-  if (m) return serial(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[1]), Number(m[2]));
+  if (m) return real(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[1]), Number(m[2]));
   return null;
 }
 
