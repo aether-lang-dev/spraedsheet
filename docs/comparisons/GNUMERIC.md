@@ -20,7 +20,15 @@ Seek, and Solver including GRG nonlinear and evolutionary (TODO 6.8b); the
    `SUBSTITUTE` lacked its instance argument, `NEGBINOM.DIST` refused p = 1, `Z.TEST` of a flat
    sample answered #NUM! (Excel's #DIV/0!), `TIME`/`HOUR`/`MINUTE`/`SECOND` accepted a negative
    time, `IMPOWER` left 1e-16 of noise on a whole power, and `FORECAST.ETS` ignored a bad
-   data_completion or aggregation (all fixed). Not done: a generated status document.
+   data_completion or aggregation (all fixed). The generated status document, done
+   2026-11-05: `docs/function_status.md`, one row per function and special form (kind,
+   arity, its cases and whether they pass, the first as its example, the ledger's
+   differing cells), written by `tools/function-status.sh` from `funcinfo.ts`, the cases
+   (now `tests/headless/lib/examples.ts`, shared with `sheet_examples`) and the ledger;
+   `./run-tests.sh`'s `function_status` fails while the committed page is not current.
+   The eight special forms gained cases too (LET, LAMBDA, MAP, REDUCE, SCAN, BYROW, BYCOL,
+   MAKEARRAY: 1,366 cases); they found `MAKEARRAY` of no rows answering #CALC! where
+   Microsoft's documentation gives #VALUE! (fixed, the case failing first).
 2. ~~**Numerical acceptance suite.** Extreme tails, inverses near boundaries,
    near-constant data, ill-conditioned regression, financial roots, convergence
    failure. Original fixtures from published datasets or high-precision values;

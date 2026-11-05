@@ -15,9 +15,9 @@ for Paul.
 | [Grist](GRIST.md) | Apache-2.0, ideas only | record identity; keyed JSON reconcile; reference fields |
 | [Airtable](AIRTABLE.md) | proprietary, public docs ideas only | saved views and record form; trigger run log |
 | [VisiData](VISIDATA.md) | GPL-3.0, ideas only | record by identity and deferred patches (the record model); lineage for group/pivot results (typed group keys first) |
-| [Univer](UNIVER.md) | Apache-2.0, ideas only | a mutation journal (cuts snapshot cost; larger change); recording and MCP discovery to read `effect` |
+| [Univer](UNIVER.md) | Apache-2.0, ideas only | ~~a mutation journal, recorded at the mutation~~ (done); recording and MCP discovery to read `effect` |
 | [HyperFormula](HYPERFORMULA.md) | GPLv3 or commercial, ideas only | range-aware aggregates (a rounding decision for Paul); coercion and array lifting declared in the function record |
-| [Gnumeric](GNUMERIC.md) | GPL, ideas only | reference examples and boundary tests per function; `LOGEST` |
+| [Gnumeric](GNUMERIC.md) | GPL, ideas only | ~~reference examples and boundary tests per function; `LOGEST`; the generated status page~~ (all done: `docs/function_status.md`) |
 | [LibreOffice Calc](LIBREOFFICE.md) | MPL-2.0, ideas only | keyboard-only pass, print/layout, larger-grid interaction (aether-ui/sae); row lineage; the record model |
 
 Gnumeric's website repository is covered in Gnumeric.md.

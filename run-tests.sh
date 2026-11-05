@@ -21,6 +21,8 @@
 # spec_app_sheet_mcp drives the app through that server, with node. cli:
 # tests/cli/test_*.sh, a shell test per subcommand of cli/sheet.js, each
 # starting the app headless itself (target/build/bin/sae), with node.
+# function_status: docs/function_status.md is what tools/function-status.sh
+# generates now (the functions' records, examples and ledger counts).
 # On Linux with no display it reruns itself under xvfb-run (a 1920 x 1200 screen).
 ROOT=$(cd "$(dirname "$0")" && pwd)
 cd "$ROOT" || exit 1
@@ -61,6 +63,7 @@ rm -rf "$LOGS" "$T/sheet-files-appdata" "$T/sheet-shell.log" "$T/sheet-storage" 
 # it gets 64 MB, and its last case asserts the peak and the callbacks held.
 TABLE="
 headless||headless
+function_status||status
 spec_sheet|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-storage SAE_PAGE_MEM=67108864|spec spec_sheet
 spec_app_sheet_bus|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-bus-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app|spec spec_app_sheet_bus
 spec_app_sheet_files|AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SAE_APPDATA_DIR=$T/sheet-files-appdata SAE_SHELL_LOG=$T/sheet-shell.log|spec spec_app_sheet_files
@@ -105,6 +108,7 @@ for line in $TABLE; do
     case "$1" in
         xkeys) set -- sh "$ROOT/tests/specs/real_keys_x11.sh" ;;
         headless) set -- env SAE_LOWER_OUT="$T/lower-tests" SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/headless" ;;
+        status) set -- sh "$ROOT/tools/function-status.sh" --check ;;
         mcp) set -- node --test "$ROOT/tests/mcp/server.test.js" ;;
         cli) set -- sh -c 'r=0; for t in "$0"/tests/cli/test_*.sh; do echo "== $t"; SAE_DIR="$1" sh "$t" || r=1; done; exit $r' "$ROOT" "$SAE" ;;
         spec) set -- env SAE_TEST_LIB_DIR="$ROOT/tests/lib" \

@@ -520,7 +520,7 @@ class Evaluator {
       case "MAKEARRAY": {
         takes(3);
         const rows = Math.trunc(toNumber(this.#scalar(args[0]))), cols = Math.trunc(toNumber(this.#scalar(args[1])));
-        if (rows < 1 || cols < 1) return fail("#CALC!", "MAKEARRAY of no rows or columns");
+        if (!(rows >= 1 && cols >= 1)) return fail("#VALUE!", "MAKEARRAY needs at least one row and one column");
         const fn = this.#closure(args[2], "MAKEARRAY"), values: Value[] = [];
         for (let i = 1; i <= rows; i++) for (let j = 1; j <= cols; j++) values.push(this.#one("MAKEARRAY", () => this.#invoke(fn, [i, j])));
         return array(rows, cols, values);
