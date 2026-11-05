@@ -16,32 +16,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "DATE_AND_TIME/DATEVALUE_issue_1380.xlsx": {
     "DATEVALUE!B2": "we-error",
   },
-  "DATE_AND_TIME/DATE_DAY_MONTH_YEAR.xlsx": {
-    "Sheet1!B6": "excel-error",
-    "Sheet1!C6": "excel-error",
-    "Sheet1!D6": "excel-error",
-    "Sheet1!E6": "excel-error",
-    "Sheet1!I15": "excel-error",
-  },
-  "DATE_AND_TIME/EDATE.xlsx": {
-    "Sheet1!C17": "excel-error",
-    "Sheet1!C18": "excel-error",
-    "Sheet1!C32": "excel-error",
-    "Sheet1!C34": "excel-error",
-    "Sheet1!C36": "excel-error",
-    "Sheet1!C46": "excel-error",
-  },
-  "DATE_AND_TIME/EOMONTH.xlsx": {
-    "Sheet1!C36": "excel-error",
-    "Sheet1!C37": "excel-error",
-    "Sheet1!C49": "we-error",
-  },
-  "DATE_AND_TIME/EOMONTH_issue_1388.xlsx": {
-    "Sheet1!C2": "excel-error",
-    "Sheet1!C4": "excel-error",
-    "Sheet1!C5": "excel-error",
-    "Sheet1!C6": "excel-error",
-  },
   "DATE_AND_TIME/TIMEVALUE.xlsx": {
     "TIMEVALUE!B9": "we-error",
     "TIMEVALUE!A22": "legacy",

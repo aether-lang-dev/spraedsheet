@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1376 cases, 1376 passing);
-88 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (458, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1384 cases, 1384 passing);
+82 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (425, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -111,11 +111,11 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | CSCH | function | 1 value | passes | 2 | `CSCH(1)` = 0.850918128239 |  |  |
 | CUMIPMT | function | 6 values | passes | 3 | `CUMIPMT(0.1, 3, 1000, 1, 3, 0)` = -206.344410876 |  | TRUE/FALSE refused |
 | CUMPRINC | function | 6 values | passes | 2 | `CUMPRINC(0.1, 3, 1000, 1, 3, 0)` = -1000 |  | TRUE/FALSE refused |
-| DATE | function | 3 values | passes | 3 | `DATE(2024, 2, 29)` = 45351 | 5 |  |
+| DATE | function | 3 values | passes | 3 | `DATE(2024, 2, 29)` = 45351 |  |  |
 | DATEDIF | function | 3 values | passes | 5 | `DATEDIF(DATE(2020, 1, 1), DATE(2024, 1, 1), "Y")` = 4 | 6 | TRUE/FALSE refused |
 | DATEVALUE | function | 1 value | passes | 3 | `DATEVALUE("2024-03-15")` = 45366 | 5 | TRUE/FALSE refused |
 | DAVERAGE | function | 3 values | passes | 3 | `DAVERAGE(H1:J5, "Profit", L1:L2)` = 110 |  |  |
-| DAY | function | 1 value | passes | 2 | `DAY(45351)` = 29 | 5 |  |
+| DAY | function | 1 value | passes | 3 | `DAY(45351)` = 29 |  |  |
 | DAYS | function | 2 values | passes | 3 | `DAYS(45352, 45351)` = 1 |  | TRUE/FALSE refused |
 | DAYS360 | function | 2 or 3 values | passes | 4 | `DAYS360(DATE(2024, 1, 31), DATE(2024, 3, 1))` = 31 |  |  |
 | DB | function | 4 or 5 values | passes | 4 | `DB(10000, 1000, 5, 1)` = 3690 | 1 |  |
@@ -144,9 +144,9 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | DURATION | function | 5 or 6 values | passes | 3 | `DURATION(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 1)` = 4.4651056127 |  |  |
 | DVAR | function | 3 values | passes | 2 | `DVAR(H1:J5, "Profit", L1:L2)` = 200 |  |  |
 | DVARP | function | 3 values | passes | 2 | `DVARP(H1:J5, "Profit", L1:L2)` = 100 |  |  |
-| EDATE | function | 2 values | passes | 3 | `EDATE(DATE(2024, 1, 31), 1)` = 45351 | 6 | TRUE/FALSE refused |
+| EDATE | function | 2 values | passes | 5 | `EDATE(DATE(2024, 1, 31), 1)` = 45351 |  | TRUE/FALSE refused |
 | EFFECT | function | 2 values | passes | 3 | `EFFECT(0.12, 12)` = 0.126825030132 |  | TRUE/FALSE refused |
-| EOMONTH | function | 2 values | passes | 2 | `EOMONTH(DATE(2024, 1, 15), 0)` = 45322 | 7 | TRUE/FALSE refused |
+| EOMONTH | function | 2 values | passes | 4 | `EOMONTH(DATE(2024, 1, 15), 0)` = 45322 |  | TRUE/FALSE refused |
 | ERF | function | 1 or 2 values | passes | 2 | `ERF(1)` = 0.84270079295 |  | TRUE/FALSE refused |
 | ERF.PRECISE | function | 1 value | passes | 3 | `ERF.PRECISE(1)` = 0.84270079295 |  | TRUE/FALSE refused |
 | ERFC | function | 1 value | passes | 3 | `ERFC(0)` = 1 |  | TRUE/FALSE refused |
@@ -303,7 +303,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | MODE | function | at least 1 value | passes | 2 | `MODE({1, 2, 2, 3})` = 2 |  |  |
 | MODE.MULT | function | at least 1 value | passes | 3 | `INDEX(MODE.MULT({1, 1, 2, 2, 3}), 2)` = 2 |  |  |
 | MODE.SNGL | function | at least 1 value | passes | 2 | `MODE.SNGL({1, 2, 2, 3})` = 2 |  |  |
-| MONTH | function | 1 value | passes | 2 | `MONTH(45351)` = 2 | 5 |  |
+| MONTH | function | 1 value | passes | 3 | `MONTH(45351)` = 2 |  |  |
 | MROUND | function | 2 values | passes | 3 | `MROUND(10, 3)` = 9 |  |  |
 | MULTINOMIAL | function | at least 1 value | passes | 3 | `MULTINOMIAL(2, 3, 4)` = 1260 | 4 |  |
 | MUNIT | function | 1 value | passes | 4 | `SUM(MUNIT(3))` = 3 |  |  |
@@ -494,7 +494,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | XMATCH | function | 2 to 4 values | passes | 5 | `XMATCH(2, {1, 2, 3})` = 2 | 6 |  |
 | XNPV | function | 3 values | passes | 3 | `XNPV(0.1, {-1000, 1100}, {0, 365})` = 0 | 7 | TRUE/FALSE refused |
 | XOR | function | at least 1 value | passes | 2 | `XOR(TRUE, FALSE)` = true | 12 |  |
-| YEAR | function | 1 value | passes | 2 | `YEAR(45351)` = 2024 | 5 |  |
+| YEAR | function | 1 value | passes | 4 | `YEAR(45351)` = 2024 |  |  |
 | YEARFRAC | function | 2 or 3 values | passes | 9 | `YEARFRAC(DATE(2024, 1, 1), DATE(2024, 7, 1))` = 0.5 | 6 | TRUE/FALSE refused |
 | YIELD | function | 6 or 7 values | passes | 2 | `YIELD(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 100, 100, 2)` = 0.06 |  |  |
 | YIELDDISC | function | 4 or 5 values | passes | 2 | `YIELDDISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 97, 100)` = 0.0618556701031 |  |  |

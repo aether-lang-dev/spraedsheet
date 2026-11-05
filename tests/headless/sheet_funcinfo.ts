@@ -24,7 +24,7 @@ eq("RAND: volatile, takes none, any case of name", [rand.name, rand.volatile, ra
 eq("DATEDIF: refuses TRUE and FALSE", (await info("DATEDIF")).refusesLogicals, true);
 eq("LET: a special form", [(await info("LET")).kind, (await info("IF")).kind], ["special form", "form"]);
 eq("OFFSET: volatile", (await info("OFFSET")).volatile, true);
-eq("a deviation declared", typeof (await info("EDATE")).deviation, "string");
+eq("a deviation declared", [typeof (await info("ACCRINT")).deviation, (await info("EDATE")).deviation], ["string", null]);
 eq("a name that is not a function", [(await cmds.execute("formulas.functionInfo", { name: "NOPE" })).message], ["NOPE is not a function"]);
 
 // The tables agree.

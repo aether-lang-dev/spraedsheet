@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 128 | this app gives an error where Excel stored a value |
-| `excel-error` | 120 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `we-error` | 127 | this app gives an error where Excel stored a value |
+| `excel-error` | 103 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 63 | both give a value, and they differ |
 
-Counted 2026-11-05 (349 cells with the 38 `legacy`, in 80 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-05 (331 cells with the 38 `legacy`, in 76 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -52,6 +52,12 @@ whole days (a start later in the same day was "after" the end); `PMT`, `FV`, `PV
 `FV` of a rate of -1 over negative periods is #DIV/0!; `IPMT` and `PPMT` take a fractional period
 up to the one after the last; `DB` of a cost of 0 is 0 (it was NaN). Cases in
 `tests/headless/lib/examples.ts`.
+
+2026-11-05, 18 cells: a date is a serial from 0 to 2,958,465 (31 December 9999): `YEAR`, `MONTH`,
+`DAY`, `EDATE` and `EOMONTH` of one outside it are #NUM!, and so is an `EDATE` or `EOMONTH` that
+comes to one outside it; a number written as text is that serial to the date functions
+(`EOMONTH("44987", 1)`). The bound is the 1900 system's (a 1904 workbook's last date is 1,462
+days earlier; not distinguished).
 
 ## Examined, not changed (still on the ledger, with the reason)
 

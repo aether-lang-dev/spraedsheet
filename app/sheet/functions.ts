@@ -1506,9 +1506,18 @@ alias("CHITEST", "CHISQ.TEST");
 // Argument i as a serial: a number, or a date written as text.
 function date(args: readonly Arg[], i: number): number {
   const v = scalar(val(args, i));
-  if (typeof v === "string") return parseDate(v) ?? fail("#VALUE!", `'${v}' is not a date`);
+  if (typeof v === "string") {
+    // A number written as text is that serial, as Excel coerces it.
+    const t = v.trim();
+    if (t !== "" && Number.isFinite(Number(t))) return Number(t);
+    return parseDate(v) ?? fail("#VALUE!", `'${v}' is not a date`);
+  }
   return toNumber(v);
 }
+// The serials that are dates: 0 (Excel's 0 January 1900) to 31 December 9999.
+const LAST_DATE = 2958465;
+const inDates = (s: number, what: string): number => (s >= 0 && s < LAST_DATE + 1 ? s : fail("#NUM!", `${what} is not a date from 1900 to 9999`));
+const dateIn = (args: readonly Arg[], i: number): number => inDates(date(args, i), `argument ${i + 1}`);
 const holidays = (args: readonly Arg[], i: number): Set<number> =>
   new Set(absent(args, i) ? [] : args[i].values.filter((v) => v !== null).map((v) => Math.floor(typeof v === "string" ? parseDate(v) ?? NaN : toNumber(v))));
 
@@ -1517,15 +1526,15 @@ def("DATE", 3, 3, (args) => {
   return serial(y < 1900 ? y + 1900 : y, Math.trunc(num(args, 1)), Math.trunc(num(args, 2)));
 });
 def("DATEVALUE", 1, 1, (args) => date(args, 0));
-def("YEAR", 1, 1, (args) => parts(date(args, 0)).y);
-def("MONTH", 1, 1, (args) => parts(date(args, 0)).m);
-def("DAY", 1, 1, (args) => parts(date(args, 0)).d);
+def("YEAR", 1, 1, (args) => parts(dateIn(args, 0)).y);
+def("MONTH", 1, 1, (args) => parts(dateIn(args, 0)).m);
+def("DAY", 1, 1, (args) => parts(dateIn(args, 0)).d);
 def("WEEKDAY", 1, 2, (args) => {
   const w = parts(date(args, 0)).weekday, type = num(args, 1, 1);
   return type === 2 ? ((w + 6) % 7) + 1 : type === 3 ? (w + 6) % 7 : w + 1;
 });
-def("EDATE", 2, 2, (args) => addMonths(date(args, 0), Math.trunc(num(args, 1))));
-def("EOMONTH", 2, 2, (args) => endOfMonth(date(args, 0), Math.trunc(num(args, 1))));
+def("EDATE", 2, 2, (args) => inDates(addMonths(dateIn(args, 0), Math.trunc(num(args, 1))), "the date it comes to"));
+def("EOMONTH", 2, 2, (args) => inDates(endOfMonth(dateIn(args, 0), Math.trunc(num(args, 1))), "the date it comes to"));
 def("DAYS", 2, 2, (args) => Math.floor(date(args, 0)) - Math.floor(date(args, 1)));
 def("DATEDIF", 3, 3, (args) => {
   // Whole days: a start later in the same day is not after the end. A
