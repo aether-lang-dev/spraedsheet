@@ -44,20 +44,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "YEARFRAC_DATEDIF!C31": "we-error",
     "YEARFRAC_DATEDIF!D31": "legacy",
   },
-  "ENGINEERING/NUMBER_SYSTEMS.xlsx": {
-    "Binary!D13": "excel-error",
-    "Binary!F13": "excel-error",
-    "Binary!D14": "excel-error",
-    "Binary!F14": "excel-error",
-    "Binary!D16": "excel-error",
-    "Binary!F16": "excel-error",
-    "Binary!D18": "excel-error",
-    "Binary!F18": "excel-error",
-    "Binary!D30": "excel-error",
-    "Binary!F30": "excel-error",
-    "Binary!D31": "excel-error",
-    "Binary!F31": "excel-error",
-  },
   "FINANCIAL/ACCRINT.xlsx": {
     "Sheet1!B4": "value",
     "Sheet1!B5": "value",
@@ -138,27 +124,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "INFORMATION/error_broadcast.xlsx": {
     "Sheet1!E68": "value",
     "Sheet1!E76": "we-error",
-  },
-  "LOGICAL/AND_OR_XOR.xlsx": {
-    "AND XOR OR!C101": "excel-error",
-    "AND XOR OR!D101": "excel-error",
-    "AND XOR OR!E101": "excel-error",
-    "AND XOR OR!C102": "excel-error",
-    "AND XOR OR!D102": "excel-error",
-    "AND XOR OR!E102": "excel-error",
-    "AND XOR OR!C103": "excel-error",
-    "AND XOR OR!D103": "excel-error",
-    "AND XOR OR!E103": "excel-error",
-    "AND XOR OR!C104": "excel-error",
-    "AND XOR OR!D104": "excel-error",
-    "AND XOR OR!E104": "excel-error",
-  },
-  "LOGICAL/IFS.xlsx": {
-    "Sheet1!C6": "excel-error",
-    "Sheet1!H6": "excel-error",
-    "Sheet1!N6": "excel-error",
-    "Sheet1!H12": "excel-error",
-    "Sheet1!N12": "excel-error",
   },
   "LOGICAL/LAMBDA.xlsx": {
     "Sheet1!F2": "we-error",
@@ -256,12 +221,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "EXP_SIGN!B36": "legacy",
     "EXP_SIGN!C36": "legacy",
   },
-  "MATH_AND_TRIGONOMETRY/LOG_LOG10_LN.xlsx": {
-    "LOG!G3": "excel-error",
-    "LOG!G8": "excel-error",
-    "LOG!G13": "excel-error",
-    "LOG!G18": "excel-error",
-  },
   "MATH_AND_TRIGONOMETRY/MIN_MAX_extras.xlsx": {
     "Sheet1!A14": "value",
     "Sheet1!A15": "value",
@@ -287,12 +246,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "inside_a_lambda!A3": "we-error",
     "inside_a_lambda!A4": "we-error",
   },
-  "MATH_AND_TRIGONOMETRY/SEQUENCE.xlsx": {
-    "Sheet1!C16": "excel-error",
-    "Sheet1!C18": "excel-error",
-    "Sheet1!E18": "excel-error",
-    "Sheet1!C23": "we-error",
-  },
   "MATH_AND_TRIGONOMETRY/SERIESSUM.xlsx": {
     "Sheet1!F7": "excel-error",
     "Sheet1!G7": "excel-error",
@@ -307,9 +260,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!G6": "we-error",
     "Sheet1!J6": "we-error",
     "Sheet1!K6": "value",
-  },
-  "MATH_AND_TRIGONOMETRY/SUMSQ.xlsx": {
-    "SUMSQ!B25": "excel-error",
   },
   "STATISTICAL/AVERAGE.xlsx": {
     "Sheet1!M16": "value",

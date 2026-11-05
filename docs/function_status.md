@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1397 cases, 1397 passing);
-79 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (367, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1403 cases, 1403 passing);
+70 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (309, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -24,7 +24,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ACOTH | function | 1 value | passes | 4 | `ACOTH(2)` = 0.549306144334 |  |  |
 | ADDRESS | function | 2 to 5 values | passes | 5 | `ADDRESS(2, 3)` = "$C$2" |  |  |
 | AGGREGATE | form | (its own) | passes | 4 | `AGGREGATE(9, 0, A1:A3)` = 6 |  | volatile |
-| AND | function | at least 1 value | passes | 3 | `AND(TRUE, TRUE)` = true | 12 |  |
+| AND | function | at least 1 value | passes | 5 | `AND(TRUE, TRUE)` = true |  |  |
 | ARABIC | function | 1 value | passes | 3 | `ARABIC("MCMXCIV")` = 1994 | 8 |  |
 | ARRAYTOTEXT | function | 1 or 2 values | passes | 3 | `ARRAYTOTEXT({1, 2; 3, 4})` = "1, 2; 3, 4" | 1 |  |
 | ASIN | function | 1 value | passes | 3 | `ASIN(0.5)` = 0.523598775598 |  |  |
@@ -47,7 +47,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | BETADIST | function | 3 to 5 values | passes | 2 | `BETADIST(0.5, 2, 2)` = 0.5 |  |  |
 | BETAINV | function | 3 to 5 values | passes | 2 | `BETAINV(0.5, 2, 2)` = 0.5 |  |  |
 | BIN2DEC | function | 1 value | passes | 3 | `BIN2DEC("1010")` = 10 |  | TRUE/FALSE refused |
-| BIN2HEX | function | 1 or 2 values | passes | 4 | `BIN2HEX("1111")` = "F" |  | TRUE/FALSE refused |
+| BIN2HEX | function | 1 or 2 values | passes | 5 | `BIN2HEX("1111")` = "F" |  | TRUE/FALSE refused |
 | BIN2OCT | function | 1 or 2 values | passes | 4 | `BIN2OCT("1111")` = "17" |  | TRUE/FALSE refused |
 | BINOM.DIST | function | 4 values | passes | 3 | `BINOM.DIST(2, 4, 0.5, FALSE)` = 0.375 |  |  |
 | BINOM.DIST.RANGE | function | 3 or 4 values | passes | 3 | `BINOM.DIST.RANGE(4, 0.5, 1, 2)` = 0.625 |  |  |
@@ -213,7 +213,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | IF | form | (its own) | passes | 3 | `IF(TRUE, 1, 2)` = 1 | 9 |  |
 | IFERROR | function | 2 values | passes | 2 | `IFERROR(1 / 0, "x")` = "x" |  |  |
 | IFNA | function | 2 values | passes | 2 | `IFNA(NA(), 5)` = 5 |  |  |
-| IFS | function | at least 2 values | passes | 2 | `IFS(FALSE, 1, TRUE, 2)` = 2 | 5 |  |
+| IFS | function | at least 2 values | passes | 3 | `IFS(FALSE, 1, TRUE, 2)` = 2 |  |  |
 | IMABS | function | 1 value | passes | 4 | `IMABS("3+4i")` = 5 |  |  |
 | IMAGE | function | 1 to 5 values | passes | 3 | `IMAGE("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "dot")` = "dot" |  |  |
 | IMAGINARY | function | 1 value | passes | 3 | `IMAGINARY("3+4i")` = 4 |  |  |
@@ -272,9 +272,9 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | LEN | function | 1 value | passes | 2 | `LEN("hello")` = 5 |  |  |
 | LET | special form | (its own) | passes | 4 | `LET(x, 2, x * 3)` = 6 |  |  |
 | LINEST | function | 1 to 4 values | passes | 2 | `INDEX(LINEST({2, 4, 6}, {1, 2, 3}), 1, 1)` = 2 |  |  |
-| LN | function | 1 value | passes | 3 | `LN(EXP(3))` = 3 | 4 |  |
-| LOG | function | 1 or 2 values | passes | 3 | `LOG(8, 2)` = 3 | 4 |  |
-| LOG10 | function | 1 value | passes | 3 | `LOG10(1000)` = 3 | 4 |  |
+| LN | function | 1 value | passes | 3 | `LN(EXP(3))` = 3 |  |  |
+| LOG | function | 1 or 2 values | passes | 3 | `LOG(8, 2)` = 3 |  |  |
+| LOG10 | function | 1 value | passes | 3 | `LOG10(1000)` = 3 |  |  |
 | LOGEST | function | 1 to 4 values | passes | 2 | `INDEX(LOGEST({2, 4, 8}, {1, 2, 3}), 1, 1)` = 2 |  |  |
 | LOGINV | function | 3 values | passes | 3 | `LOGINV(0.5, 0, 1)` = 1 |  |  |
 | LOGNORM.DIST | function | 4 values | passes | 3 | `LOGNORM.DIST(1, 0, 1, TRUE)` = 0.5 |  |  |
@@ -336,7 +336,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ODDLPRICE | function | 7 or 8 values | passes | 2 | `ODDLPRICE(DATE(2024, 2, 1), DATE(2024, 5, 1), DATE(2024, 1, 1), 0.06, 0.05, 100, 2, 0)` = 100.240740741 |  |  |
 | ODDLYIELD | function | 7 or 8 values | passes | 2 | `ODDLYIELD(DATE(2024, 2, 1), DATE(2024, 5, 1), DATE(2024, 1, 1), 0.06, 102 / 1.0125 - 0.5, 100, 2, 0)` = 0.05 |  |  |
 | OFFSET | form | (its own) | passes | 4 | `OFFSET(A1, 1, 1)` = 20 |  | volatile |
-| OR | function | at least 1 value | passes | 2 | `OR(FALSE, TRUE)` = true | 12 |  |
+| OR | function | at least 1 value | passes | 2 | `OR(FALSE, TRUE)` = true |  |  |
 | PDURATION | function | 3 values | passes | 3 | `PDURATION(0.1, 100, 121)` = 2 |  |  |
 | PEARSON | function | 2 values | passes | 3 | `PEARSON({1, 2, 3}, {2, 4, 7})` = 0.993399267799 |  |  |
 | PERCENTILE | function | 2 values | passes | 3 | `PERCENTILE({1, 2, 3, 4}, 0.5)` = 2.5 |  |  |
@@ -395,7 +395,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SEC | function | 1 value | passes | 3 | `SEC(0)` = 1 |  |  |
 | SECH | function | 1 value | passes | 2 | `SECH(0)` = 1 |  |  |
 | SECOND | function | 1 value | passes | 4 | `SECOND(45 / 86400)` = 45 |  |  |
-| SEQUENCE | function | 1 to 4 values | passes | 4 | `INDEX(SEQUENCE(3), 3)` = 3 | 4 |  |
+| SEQUENCE | function | 1 to 4 values | passes | 5 | `INDEX(SEQUENCE(3), 3)` = 3 |  |  |
 | SERIESSUM | function | 4 values | passes | 3 | `SERIESSUM(2, 0, 1, {1, 1, 1})` = 7 | 2 |  |
 | SHEET | form | (its own) | passes | 4 | `SHEET()` = 1 |  |  |
 | SHEETS | form | (its own) | passes | 3 | `SHEETS()` = 2 |  |  |
@@ -426,7 +426,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SUMIF | function | 2 or 3 values | passes | 4 | `SUMIF(A1:A3, ">1")` = 5 | 9 |  |
 | SUMIFS | function | at least 3 values | passes | 3 | `SUMIFS(B1:B3, A1:A3, ">1", A1:A3, "<3")` = 20 |  |  |
 | SUMPRODUCT | function | at least 1 value | passes | 2 | `SUMPRODUCT({1, 2}, {3, 4})` = 11 |  |  |
-| SUMSQ | function | at least 1 value | passes | 4 | `SUMSQ(3, 4)` = 25 | 1 |  |
+| SUMSQ | function | at least 1 value | passes | 5 | `SUMSQ(3, 4)` = 25 |  |  |
 | SUMX2MY2 | function | 2 values | passes | 3 | `SUMX2MY2({1, 2}, {3, 4})` = -20 |  |  |
 | SUMX2PY2 | function | 2 values | passes | 3 | `SUMX2PY2({1, 2}, {3, 4})` = 30 |  |  |
 | SUMXMY2 | function | 2 values | passes | 3 | `SUMXMY2({1, 2}, {3, 5})` = 13 |  |  |
@@ -493,7 +493,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | XLOOKUP | function | 3 to 6 values | passes | 3 | `XLOOKUP(2, {1, 2, 3}, {"a", "b", "c"})` = "b" |  |  |
 | XMATCH | function | 2 to 4 values | passes | 5 | `XMATCH(2, {1, 2, 3})` = 2 | 6 |  |
 | XNPV | function | 3 values | passes | 3 | `XNPV(0.1, {-1000, 1100}, {0, 365})` = 0 | 7 | TRUE/FALSE refused |
-| XOR | function | at least 1 value | passes | 2 | `XOR(TRUE, FALSE)` = true | 12 |  |
+| XOR | function | at least 1 value | passes | 2 | `XOR(TRUE, FALSE)` = true |  |  |
 | YEAR | function | 1 value | passes | 4 | `YEAR(45351)` = 2024 |  |  |
 | YEARFRAC | function | 2 or 3 values | passes | 9 | `YEARFRAC(DATE(2024, 1, 1), DATE(2024, 7, 1))` = 0.5 | 6 | TRUE/FALSE refused |
 | YIELD | function | 6 or 7 values | passes | 2 | `YIELD(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 100, 100, 2)` = 0.06 |  |  |

@@ -33,6 +33,8 @@ export function fromRadix(text: string, r: Radix): number {
 export function toRadix(n: number, r: Radix, places: number | null): string {
   const x = Math.trunc(n), half = span(r) / 2;
   if (x < -half || x >= half) throw new RangeError(`${x} does not fit ten ${r.name} digits`);
+  // Places, given, are 1 to 10 even where a negative ignores them.
+  if (places !== null && !(Math.trunc(places) >= 1 && Math.trunc(places) <= 10)) throw new RangeError(`places is 1 to 10, not ${places}`);
   if (x < 0) return (span(r) + x).toString(r.base).toUpperCase();
   const s = x.toString(r.base).toUpperCase();
   if (places === null) return s;

@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 104 | this app gives an error where Excel stored a value |
-| `excel-error` | 97 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `we-error` | 103 | this app gives an error where Excel stored a value |
+| `excel-error` | 60 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 57 | both give a value, and they differ |
 
-Counted 2026-11-05 (296 cells with the 38 `legacy`, in 73 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-05 (258 cells with the 38 `legacy`, in 67 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -70,6 +70,14 @@ COUNT and the other functions over a list of numbers, where the same value in a 
 over: `SUM("7", TRUE)` is 8 and `SUM("seven")` #VALUE! (COUNT passes the text over), as Excel
 documents. An argument is typed when it is a number, text, TRUE or FALSE, a negation or an
 operation (`Arg.typed`, set by the evaluator).
+
+2026-11-05, 38 cells: AND, OR and XOR pass over text in a cell ("TRUE" there is no TRUE, so
+`AND(A7)` with nothing else is #VALUE!); an IFS condition that is text is #VALUE!; LOG to base 1
+is #DIV/0!; SEQUENCE of fewer than one row or column is #VALUE!, and its rows left out are 1;
+SUMSQ that overflows is #NUM!; BIN2HEX, BIN2OCT and the other conversions refuse places outside 1
+to 10 even for a negative, which ignores them. The earlier cases `LOG(8, 1)` = #NUM! and
+`SEQUENCE(0)` = #CALC! were this app's guesses; Excel's stored values say otherwise, and they are
+corrected.
 
 ## Intended (found while looking)
 

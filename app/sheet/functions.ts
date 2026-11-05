@@ -333,7 +333,9 @@ def("LOG10", 1, 1, (args) => {
 def("LOG", 1, 2, (args) => {
   const x = num(args, 0), b = num(args, 1, 10);
   if (x <= 0) return fail("#NUM!", `LOG of ${x}: not positive`);
-  if (b <= 0 || b === 1) return fail("#NUM!", `LOG to base ${b}`);
+  if (b <= 0) return fail("#NUM!", `LOG to base ${b}`);
+  // The log of the base is 0: a division by zero, as Excel answers.
+  if (b === 1) return fail("#DIV/0!", "LOG to base 1");
   return Number((Math.log(x) / Math.log(b)).toPrecision(15));
 });
 def("QUOTIENT", 2, 2, (args) => {
@@ -370,7 +372,7 @@ def("PERMUT", 2, 2, (args) => {
   for (let i = 0; i < k; i++) p *= n - i;
   return real(p, "PERMUT overflows");
 });
-def("SUMSQ", 1, Infinity, (args) => sum(numbers(args).map((n) => n * n)));
+def("SUMSQ", 1, Infinity, (args) => finite(sum(numbers(args).map((n) => n * n))));
 // RAND, RANDBETWEEN and RANDARRAY draw afresh on every change (volatile:
 // evaluate.ts lists them).
 def("RAND", 0, 0, () => Math.random());
@@ -422,11 +424,14 @@ const truthText = (s: string): boolean | null => {
   return t === "TRUE" ? true : t === "FALSE" ? false : null;
 };
 // AND's and OR's operands as TRUE or FALSE: numbers by whether they are 0,
-// the text "TRUE" and "FALSE" as those, other text and empty cells skipped.
+// the text "TRUE" and "FALSE" typed into the call as those, other text (and
+// any text in a cell) and empty cells skipped.
 const truths = (name: string, args: readonly Arg[]): boolean[] => {
-  const ts = every(args).map(scalar).flatMap((v): boolean[] => {
+  const ts = args.flatMap((a) => a.values.map((v): [Value, boolean] => [v, !!a.typed])).flatMap(([x, typed]): boolean[] => {
+    const v = scalar(x);
     if (v === null) return [];
-    if (typeof v === "string") { const t = truthText(v); return t === null ? [] : [t]; }
+    // Text in a cell is passed over ("TRUE" there is no TRUE); typed, "TRUE" and "FALSE" are those.
+    if (typeof v === "string") { const t = typed ? truthText(v) : null; return t === null ? [] : [t]; }
     return [toNumber(v) !== 0];
   });
   return ts.length ? ts : fail("#VALUE!", `${name} found no TRUE or FALSE`);
@@ -767,7 +772,12 @@ def("TEXTSPLIT", 2, 6, (args) => {
 // --- conditionals ---
 
 def("IFS", 2, Infinity, (args) => {
-  for (let i = 0; i + 1 < args.length; i += 2) if (toNumber(val(args, i)) !== 0) return val(args, i + 1);
+  for (let i = 0; i + 1 < args.length; i += 2) {
+    // A condition is TRUE, FALSE or a number; text is #VALUE!, as Excel has it.
+    const c = scalar(val(args, i));
+    if (typeof c === "string") return fail("#VALUE!", `IFS's condition ${i / 2 + 1} is text`);
+    if (toNumber(c) !== 0) return val(args, i + 1);
+  }
   return fail("#N/A", "no condition was true");
 });
 def("SWITCH", 3, Infinity, (args) => {
@@ -1761,8 +1771,9 @@ const turned = (x: ArrayValue): ArrayValue => {
 };
 
 def("SEQUENCE", 1, 4, (args) => {
-  const rows = Math.trunc(num(args, 0)), cols = Math.trunc(num(args, 1, 1)), start = num(args, 2, 1), step = num(args, 3, 1);
-  if (rows < 1 || cols < 1) return fail("#CALC!", `SEQUENCE of no ${rows < 1 ? "rows" : "columns"}`);
+  // Rows left out are 1 (SEQUENCE(, 12) is a row); fewer than one is #VALUE!.
+  const rows = Math.trunc(num(args, 0, 1)), cols = Math.trunc(num(args, 1, 1)), start = num(args, 2, 1), step = num(args, 3, 1);
+  if (rows < 1 || cols < 1) return fail("#VALUE!", `SEQUENCE of no ${rows < 1 ? "rows" : "columns"}`);
   if (rows * cols > 10_000) return fail("#NUM!", "SEQUENCE of more than 10000 values");
   return array(rows, cols, Array.from({ length: rows * cols }, (_, i) => start + step * i));
 });

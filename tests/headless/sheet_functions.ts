@@ -481,7 +481,7 @@ eq("MROUND of different signs", why("MROUND(5, -2)"), ["#NUM! MROUND's number an
 eq("EXP, LN, LOG, LOG10", ev("EXP(1)", "EXP(0)", "LN(EXP(2))", "LN(86)", "LOG(8, 2)", "LOG(100)", "LOG(1000, 10)", "LOG10(86)", "LOG(2.7182818)"),
   ["2.718281828", "1", "2", "4.454347296", "3", "2", "3", "1.934498451", "0.4342944774"]);
 eq("their errors", why("LN(0)", "LN(-1)", "LOG(8, 1)", "LOG(-8)", "LOG10(0)", "EXP(1000)"),
-  ["#NUM! LN of 0: not positive", "#NUM! LN of -1: not positive", "#NUM! LOG to base 1", "#NUM! LOG of -8: not positive", "#NUM! LOG10 of 0: not positive", "#NUM! EXP overflows"]);
+  ["#NUM! LN of 0: not positive", "#NUM! LN of -1: not positive", "#DIV/0! LOG to base 1", "#NUM! LOG of -8: not positive", "#NUM! LOG10 of 0: not positive", "#NUM! EXP overflows"]);
 eq("QUOTIENT, GCD, LCM", ev("QUOTIENT(5, 2)", "QUOTIENT(4.5, 3.1)", "QUOTIENT(-10, 3)", "GCD(5, 2)", "GCD(24, 36)", "GCD(7, 1)", "GCD(5, 0)", "GCD(A1:A6)", "LCM(5, 2)", "LCM(24, 36)", "LCM(6, 4, 10)", "LCM(0, 5)"),
   ["2", "1", "-3", "1", "12", "1", "5", "1", "10", "72", "60", "0"]);
 eq("their errors", why("QUOTIENT(1, 0)", "GCD(-2, 4)", "LCM(3, -1)"), ["#DIV/0! QUOTIENT by zero", "#NUM! GCD of a negative number, -2", "#NUM! LCM of a negative number, -1"]);
