@@ -263,7 +263,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "LOG!G18": "excel-error",
   },
   "MATH_AND_TRIGONOMETRY/MIN_MAX_extras.xlsx": {
-    "Sheet1!A7": "excel-error",
     "Sheet1!A14": "value",
     "Sheet1!A15": "value",
     "Sheet1!A16": "value",
@@ -287,14 +286,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "implicit_intersection!C2": "we-error",
     "inside_a_lambda!A3": "we-error",
     "inside_a_lambda!A4": "we-error",
-  },
-  "MATH_AND_TRIGONOMETRY/PRODUCT_SUM.xlsx": {
-    "Sheet1!B22": "value",
-    "Sheet1!C22": "value",
-    "Sheet1!B23": "excel-error",
-    "Sheet1!C23": "excel-error",
-    "Sheet1!B24": "value",
-    "Sheet1!C24": "value",
   },
   "MATH_AND_TRIGONOMETRY/SEQUENCE.xlsx": {
     "Sheet1!C16": "excel-error",
@@ -321,12 +312,8 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "SUMSQ!B25": "excel-error",
   },
   "STATISTICAL/AVERAGE.xlsx": {
-    "Sheet1!M15": "we-error",
     "Sheet1!M16": "value",
     "Sheet1!E23": "we-error",
-    "Sheet1!D27": "excel-error",
-    "Sheet1!E27": "excel-error",
-    "Sheet1!F27": "value",
     "Sheet1!E28": "excel-error",
     "Sheet1!F28": "value",
   },
@@ -337,8 +324,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!B16": "we-error",
     "Sheet1!E16": "we-error",
     "Sheet1!E23": "we-error",
-    "Sheet1!E27": "value",
-    "Sheet1!F27": "value",
     "Sheet1!G27": "we-error",
   },
   "STATISTICAL/EXPONDIST.xlsx": {

@@ -3,7 +3,7 @@
 // range's width (VLOOKUP and INDEX need its shape), or one value. An
 // argument that is an error arrives as that error, so IFERROR and ISERROR
 // can look at it; everything else rethrows it as soon as it reads it.
-import { CellError, array, compare, fail, finite, isArray, power, scalar, toNumber, toText, trimmed } from "./values.ts";
+import { CellError, array, compare, fail, finite, isArray, power, scalar, textNumber, toNumber, toText, trimmed } from "./values.ts";
 import { numberFormat } from "./numfmt.ts";
 import type { ArrayValue, Comparison, Result, Value } from "./values.ts";
 import { sortOrder } from "./sortfind.ts";
@@ -20,6 +20,10 @@ import { colName, sheetPrefix } from "./address.ts";
 export interface Arg {
   readonly values: readonly Value[];
   readonly cols: number;
+  // Typed into the call itself (a number, text, TRUE, an operation), not a
+  // reference or a range: SUM("7") counts the 7 and SUM(TRUE) the 1, where
+  // a cell holding "7" or TRUE is passed over, as Excel has it.
+  readonly typed?: true;
 }
 
 export const single = (v: Value): Arg => ({ values: [v], cols: 1 });
@@ -133,8 +137,21 @@ const num = (args: readonly Arg[], i: number, otherwise?: number): number =>
   absent(args, i) && otherwise !== undefined ? otherwise : toNumber(val(args, i));
 const str = (args: readonly Arg[], i: number): string => toText(val(args, i));
 const every = (args: readonly Arg[]): Value[] => args.flatMap((a) => a.values);
-const numbers = (args: readonly Arg[]): number[] =>
-  every(args).map(scalar).filter((v): v is number => typeof v === "number");
+// The numbers of the arguments: a range's numbers only, and a typed value as
+// a number (TRUE 1, "7" 7; other text #VALUE!, or, `lenient`, passed over
+// as COUNT does).
+const numbers = (args: readonly Arg[], lenient = false): number[] =>
+  args.flatMap((a) => {
+    if (!a.typed) return a.values.map(scalar).filter((v): v is number => typeof v === "number");
+    const v = scalar(a.values[0] ?? null);
+    if (typeof v === "number") return [v];
+    if (typeof v === "boolean") return [v ? 1 : 0];
+    if (typeof v === "string") {
+      const n = textNumber(v);
+      return n !== null ? [n] : lenient ? [] : fail("#VALUE!", `'${v}' is not a number`);
+    }
+    return [];
+  });
 const sum = (ns: readonly number[]): number => ns.reduce((s, n) => s + n, 0);
 const blank = (v: Value): boolean => v === null || v === "";
 
@@ -215,7 +232,7 @@ def("STDEV", 1, Infinity, (args) => {
   const mean = sum(ns) / ns.length;
   return Math.sqrt(sum(ns.map((n) => (n - mean) ** 2)) / (ns.length - 1));
 });
-def("COUNT", 1, Infinity, (args) => numbers(args).length);
+def("COUNT", 1, Infinity, (args) => numbers(args, true).length);
 // The A forms count every cell that holds something: TRUE 1, FALSE and
 // text 0, an error itself.
 const everything = (args: readonly Arg[]): number[] => every(args).map(scalar).flatMap((v) => (v === null ? [] : typeof v === "number" ? [v] : v === true ? [1] : [0]));

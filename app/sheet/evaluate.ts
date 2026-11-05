@@ -27,6 +27,9 @@ import type { ArrayValue, Result, Value } from "./values.ts";
 import type { Op } from "./lexer.ts";
 
 // The forms worked out here rather than by the library (IF is listed there).
+// The arguments typed into a call (functions.ts Arg.typed), by what they are.
+const TYPED = new Set(["num", "str", "bool", "neg", "binary"]);
+
 export const SPECIAL_FORMS: readonly string[] = ["LET", "LAMBDA", "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL", "MAKEARRAY"];
 
 export interface Env {
@@ -298,7 +301,8 @@ class Evaluator {
     if (e.kind === "missing") return { values: [], cols: 0 };
     try {
       const r = this.result(e);
-      return isArray(r) ? { values: r.values, cols: r.cols } : single(r);
+      if (isArray(r)) return { values: r.values, cols: r.cols };
+      return TYPED.has(e.kind) && !(r instanceof CellError) ? { values: [r], cols: 1, typed: true } : single(r);
     } catch (err) {
       if (err instanceof CellError && e.kind !== "range" && e.kind !== "table") return single(err);
       throw err;

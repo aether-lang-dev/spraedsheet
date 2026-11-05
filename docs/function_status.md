@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1392 cases, 1392 passing);
-81 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (387, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1397 cases, 1397 passing);
+79 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (367, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -33,7 +33,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ATAN2 | function | 2 values | passes | 3 | `ATAN2(1, 1)` = 0.785398163397 |  |  |
 | ATANH | function | 1 value | passes | 4 | `ATANH(0.5)` = 0.549306144334 |  |  |
 | AVEDEV | function | at least 1 value | passes | 2 | `AVEDEV({1, 2, 3})` = 0.666666666667 |  |  |
-| AVERAGE | function | at least 1 value | passes | 3 | `AVERAGE({1, 2, 3, 4})` = 2.5 | 17 |  |
+| AVERAGE | function | at least 1 value | passes | 3 | `AVERAGE({1, 2, 3, 4})` = 2.5 | 13 |  |
 | AVERAGEA | function | at least 1 value | passes | 3 | `AVERAGEA({2, 4})` = 3 |  |  |
 | AVERAGEIF | function | 2 or 3 values | passes | 3 | `AVERAGEIF(A1:A3, ">1")` = 2.5 |  |  |
 | AVERAGEIFS | function | at least 3 values | passes | 2 | `AVERAGEIFS(B1:B3, A1:A3, ">1")` = 25 |  |  |
@@ -93,7 +93,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | COSH | function | 1 value | passes | 3 | `COSH(1)` = 1.54308063482 |  |  |
 | COT | function | 1 value | passes | 3 | `COT(1)` = 0.642092615934 |  |  |
 | COTH | function | 1 value | passes | 2 | `COTH(1)` = 1.3130352855 |  |  |
-| COUNT | function | at least 1 value | passes | 2 | `COUNT({1, "a", 2})` = 2 | 9 |  |
+| COUNT | function | at least 1 value | passes | 3 | `COUNT({1, "a", 2})` = 2 | 7 |  |
 | COUNTA | function | at least 1 value | passes | 3 | `COUNTA({1, "a", ""})` = 3 |  |  |
 | COUNTBLANK | function | 1 value | passes | 2 | `COUNTBLANK({1, "", 2})` = 1 |  |  |
 | COUNTIF | function | 2 values | passes | 4 | `COUNTIF(A1:A3, ">1")` = 2 |  |  |
@@ -285,14 +285,14 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | MAKEARRAY | special form | (its own) | passes | 3 | `INDEX(MAKEARRAY(2, 3, LAMBDA(r, c, r * c)), 2, 3)` = 6 |  |  |
 | MAP | special form | (its own) | passes | 2 | `INDEX(MAP({1, 2, 3}, LAMBDA(x, x * 2)), 1, 3)` = 6 |  |  |
 | MATCH | function | 2 or 3 values | passes | 3 | `MATCH(3, {1, 2, 3}, 0)` = 3 | 9 |  |
-| MAX | function | at least 1 value | passes | 3 | `MAX({1, 5, 3})` = 5 | 4 |  |
+| MAX | function | at least 1 value | passes | 4 | `MAX({1, 5, 3})` = 5 | 3 |  |
 | MAXA | function | at least 1 value | passes | 3 | `MAXA({1, TRUE, "a"})` = 1 | 3 |  |
 | MAXIFS | function | at least 3 values | passes | 2 | `MAXIFS(B1:B3, A1:A3, "<3")` = 20 |  |  |
 | MDETERM | function | 1 value | passes | 3 | `MDETERM({1, 2; 3, 4})` = -2 |  |  |
 | MDURATION | function | 5 or 6 values | passes | 2 | `MDURATION(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 1)` = 4.21236378557 |  |  |
 | MEDIAN | function | at least 1 value | passes | 3 | `MEDIAN({1, 3, 2, 4})` = 2.5 |  |  |
 | MID | function | 3 values | passes | 3 | `MID("hello", 2, 3)` = "ell" |  |  |
-| MIN | function | at least 1 value | passes | 3 | `MIN({4, 1, 3})` = 1 | 4 |  |
+| MIN | function | at least 1 value | passes | 3 | `MIN({4, 1, 3})` = 1 | 3 |  |
 | MINA | function | at least 1 value | passes | 3 | `MINA({5, "a"})` = 0 | 3 |  |
 | MINIFS | function | at least 3 values | passes | 2 | `MINIFS(B1:B3, A1:A3, ">1")` = 20 |  |  |
 | MINUTE | function | 1 value | passes | 4 | `MINUTE(0.5 + 30 / 1440)` = 30 |  |  |
@@ -359,7 +359,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | PRICEDISC | function | 4 or 5 values | passes | 3 | `PRICEDISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 100)` = 97 |  |  |
 | PRICEMAT | function | 5 or 6 values | passes | 2 | `PRICEMAT(DATE(2024, 4, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 0.05, 0)` = 100.668674699 |  |  |
 | PROB | function | 3 or 4 values | passes | 4 | `PROB({1, 2, 3}, {0.2, 0.5, 0.3}, 2)` = 0.5 | 1 |  |
-| PRODUCT | function | at least 1 value | passes | 2 | `PRODUCT(2, 3, 4)` = 24 | 6 |  |
+| PRODUCT | function | at least 1 value | passes | 2 | `PRODUCT(2, 3, 4)` = 24 |  |  |
 | PROPER | function | 1 value | passes | 2 | `PROPER("hello wORLD")` = "Hello World" |  |  |
 | PV | function | 3 to 5 values | passes | 2 | `PV(0, 10, -100)` = 1000 |  |  |
 | QUARTILE | function | 2 values | passes | 3 | `QUARTILE({1, 2, 3, 4, 5}, 2)` = 3 |  |  |
@@ -422,7 +422,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | STEYX | function | 2 values | passes | 3 | `STEYX({2, 4, 5}, {1, 2, 3})` = 0.408248290464 |  |  |
 | SUBSTITUTE | function | 3 or 4 values | passes | 4 | `SUBSTITUTE("aaa", "a", "b", 2)` = "aba" |  |  |
 | SUBTOTAL | form | (its own) | passes | 4 | `SUBTOTAL(9, A1:A3)` = 6 |  | volatile |
-| SUM | function | at least 1 value | passes | 3 | `SUM(1, 2, 3)` = 6 | 6 |  |
+| SUM | function | at least 1 value | passes | 6 | `SUM(1, 2, 3)` = 6 |  |  |
 | SUMIF | function | 2 or 3 values | passes | 4 | `SUMIF(A1:A3, ">1")` = 5 | 9 |  |
 | SUMIFS | function | at least 3 values | passes | 3 | `SUMIFS(B1:B3, A1:A3, ">1", A1:A3, "<3")` = 20 |  |  |
 | SUMPRODUCT | function | at least 1 value | passes | 2 | `SUMPRODUCT({1, 2}, {3, 4})` = 11 |  |  |

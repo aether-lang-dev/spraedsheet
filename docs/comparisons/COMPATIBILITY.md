@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 105 | this app gives an error where Excel stored a value |
-| `excel-error` | 102 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 64 | both give a value, and they differ |
+| `we-error` | 104 | this app gives an error where Excel stored a value |
+| `excel-error` | 97 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 57 | both give a value, and they differ |
 
-Counted 2026-11-05 (309 cells with the 38 `legacy`, in 74 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-05 (296 cells with the 38 `legacy`, in 73 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -64,6 +64,12 @@ days earlier; not distinguished).
 time as it stands; and no longer JavaScript's spellings ("0x10", "Infinity"). A date is checked
 to be one ("30/2/2010" is not). EXP, SIGN, VALUE, `--"50%"`, CONFIDENCE and an IF over an array
 came right with it.
+
+2026-11-05, 13 cells: a value typed into the call is counted by SUM, PRODUCT, AVERAGE, MIN, MAX,
+COUNT and the other functions over a list of numbers, where the same value in a cell is passed
+over: `SUM("7", TRUE)` is 8 and `SUM("seven")` #VALUE! (COUNT passes the text over), as Excel
+documents. An argument is typed when it is a number, text, TRUE or FALSE, a negation or an
+operation (`Arg.typed`, set by the evaluator).
 
 ## Intended (found while looking)
 
