@@ -243,7 +243,8 @@ def("STDEV", 1, Infinity, (args) => {
 def("COUNT", 1, Infinity, (args) => numbers(args, true).length);
 // The A forms count every cell that holds something: TRUE 1, FALSE and
 // text 0, an error itself.
-const everything = (args: readonly Arg[]): number[] => every(args).map(scalar).flatMap((v) => (v === null ? [] : typeof v === "number" ? [v] : v === true ? [1] : [0]));
+// Typed into the call, text is read as a number (#VALUE! if it is not one).
+const everything = (args: readonly Arg[]): number[] => args.flatMap((a) => a.typed ? numbers([a]) : a.values.map(scalar).flatMap((v) => (v === null ? [] : typeof v === "number" ? [v] : v === true ? [1] : [0])));
 def("MAXA", 1, Infinity, (args) => { const ns = everything(args); return ns.length ? Math.max(...ns) : 0; });
 def("MINA", 1, Infinity, (args) => { const ns = everything(args); return ns.length ? Math.min(...ns) : 0; });
 def("AVERAGEA", 1, Infinity, (args) => {
@@ -840,7 +841,8 @@ def("SUMPRODUCT", 1, Infinity, (args) => {
 
 // --- order statistics ---
 
-const sorted = (args: readonly Arg[], i: number): number[] => numbersIn(args[i].values).sort((x, y) => x - y);
+// The numbers of argument i, sorted (a typed one read as numbers() reads it).
+const sorted = (args: readonly Arg[], i: number): number[] => numbers([args[i]]).sort((x, y) => x - y);
 function kth(name: string, largest: boolean): Fn {
   return (args) => {
     const ns = sorted(args, 0), k = Math.trunc(num(args, 1));

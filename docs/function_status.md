@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1407 cases, 1407 passing);
-68 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (293, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1411 cases, 1411 passing);
+64 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (278, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -33,7 +33,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ATAN2 | function | 2 values | passes | 3 | `ATAN2(1, 1)` = 0.785398163397 |  |  |
 | ATANH | function | 1 value | passes | 4 | `ATANH(0.5)` = 0.549306144334 |  |  |
 | AVEDEV | function | at least 1 value | passes | 2 | `AVEDEV({1, 2, 3})` = 0.666666666667 |  |  |
-| AVERAGE | function | at least 1 value | passes | 3 | `AVERAGE({1, 2, 3, 4})` = 2.5 | 13 |  |
+| AVERAGE | function | at least 1 value | passes | 3 | `AVERAGE({1, 2, 3, 4})` = 2.5 | 10 |  |
 | AVERAGEA | function | at least 1 value | passes | 3 | `AVERAGEA({2, 4})` = 3 |  |  |
 | AVERAGEIF | function | 2 or 3 values | passes | 3 | `AVERAGEIF(A1:A3, ">1")` = 2.5 |  |  |
 | AVERAGEIFS | function | at least 3 values | passes | 2 | `AVERAGEIFS(B1:B3, A1:A3, ">1")` = 25 |  |  |
@@ -266,7 +266,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ISTEXT | function | 1 value | passes | 2 | `ISTEXT("a")` = true |  |  |
 | KURT | function | at least 1 value | passes | 2 | `KURT({1, 2, 3, 4, 10})` = 3.152 |  |  |
 | LAMBDA | special form | (its own) | passes | 4 | `LAMBDA(x, x + 1)(2)` = 3 | 5 |  |
-| LARGE | function | 2 values | passes | 3 | `LARGE({1, 5, 3}, 2)` = 3 | 3 |  |
+| LARGE | function | 2 values | passes | 3 | `LARGE({1, 5, 3}, 2)` = 3 |  |  |
 | LCM | function | at least 1 value | passes | 4 | `LCM(4, 6)` = 12 |  |  |
 | LEFT | function | 1 or 2 values | passes | 3 | `LEFT("hello", 2)` = "he" |  |  |
 | LEN | function | 1 value | passes | 2 | `LEN("hello")` = 5 |  |  |
@@ -286,14 +286,14 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | MAP | special form | (its own) | passes | 2 | `INDEX(MAP({1, 2, 3}, LAMBDA(x, x * 2)), 1, 3)` = 6 |  |  |
 | MATCH | function | 2 or 3 values | passes | 6 | `MATCH(3, {1, 2, 3}, 0)` = 3 | 3 |  |
 | MAX | function | at least 1 value | passes | 4 | `MAX({1, 5, 3})` = 5 | 3 |  |
-| MAXA | function | at least 1 value | passes | 3 | `MAXA({1, TRUE, "a"})` = 1 | 3 |  |
+| MAXA | function | at least 1 value | passes | 3 | `MAXA({1, TRUE, "a"})` = 1 |  |  |
 | MAXIFS | function | at least 3 values | passes | 2 | `MAXIFS(B1:B3, A1:A3, "<3")` = 20 |  |  |
 | MDETERM | function | 1 value | passes | 3 | `MDETERM({1, 2; 3, 4})` = -2 |  |  |
 | MDURATION | function | 5 or 6 values | passes | 2 | `MDURATION(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 1)` = 4.21236378557 |  |  |
 | MEDIAN | function | at least 1 value | passes | 3 | `MEDIAN({1, 3, 2, 4})` = 2.5 |  |  |
 | MID | function | 3 values | passes | 3 | `MID("hello", 2, 3)` = "ell" |  |  |
 | MIN | function | at least 1 value | passes | 3 | `MIN({4, 1, 3})` = 1 | 3 |  |
-| MINA | function | at least 1 value | passes | 3 | `MINA({5, "a"})` = 0 | 3 |  |
+| MINA | function | at least 1 value | passes | 5 | `MINA({5, "a"})` = 0 |  |  |
 | MINIFS | function | at least 3 values | passes | 2 | `MINIFS(B1:B3, A1:A3, ">1")` = 20 |  |  |
 | MINUTE | function | 1 value | passes | 4 | `MINUTE(0.5 + 30 / 1440)` = 30 |  |  |
 | MINVERSE | function | 1 value | passes | 3 | `INDEX(MINVERSE({4, 7; 2, 6}), 1, 1)` = 0.6 |  |  |
@@ -406,7 +406,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SKEW.P | function | at least 1 value | passes | 2 | `SKEW.P({1, 2, 4})` = 0.381801774161 |  |  |
 | SLN | function | 3 values | passes | 2 | `SLN(1000, 100, 9)` = 100 |  |  |
 | SLOPE | function | 2 values | passes | 3 | `SLOPE({2, 4, 6}, {1, 2, 3})` = 2 |  |  |
-| SMALL | function | 2 values | passes | 2 | `SMALL({1, 5, 3}, 1)` = 1 | 3 |  |
+| SMALL | function | 2 values | passes | 4 | `SMALL({1, 5, 3}, 1)` = 1 |  |  |
 | SORT | function | 1 to 4 values | passes | 3 | `INDEX(SORT({3; 1; 2}), 1)` = 1 | 3 |  |
 | SORTBY | function | at least 2 values | passes | 3 | `INDEX(SORTBY({1; 2; 3}, {3; 1; 2}), 1)` = 2 |  |  |
 | SPARKLINE | function | 1 to 3 values | passes | 3 | `SPARKLINE({1, 2, 3})` = "▁▅█" |  |  |

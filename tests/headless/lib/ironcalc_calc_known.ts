@@ -243,10 +243,7 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!K6": "value",
   },
   "STATISTICAL/AVERAGE.xlsx": {
-    "Sheet1!M16": "value",
     "Sheet1!E23": "we-error",
-    "Sheet1!E28": "excel-error",
-    "Sheet1!F28": "value",
   },
   "STATISTICAL/COUNT.xlsx": {
     "Sheet1!B11": "we-error",
@@ -281,11 +278,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "LOGNORM.DIST LOGNORM.INV!E68": "we-error",
     "LOGNORM.DIST LOGNORM.INV!F68": "we-error",
   },
-  "STATISTICAL/MINA_MAXA.xlsx": {
-    "Sheet1!K1": "value",
-    "Sheet1!E12": "value",
-    "Sheet1!G13": "excel-error",
-  },
   "STATISTICAL/NORM_DIST.xlsx": {
     "NORM.DIST NORM.INV!E64": "value",
     "NORM.DIST NORM.INV!F64": "legacy",
@@ -300,11 +292,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   },
   "STATISTICAL/PROB.xlsx": {
     "Sheet1!O2": "excel-error",
-  },
-  "STATISTICAL/SMALL_LARGE.xlsx": {
-    "Sheet1!J3": "we-error",
-    "Sheet1!H4": "we-error",
-    "Sheet1!J4": "excel-error",
   },
   "STATISTICAL/TREND_GROWTH.xlsx": {
     "Sheet1!E2": "we-error",
