@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1366 cases, 1366 passing);
-93 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (497, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1376 cases, 1376 passing);
+88 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (458, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -17,7 +17,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 |---|---|---|---|---|---|---|---|
 | ABS | function | 1 value | passes | 3 | `ABS(-5)` = 5 |  |  |
 | ACCRINT | function | 6 to 8 values | passes | 2 | `ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0.06, 1000, 2)` = 15 | 9 |  |
-| ACCRINTM | function | 4 or 5 values | passes | 2 | `ACCRINTM(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 1000, 0)` = 30 | 1 |  |
+| ACCRINTM | function | 4 or 5 values | passes | 2 | `ACCRINTM(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 1000, 0)` = 30 |  |  |
 | ACOS | function | 1 value | passes | 3 | `ACOS(0.5)` = 1.0471975512 |  |  |
 | ACOSH | function | 1 value | passes | 3 | `ACOSH(1)` = 0 |  |  |
 | ACOT | function | 1 value | passes | 3 | `ACOT(1)` = 0.785398163397 |  |  |
@@ -112,16 +112,16 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | CUMIPMT | function | 6 values | passes | 3 | `CUMIPMT(0.1, 3, 1000, 1, 3, 0)` = -206.344410876 |  | TRUE/FALSE refused |
 | CUMPRINC | function | 6 values | passes | 2 | `CUMPRINC(0.1, 3, 1000, 1, 3, 0)` = -1000 |  | TRUE/FALSE refused |
 | DATE | function | 3 values | passes | 3 | `DATE(2024, 2, 29)` = 45351 | 5 |  |
-| DATEDIF | function | 3 values | passes | 3 | `DATEDIF(DATE(2020, 1, 1), DATE(2024, 1, 1), "Y")` = 4 | 12 | TRUE/FALSE refused |
+| DATEDIF | function | 3 values | passes | 5 | `DATEDIF(DATE(2020, 1, 1), DATE(2024, 1, 1), "Y")` = 4 | 6 | TRUE/FALSE refused |
 | DATEVALUE | function | 1 value | passes | 3 | `DATEVALUE("2024-03-15")` = 45366 | 5 | TRUE/FALSE refused |
 | DAVERAGE | function | 3 values | passes | 3 | `DAVERAGE(H1:J5, "Profit", L1:L2)` = 110 |  |  |
 | DAY | function | 1 value | passes | 2 | `DAY(45351)` = 29 | 5 |  |
 | DAYS | function | 2 values | passes | 3 | `DAYS(45352, 45351)` = 1 |  | TRUE/FALSE refused |
 | DAYS360 | function | 2 or 3 values | passes | 4 | `DAYS360(DATE(2024, 1, 31), DATE(2024, 3, 1))` = 31 |  |  |
-| DB | function | 4 or 5 values | passes | 3 | `DB(10000, 1000, 5, 1)` = 3690 | 5 |  |
+| DB | function | 4 or 5 values | passes | 4 | `DB(10000, 1000, 5, 1)` = 3690 | 1 |  |
 | DCOUNT | function | 2 or 3 values | passes | 3 | `DCOUNT(H1:J5, "Height", L1:L2)` = 2 |  |  |
 | DCOUNTA | function | 2 or 3 values | passes | 2 | `DCOUNTA(H1:J5, "Tree", L1:L2)` = 2 |  |  |
-| DDB | function | 4 or 5 values | passes | 4 | `DDB(10000, 1000, 5, 1)` = 4000 | 5 |  |
+| DDB | function | 4 or 5 values | passes | 4 | `DDB(10000, 1000, 5, 1)` = 4000 | 1 |  |
 | DEC2BIN | function | 1 or 2 values | passes | 3 | `DEC2BIN(10)` = "1010" |  | TRUE/FALSE refused |
 | DEC2HEX | function | 1 or 2 values | passes | 2 | `DEC2HEX(255)` = "FF" |  | TRUE/FALSE refused |
 | DEC2OCT | function | 1 or 2 values | passes | 4 | `DEC2OCT(64)` = "100" |  | TRUE/FALSE refused |
@@ -185,7 +185,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | FORMULATEXT | form | (its own) | passes | 3 | `FORMULATEXT(C1)` = "=A1+4" | 6 |  |
 | FREQUENCY | function | 2 values | passes | 3 | `INDEX(FREQUENCY({1, 2, 3, 4, 5}, {2, 4}), 1)` = 2 | 1 |  |
 | FTEST | function | 2 values | passes | 2 | `FTEST({1, 2, 3, 4}, {2, 4, 6, 9})` = 0.201861474799 |  |  |
-| FV | function | 3 to 5 values | passes | 2 | `FV(0, 10, -100)` = 1000 | 1 |  |
+| FV | function | 3 to 5 values | passes | 3 | `FV(0, 10, -100)` = 1000 |  |  |
 | FVSCHEDULE | function | 2 values | passes | 3 | `FVSCHEDULE(100, {0.1, 0.2})` = 132 |  |  |
 | GAMMA | function | 1 value | passes | 5 | `GAMMA(5)` = 24 |  |  |
 | GAMMA.DIST | function | 4 values | passes | 3 | `GAMMA.DIST(2, 2, 1, TRUE)` = 0.59399415029 |  |  |
@@ -246,7 +246,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | INT | function | 1 value | passes | 3 | `INT(1.5)` = 1 |  |  |
 | INTERCEPT | function | 2 values | passes | 2 | `INTERCEPT({3, 5, 7}, {1, 2, 3})` = 1 |  |  |
 | INTRATE | function | 4 or 5 values | passes | 2 | `INTRATE(DATE(2024, 1, 1), DATE(2024, 7, 1), 97, 100)` = 0.0618556701031 |  |  |
-| IPMT | function | 4 to 6 values | passes | 3 | `IPMT(0.1, 1, 3, 1000)` = -100 | 4 |  |
+| IPMT | function | 4 to 6 values | passes | 4 | `IPMT(0.1, 1, 3, 1000)` = -100 |  |  |
 | IRR | function | 1 or 2 values | passes | 2 | `IRR({-100, 110})` = 0.1 |  |  |
 | ISBLANK | function | 1 value | passes | 3 | `ISBLANK(A5)` = true |  |  |
 | ISERR | function | 1 value | passes | 3 | `ISERR(1 / 0)` = true |  |  |
@@ -350,11 +350,11 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | PHI | function | 1 value | passes | 3 | `PHI(0)` = 0.398942280401 |  |  |
 | PI | function | no values | passes | 2 | `PI()` = 3.14159265359 |  |  |
 | PIVOTBY | form | (its own) | passes | 3 | `INDEX(PIVOTBY({"a"; "b"; "a"}, {"x"; "x"; "y"}, {1; 2; 3}, SUM, 0, 0, 0, 0), 2, 3)` = 3 |  |  |
-| PMT | function | 3 to 5 values | passes | 2 | `PMT(0, 12, 1200)` = -100 | 9 |  |
+| PMT | function | 3 to 5 values | passes | 4 | `PMT(0, 12, 1200)` = -100 |  |  |
 | POISSON | function | 3 values | passes | 3 | `POISSON(1, 2, FALSE)` = 0.270670566473 | 3 |  |
 | POISSON.DIST | function | 3 values | passes | 3 | `POISSON.DIST(0, 2, FALSE)` = 0.135335283237 |  |  |
 | POWER | function | 2 values | passes | 3 | `POWER(2, 10)` = 1024 | 5 |  |
-| PPMT | function | 4 to 6 values | passes | 2 | `PPMT(0.1, 1, 3, 1000)` = -302.114803625 | 4 |  |
+| PPMT | function | 4 to 6 values | passes | 2 | `PPMT(0.1, 1, 3, 1000)` = -302.114803625 |  |  |
 | PRICE | function | 6 or 7 values | passes | 3 | `PRICE(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 100, 2)` = 100 |  |  |
 | PRICEDISC | function | 4 or 5 values | passes | 3 | `PRICEDISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 100)` = 97 |  |  |
 | PRICEMAT | function | 5 or 6 values | passes | 2 | `PRICEMAT(DATE(2024, 4, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 0.05, 0)` = 100.668674699 |  |  |
@@ -495,7 +495,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | XNPV | function | 3 values | passes | 3 | `XNPV(0.1, {-1000, 1100}, {0, 365})` = 0 | 7 | TRUE/FALSE refused |
 | XOR | function | at least 1 value | passes | 2 | `XOR(TRUE, FALSE)` = true | 12 |  |
 | YEAR | function | 1 value | passes | 2 | `YEAR(45351)` = 2024 | 5 |  |
-| YEARFRAC | function | 2 or 3 values | passes | 6 | `YEARFRAC(DATE(2024, 1, 1), DATE(2024, 7, 1))` = 0.5 | 12 | TRUE/FALSE refused |
+| YEARFRAC | function | 2 or 3 values | passes | 9 | `YEARFRAC(DATE(2024, 1, 1), DATE(2024, 7, 1))` = 0.5 | 6 | TRUE/FALSE refused |
 | YIELD | function | 6 or 7 values | passes | 2 | `YIELD(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 100, 100, 2)` = 0.06 |  |  |
 | YIELDDISC | function | 4 or 5 values | passes | 2 | `YIELDDISC(DATE(2024, 1, 1), DATE(2024, 7, 1), 97, 100)` = 0.0618556701031 |  |  |
 | YIELDMAT | function | 5 or 6 values | passes | 2 | `YIELDMAT(DATE(2024, 4, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 100.5, 0)` = 0.0522875816993 |  |  |

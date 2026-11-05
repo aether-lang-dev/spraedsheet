@@ -39,7 +39,10 @@ the number-format cases, the series-detection cases.
    WEEKDAY's return types 11 to 17), and one cause the ledger calls *legacy*:
    a formula Excel stored with no array flag is intersected implicitly
    (`=H34:H37` in row 36 is H36), where this app spills it; an importer that
-   writes `@` where Excel's loader would is not done.
+   writes `@` where Excel's loader would is not done. 2026-11-05: 25 more cells
+   fixed (YEARFRAC basis 1, DATEDIF, the loan functions' type and rate edges, IPMT's
+   fractional period, DB of no cost), 349 left in 80 workbooks; the cells looked at
+   and kept, with why, are in COMPATIBILITY.md.
 3. **Small ports, only where a test shows a gap:** a routine from
    `base/src/formatter/` for `numfmt.ts` (the cases are in; no code ported yet).
    Port the smallest unit with its cases.

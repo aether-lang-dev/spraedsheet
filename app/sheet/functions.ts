@@ -1528,7 +1528,10 @@ def("EDATE", 2, 2, (args) => addMonths(date(args, 0), Math.trunc(num(args, 1))))
 def("EOMONTH", 2, 2, (args) => endOfMonth(date(args, 0), Math.trunc(num(args, 1))));
 def("DAYS", 2, 2, (args) => Math.floor(date(args, 0)) - Math.floor(date(args, 1)));
 def("DATEDIF", 3, 3, (args) => {
-  const a = date(args, 0), b = date(args, 1);
+  // Whole days: a start later in the same day is not after the end. A
+  // negative serial is no date.
+  const a = Math.floor(date(args, 0)), b = Math.floor(date(args, 1));
+  if (a < 0 || b < 0) return fail("#NUM!", "DATEDIF's dates are 0 or more");
   if (a > b) return fail("#NUM!", "DATEDIF's start is after its end");
   return dateDif(a, b, str(args, 2)) ?? fail("#NUM!", `${str(args, 2)} is not a unit (Y, M, D, YM, MD, YD)`);
 });
@@ -1557,6 +1560,7 @@ def("ISOWEEKNUM", 1, 1, (args) => isoWeek(date(args, 0)));
 // dates.ts says the conventions.
 def("YEARFRAC", 2, 3, (args) => {
   const basis = Math.trunc(num(args, 2, 0));
+  if (date(args, 0) < 0 || date(args, 1) < 0) return fail("#NUM!", "YEARFRAC's dates are 0 or more");
   return yearFraction(date(args, 0), date(args, 1), basis) ?? fail("#NUM!", `YEARFRAC's basis is 0 to 4, not ${basis}`);
 });
 def("DAYS360", 2, 3, (args) => days360(date(args, 0), date(args, 1), !absent(args, 2) && toNumber(val(args, 2)) !== 0));
@@ -1582,12 +1586,22 @@ def("NOW", 0, 0, () => now());
 
 // --- money (finance.ts) ---
 
-def("PMT", 3, 5, (args) => finite(pmt(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), num(args, 4, 0))));
-def("FV", 3, 5, (args) => finite(fv(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), num(args, 4, 0))));
-def("PV", 3, 5, (args) => finite(pv(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), num(args, 4, 0))));
-def("NPER", 3, 5, (args) => finite(nper(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), num(args, 4, 0))));
+// The type argument: payments at the start of each period if it is anything
+// but 0, as Excel reads it (5, -1 and 1.234 are all 1).
+const due = (args: readonly Arg[], i: number): number => (num(args, i, 0) !== 0 ? 1 : 0);
+// A rate of -1 or less: PMT refuses it, as Excel does (PV and FV work it out).
+const aboveMinus1 = (r: number, name: string): number => (r > -1 ? r : fail("#NUM!", `${name}'s rate is more than -1, not ${r}`));
+def("PMT", 3, 5, (args) => finite(pmt(aboveMinus1(num(args, 0), "PMT"), num(args, 1), num(args, 2), num(args, 3, 0), due(args, 4))));
+def("FV", 3, 5, (args) => {
+  const r = num(args, 0), n = num(args, 1);
+  // (1 + rate) ^ periods with nothing to raise and a negative power.
+  if (r === -1 && n < 0) return fail("#DIV/0!", "FV of a rate of -1 over a negative number of periods");
+  return finite(fv(r, n, num(args, 2), num(args, 3, 0), due(args, 4)));
+});
+def("PV", 3, 5, (args) => finite(pv(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), due(args, 4))));
+def("NPER", 3, 5, (args) => finite(nper(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), due(args, 4))));
 def("RATE", 3, 6, (args) =>
-  rate(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), num(args, 4, 0), num(args, 5, 0.1)) ?? fail("#NUM!", "RATE did not settle"));
+  rate(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), due(args, 4), num(args, 5, 0.1)) ?? fail("#NUM!", "RATE did not settle"));
 def("NPV", 2, Infinity, (args) => npv(num(args, 0), numbers(args.slice(1))));
 def("IRR", 1, 2, (args) => {
   const flows = numbersIn(args[0].values);
@@ -1598,7 +1612,8 @@ def("IRR", 1, 2, (args) => {
 // The rest of the cash-flow functions (2.9a: finance.ts).
 const loan = (args: readonly Arg[], name: string): [number, number, number, number, number, number] => {
   const r = num(args, 0), per = num(args, 1), n = num(args, 2), pv0 = num(args, 3), fv0 = num(args, 4, 0), type = num(args, 5, 0) !== 0 ? 1 : 0;
-  if (per < 1 || per > n) return fail("#NUM!", `${name}'s period ${per} is outside 1 to ${n}`);
+  // A period may be a fraction, up to (not at) the one after the last, as Excel takes it.
+  if (per < 1 || per >= n + 1) return fail("#NUM!", `${name}'s period ${per} is outside 1 to ${n}`);
   return [r, per, n, pv0, fv0, type];
 };
 def("IPMT", 4, 6, (args) => finite(ipmt(...loan(args, "IPMT"))));
@@ -1651,6 +1666,8 @@ def("DB", 4, 5, (args) => {
   const [cost, salvage, life] = assetArgs("DB", args), per = Math.trunc(num(args, 3)), month = Math.trunc(num(args, 4, 12));
   if (month < 1 || month > 12) return fail("#NUM!", `DB's month is 1 to 12, not ${month}`);
   if (per < 1 || per > life + (month < 12 ? 1 : 0)) return fail("#NUM!", `DB's period ${per} of a life of ${life}`);
+  // Nothing to depreciate (the rate would divide by a cost of 0).
+  if (cost === 0) return 0;
   return db(cost, salvage, life, per, month);
 });
 def("DDB", 4, 5, (args) => {

@@ -35,8 +35,32 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 137 | this app gives an error where Excel stored a value |
-| `excel-error` | 132 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 72 | both give a value, and they differ |
+| `we-error` | 128 | this app gives an error where Excel stored a value |
+| `excel-error` | 120 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 63 | both give a value, and they differ |
 
-Counted 2026-10-24 (379 cells); the list by workbook is the ledger file itself.
+Counted 2026-11-05 (349 cells with the 38 `legacy`, in 80 workbooks; 379 on 2026-10-24); the
+list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
+
+## Taken off the ledger (fixed, each with the case that failed first)
+
+2026-11-05, 25 cells: `YEARFRAC` basis 1 within a year counts a year of 366 days only when a
+29 February falls in the span (it averaged the two years), which `ACCRINTM` and the bond
+functions use too; `YEARFRAC` and `DATEDIF` of a negative serial are #NUM!; `DATEDIF` counts
+whole days (a start later in the same day was "after" the end); `PMT`, `FV`, `PV`, `NPER` and
+`RATE` read any type but 0 as 1 (payments at the start); `PMT` of a rate of -1 or less is #NUM!;
+`FV` of a rate of -1 over negative periods is #DIV/0!; `IPMT` and `PPMT` take a fractional period
+up to the one after the last; `DB` of a cost of 0 is 0 (it was NaN). Cases in
+`tests/headless/lib/examples.ts`.
+
+## Examined, not changed (still on the ledger, with the reason)
+
+- `XNPV.xlsx` R2, R5 (`XIRR`): the two agree to 1e-8 of the rate; Excel stops its iteration
+  sooner than this app does. Matching would mean copying Excel's stopping rule, which is not
+  documented; the difference is under the displayed precision.
+- `ACCRINT.xlsx` (9 cells): Excel's accrual by quasi-coupon periods counts the days of each
+  period on the basis differently from this app's (30/360 from 1 March 2007 to 1 May 2008 is
+  420 days here, 421 in Excel's answer); not yet worked out from the documentation.
+- `RATE.xlsx` F17, G17: Excel answers #NUM! where this app's iteration finds a root below -1
+  (-1.87) or at -1; Excel's guess-driven Newton search does not reach it. Not changed until
+  Excel's rule for refusing such roots is known.

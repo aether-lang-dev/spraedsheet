@@ -150,6 +150,13 @@ export function yearFraction(start: number, end: number, basis: number): number 
     case 1: {
       const p = parts(a), q = parts(b);
       if (p.y === q.y) return days / (isLeap(p.y) ? 366 : 365);
+      // Within a year (the end no later in the next year than the start's
+      // month and day): a year of 366 days if a 29 February falls between
+      // them, else 365, as Excel counts; longer spans average the years.
+      if (q.y === p.y + 1 && (q.m < p.m || (q.m === p.m && q.d <= p.d))) {
+        const leapDay = (isLeap(p.y) && (p.m < 3)) || (isLeap(q.y) && (q.m > 2 || (q.m === 2 && q.d === 29)));
+        return days / (leapDay ? 366 : 365);
+      }
       const span = serial(q.y + 1, 1, 1) - serial(p.y, 1, 1);
       return days / (span / (q.y - p.y + 1));
     }
