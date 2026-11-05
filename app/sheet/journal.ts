@@ -8,6 +8,7 @@
 // backwards to the workbook as it is, redo forwards; the result is a Saved that
 // the workbook puts back as it always has.
 import type { Page, Saved, SavedPage } from "./workbook.ts";
+import { DEPTH, Overlay } from "./overlay.ts";
 
 // One kind of state: a workbook's own (page absent) or a sheet's.
 export interface Slot {
@@ -17,10 +18,17 @@ export interface Slot {
 
 export interface Entry {
   readonly slot?: Slot;
-  readonly kind: "set" | "map" | "pages";
+  readonly kind: "set" | "map" | "list" | "members" | "pages";
   // The keys a map kind of state changed, each with what it was and became
   // (undefined: no entry).
   readonly changes?: readonly (readonly [unknown, unknown, unknown])[];
+  // A list kind of state (rules, charts, merges ...): from `at`, the items
+  // it had and the items it has there instead (list).
+  readonly at?: number;
+  readonly removed?: readonly unknown[];
+  readonly added?: readonly unknown[];
+  // A set kind of state (hidden rows ...): the members it lost and gained
+  // (members, in removed and added).
   // What the state was and became (set), whole.
   readonly was?: unknown;
   readonly now?: unknown;
@@ -49,6 +57,11 @@ const BOOK = ["names", "name", "setupScript", "styles", "theme", "bookProtection
 // sheet's. Each kind moved here is one step of docs/mutation_journal.md.
 const PATCHED = new Set<string>(["sheet:widths", "sheet:heights", "sheet:pivots", "sheet:rowLevels", "sheet:colLevels", "sheet:inputs", "sheet:notes", "sheet:names", "sheet:formulas", "sheet:tables", "book:names", "book:styles"]);
 const patched = (slot: Slot) => PATCHED.has(`${slot.page ? "sheet" : "book"}:${slot.key}`);
+// A sheet's lists, whose items are replaced and never changed in place: the
+// stretch that changed is kept (list). And its sets: the members that came
+// and went (members).
+const LISTS = new Set(["rules", "charts", "merges", "slicers", "scenarios", "drawings", "editRanges"]);
+const SETS = new Set(["hiddenRows", "hiddenCols", "filtered"]);
 
 const sizeOf = (v: unknown): number => v instanceof Map || v instanceof Set ? v.size : Array.isArray(v) ? v.length : 1;
 
@@ -105,7 +118,27 @@ function put(s: Saved, slot: Slot, v: unknown): Saved {
 export function stepOf(before: Saved, after: Saved, label: string | undefined): Step {
   const entries: Entry[] = [];
   const add = (slot: Slot, was: unknown, now: unknown) => {
+    // A map recorded as it was changed (overlay.ts): the keys it changed,
+    // read from the snapshot itself, with no comparison of the whole map.
+    if (patched(slot) && was instanceof Map && now instanceof Overlay) {
+      const changes = now.changesFrom(was);
+      if (changes) {
+        if (changes.length) entries.push({ kind: "map", slot, changes });
+        return;
+      }
+    }
     if (same(was, now)) return;
+    if (slot.page && LISTS.has(slot.key) && Array.isArray(was) && Array.isArray(now)) {
+      let at = 0, tail = 0;
+      while (at < was.length && at < now.length && was[at] === now[at]) at++;
+      while (tail < was.length - at && tail < now.length - at && was[was.length - 1 - tail] === now[now.length - 1 - tail]) tail++;
+      entries.push({ kind: "list", slot, at, removed: was.slice(at, was.length - tail), added: now.slice(at, now.length - tail) });
+      return;
+    }
+    if (slot.page && SETS.has(slot.key) && was instanceof Set && now instanceof Set) {
+      entries.push({ kind: "members", slot, removed: [...was].filter((v) => !now.has(v)), added: [...now].filter((v) => !was.has(v)) });
+      return;
+    }
     if (patched(slot) && was instanceof Map && now instanceof Map) {
       const changes: [unknown, unknown, unknown][] = [];
       for (const [k, v] of was) if (now.get(k) !== v || !now.has(k)) changes.push([k, v, now.get(k)]);
@@ -134,6 +167,7 @@ export function stepOf(before: Saved, after: Saved, label: string | undefined): 
   let cost = 0;
   for (const e of entries) {
     if (e.kind === "map") cost += e.changes!.length;
+    else if (e.kind === "list" || e.kind === "members") cost += e.removed!.length + e.added!.length;
     else if (e.kind === "set") cost += sizeOf(e.was) + sizeOf(e.now);
     else for (const sp of e.extra!.values()) cost += sp.sheet.inputs.size + sp.sheet.formulas.size + sp.sheet.names.size + sp.sheet.tables.size + sp.notes.size;
   }
@@ -147,12 +181,26 @@ export function applyStep(step: Step, s: Saved, backwards: boolean): Saved {
   for (const e of step.entries) {
     if (e.kind === "set") out = put(out, e.slot!, backwards ? e.was : e.now);
     else if (e.kind === "map") {
-      const m = new Map(get(out, e.slot!) as Map<unknown, unknown>);
-      for (const [k, was, now] of e.changes!) {
-        const v = backwards ? was : now;
-        if (v === undefined) m.delete(k); else m.set(k, v);
+      // Layered on the map as it is (overlay.ts), so taking it costs, and
+      // putting it back compares, only the keys the step changed.
+      const cur = get(out, e.slot!) as ReadonlyMap<unknown, unknown>;
+      const delta = new Map<unknown, unknown>();
+      for (const [k, was, now] of e.changes!) delta.set(k, backwards ? was : now);
+      if (!(cur instanceof Overlay) || cur.depth < DEPTH) out = put(out, e.slot!, new Overlay(cur, delta));
+      else {
+        const m = new Map(cur);
+        for (const [k, v] of delta) { if (v === undefined) m.delete(k); else m.set(k, v); }
+        out = put(out, e.slot!, m);
       }
-      out = put(out, e.slot!, m);
+    } else if (e.kind === "list") {
+      const items = [...(get(out, e.slot!) as unknown[])];
+      items.splice(e.at!, (backwards ? e.added! : e.removed!).length, ...(backwards ? e.removed! : e.added!));
+      out = put(out, e.slot!, items);
+    } else if (e.kind === "members") {
+      const members = new Set(get(out, e.slot!) as Set<unknown>);
+      for (const v of backwards ? e.added! : e.removed!) members.delete(v);
+      for (const v of backwards ? e.removed! : e.added!) members.add(v);
+      out = put(out, e.slot!, members);
     } else {
       const to = backwards ? e.order![0] : e.order![1];
       out = { ...out, pages: to.map((p) => out.pages.find((x) => x.page === p) ?? e.extra!.get(p)!) };

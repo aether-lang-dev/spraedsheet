@@ -6,6 +6,7 @@
 // formulas, IF(C5 < 0, "color: red", "") in Excel ones), and whether Error
 // Checking ignores it.
 import { addrOf, keyOf } from "./address.ts";
+import { Overlay, snapshot } from "./overlay.ts";
 import type { Addr } from "./address.ts";
 import type { Rule } from "./validation.ts";
 import type { Look } from "./formats.ts";
@@ -65,8 +66,10 @@ export interface Hyperlink {
 
 export class CellNotes {
   readonly #notes = new Map<string, Note>();
-  // The notes as saved() last gave them, until they change.
+  // The notes as saved() last gave them, and the cells whose note changed
+  // since (null: all of them may have, the next snapshot a copy).
   #snap: ReadonlyMap<string, Note> | null = null;
+  #touched: Set<string> | null = new Set();
 
   get(key: string): Note {
     return this.#notes.get(key) ?? {};
@@ -74,7 +77,7 @@ export class CellNotes {
 
   // Some parts of a cell's note; an empty part is none.
   set(key: string, parts: Note): void {
-    this.#snap = null;
+    this.#touched?.add(key);
     const note: Record<string, unknown> = { ...this.get(key), ...parts };
     for (const [k, v] of Object.entries(note)) if (v === "" || v === null || v === undefined) delete note[k];
     if (Object.keys(note).length) this.#notes.set(key, note as Note); else this.#notes.delete(key);
@@ -95,7 +98,7 @@ export class CellNotes {
   // note whose cell went is gone.
   remap(to: (a: Addr) => Addr | null, rewrite: (expression: string, from: Addr, to: Addr) => string = (e) => e): void {
     const notes = [...this.#notes];
-    this.#snap = null;
+    this.#touched = null;
     this.#notes.clear();
     for (const [key, note] of notes) {
       const from = addrOf(key)!, a = to(from);
@@ -104,19 +107,29 @@ export class CellNotes {
   }
 
   clear(): void {
-    this.#snap = null;
+    this.#touched = null;
     this.#notes.clear();
   }
 
   // Every note, to be put back (undo); a note is never changed in place.
   saved(): ReadonlyMap<string, Note> {
-    this.#snap ??= new Map(this.#notes);
+    this.#snap = snapshot(this.#notes, this.#snap, this.#touched);
+    this.#touched = new Set();
     return this.#snap;
   }
 
+  // Put back as saved; a snapshot layered on the one held now (an undo or
+  // redo) sets only the cells it changed.
   restore(saved: ReadonlyMap<string, Note>): void {
-    this.#notes.clear();
-    for (const [k, n] of saved) this.#notes.set(k, n);
+    const held = this.#snap && this.#touched && !this.#touched.size ? this.#snap : null;
+    const layered = !held ? null : saved === held ? [] : saved instanceof Overlay ? saved.changesFrom(held) : null;
+    if (layered) {
+      for (const [k] of layered) { const n = saved.get(k); if (n) this.#notes.set(k, n); else this.#notes.delete(k); }
+    } else {
+      this.#notes.clear();
+      for (const [k, n] of saved) this.#notes.set(k, n);
+    }
     this.#snap = saved;
+    this.#touched = new Set();
   }
 }

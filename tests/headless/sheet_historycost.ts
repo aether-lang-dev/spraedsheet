@@ -7,6 +7,7 @@
 // changes 3,043); the numbers below are the journal's.
 import { Commands } from "./sheet/commands.ts";
 import { Workbook } from "./sheet/workbook.ts";
+import { copies, DEPTH } from "./sheet/overlay.ts";
 import { eq } from "./lib/check.ts";
 
 const N = 2000;
@@ -79,6 +80,51 @@ for (let i = 1; i <= 50; i++) lines.push(`LET r = SETCELL("F${i}", ${i})`);
 const ran = await cmds.script(lines.join("\n"), () => {});
 eq("a script of fifty changes is one step holding the fifty cells", [ran.ok, cost().undo - steps, was() - before], [true, 1, 50]);
 
+// Recorded at the mutation (overlay.ts): a command's snapshot is the cells it
+// set, layered on the one before, not a copy of the sheet's 2,000 cells; the
+// whole map is copied once in DEPTH snapshots (undo and redo the same). Before,
+// a hundred one-cell edits made a hundred copies.
+{
+  const big = new Workbook(), bc = new Commands(big);
+  await bc.run("formulas.use language=Excel");
+  await big.sheet.setMany(rows);
+  await bc.run("cell.set cell=B1 input=0");
+  const at = copies.maps;
+  for (let i = 1; i <= 100; i++) await bc.run(`cell.set cell=B${i} input=${i}`);
+  const made = copies.maps - at, most = Math.ceil(100 / DEPTH);
+  if (made > 2 * most) print(`note: ${made} copies`);
+  eq("a hundred one-cell edits copy the sheet's cells a few times (once in DEPTH), not a hundred", made <= 2 * most, true);
+  const u = copies.maps;
+  for (let i = 0; i < 40; i++) await bc.run("edit.undo");
+  for (let i = 0; i < 40; i++) await bc.run("edit.redo");
+  eq("and forty undos and redos as few", [copies.maps - u <= 2 * Math.ceil(80 / DEPTH), big.sheet.input("B60"), big.sheet.input("B100")], [true, "60", "100"]);
+}
+
+// The lists (rules, charts, merges ...) and sets (hidden rows and columns) of
+// a sheet: the items that came and went, not the whole list again.
+{
+  const v = new Workbook(), vc = new Commands(v);
+  await vc.run("formulas.use language=Excel");
+  for (let i = 1; i <= 20; i++) await vc.run(`format.highlight range=A${i} op=greater value=${i}`);
+  for (let i = 1; i <= 40; i++) await vc.run(`rows.hide range=A${2 * i}`);
+  for (let i = 1; i <= 10; i++) await vc.run(`cells.merge range=C${2 * i - 1}:D${2 * i - 1}`);
+  const w = () => v.historyCost().entries;
+  let b = w();
+  await vc.run("format.highlight range=B1 op=greater value=0");
+  eq("a rule added to twenty keeps that rule", w() - b, 1);
+  b = w();
+  await vc.run("rows.hide range=A99");
+  eq("a row hidden beside forty keeps that row", w() - b, 1);
+  b = w();
+  await vc.run("cells.merge range=F1:G1");
+  eq("a merge added to ten keeps that merge", w() - b, 1);
+  await vc.run("edit.undo"); await vc.run("edit.undo"); await vc.run("edit.undo");
+  const back = v.page(v.active)!;
+  eq("and undo takes each back", [back.rules.length, back.hiddenRows.has(98), back.merges.length], [20, false, 10]);
+  await vc.run("edit.redo"); await vc.run("edit.redo"); await vc.run("edit.redo");
+  eq("and redo does each again", [back.rules.length, v.page(v.active)!.hiddenRows.size, v.page(v.active)!.merges.length], [21, 41, 11]);
+}
+
 // Redo keeps what was undone.
 const undone = cost();
 await cmds.run("edit.undo");
@@ -118,6 +164,13 @@ eq("steps are bounded, and a hundred one-cell steps hold a hundred cells' worth,
 // expect: ok a column widened keeps that column, not every width of the sheet
 // expect: ok a row made taller keeps that row
 // expect: ok a script of fifty changes is one step holding the fifty cells
+// expect: ok a hundred one-cell edits copy the sheet's cells a few times (once in DEPTH), not a hundred
+// expect: ok and forty undos and redos as few
+// expect: ok a rule added to twenty keeps that rule
+// expect: ok a row hidden beside forty keeps that row
+// expect: ok a merge added to ten keeps that merge
+// expect: ok and undo takes each back
+// expect: ok and redo does each again
 // expect: ok undo moves a step to redo; the entries held are the same
 // expect: ok steps are bounded, and a hundred one-cell steps hold a hundred cells' worth, not a hundred sheets
 // expect: ok a history over its entry budget drops the oldest steps, and stays under it

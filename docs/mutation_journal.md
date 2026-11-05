@@ -45,10 +45,28 @@ Because an undo patches the slots the step touched, rather than putting a whole
 snapshot back, a change made to some other slot outside the journal is no longer
 wiped by an undo of a different step (the old snapshot restore did).
 
-The diff is taken when the command is done, not recorded as each mutation is made:
-the cost per command is one `saved()` (copying a changed map, as before), but nothing
-is retained beyond the entries. Recording at the mutation, so that a command
-costs what it changed, is the later step and needs no change to the journal's entries.
+Recorded at the mutation (2026-11-05, `app/sheet/overlay.ts`): the sheet's cells and
+its notes, the two maps that grow with the workbook, note each key as it is changed,
+and the next snapshot is an `Overlay`, the snapshot before plus those keys with what
+they hold now, rather than a copy of the map. So `saved()` after a command costs what
+the command changed, and `stepOf` reads the map entry's keys from the overlay itself
+(`Overlay.changesFrom`) instead of comparing the two maps key by key; undo and redo
+layer their target on the workbook as it is, and `Sheet.restore` and
+`CellNotes.restore` set only the keys the overlay changed. Overlays stack, one per
+snapshot; at `DEPTH` (32) a snapshot is a plain copy again, so a lookup walks at most
+32 layers and old layers are let go. That copy, once in 32 commands, is what is left
+of a command copying a changed map (`sheet_historycost`: a hundred one-cell edits on
+2,000 cells made 100 copies of the cells and now make 3; forty
+undos and redos as few). A row inserted (`remap`) or a sheet cleared still copies, as
+every key moves. The other maps (names, tables, widths ...) are small and are still
+copied by `saved()` and compared by `stepOf`.
+
+The lists and sets of a sheet are no longer kept whole: `list` entries keep the
+stretch of a list that changed (rules, charts, merges, slicers, scenarios, drawings,
+edit ranges: items are replaced, never changed in place, so a common head and tail are
+trimmed), and `members` entries the members a set lost and gained (hidden rows and
+columns, filtered rows). A rule added beside twenty kept 41 entries, now 1; a row
+hidden beside forty 81, now 1.
 
 ## Migration, one kind at a time
 
@@ -63,9 +81,10 @@ that changed; the rest are `set` whole.
 4. Done: the workbook's **names** and **cell styles**.
 5. Done: the sheet's view maps: **widths, heights, pivots, outline levels**.
 
-What stays `set` for good is a container a command replaces whole and that is small
-(rules, charts, merges, scenarios, drawings, slicers, edit ranges), a set of hidden
-rows, and the scalar kinds (name, setup script, theme, protection, tab colour ...).
+6. Done 2026-11-05: recording the cells and notes at the mutation (above), and the
+   lists and sets as `list` and `members` entries.
+
+What stays `set` is the scalar kinds (name, setup script, theme, protection, tab colour ...).
 The active sheet is not an entry: undo goes to the sheet the change was made on,
 and redo to the one undo was made from, swapped with each (`Step.active`).
 
@@ -96,6 +115,9 @@ and redo to the one undo was made from, swapped with each (`Step.active`).
 | a defined cell style (21 in the gallery) | 43 | 1 |
 | a second name, a second table | 3 each | 1 each |
 | a column widened or a row made taller | 7 | 1 |
+| a rule added beside twenty | 41 | 1 |
+| a row hidden beside forty | 81 | 1 |
+| a merge added beside ten | 21 | 1 |
 
 (The paste's 31 was the snapshot sharing the cells with the step before; the journal
 counts the 1,000 cells it set.) A structural edit that moves every cell is the one

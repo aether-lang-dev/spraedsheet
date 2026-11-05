@@ -56,9 +56,11 @@ labels, params, journal and grouped undo; `journaled` and `unstepped` flags
    a sheet's names, formulas and tables, the workbook's names and cell styles, and
    widths, heights, pivots and outline levels are kept as the keys that changed. A
    one-cell edit on a 2,000-cell sheet held 2,021 map entries and holds 1; a script of
-   fifty edits 3,043 and now 50 (`sheet_historycost`, `sheet_journal`). Left: recording at
-   the mutation (the diff is taken when the command is done), and recording and MCP
-   discovery reading `effect` (action 1's remainder). View changes stay undoable, as
+   fifty edits 3,043 and now 50 (`sheet_historycost`, `sheet_journal`). Recording at the mutation
+   and the lists and sets as changes, done 2026-11-05 (`overlay.ts`; a hundred one-cell
+   edits on 2,000 cells copied the cells 100 times, now 3; a rule added beside twenty
+   kept 41 entries, now 1). Left: recording and MCP discovery reading `effect` (action
+   1's remainder), see below. View changes stay undoable, as
    before: a decision for Paul (TODO.md).
 
 Proof: record a panel command, replay it over the bus with another selection;
