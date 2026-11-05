@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 103 | this app gives an error where Excel stored a value |
-| `excel-error` | 60 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `we-error` | 91 | this app gives an error where Excel stored a value |
+| `excel-error` | 55 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 57 | both give a value, and they differ |
 
-Counted 2026-11-05 (258 cells with the 38 `legacy`, in 67 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-05 (241 cells with the 38 `legacy`, in 66 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -78,6 +78,10 @@ SUMSQ that overflows is #NUM!; BIN2HEX, BIN2OCT and the other conversions refuse
 to 10 even for a negative, which ignores them. The earlier cases `LOG(8, 1)` = #NUM! and
 `SEQUENCE(0)` = #CALC! were this app's guesses; Excel's stored values say otherwise, and they are
 corrected.
+
+2026-11-05, 17 cells: MATCH, VLOOKUP and HLOOKUP looking for an exact match take `*`, `?` and
+`~` in the text looked for as wildcards (they compared it as it is); DROP and TAKE that leave
+nothing are #VALUE! (the earlier cases and `sheet_more` said #CALC!, this app's guess).
 
 ## Intended (found while looking)
 

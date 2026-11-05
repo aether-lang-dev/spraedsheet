@@ -197,7 +197,15 @@ const notFound = (x: Value): never => fail("#N/A", `${toText(x)} is not there`);
 // The position in `list` MATCH means by type 0 (equal), 1 (the largest at
 // most x, in ascending order) or -1 (the smallest at least x, descending).
 function position(x: Value, list: readonly Value[], type: number): number {
-  if (type === 0) return list.findIndex((v) => !(v instanceof CellError) && v !== null && compare("=", v, x));
+  if (type === 0) {
+    // Exact, with * ? and ~ in a text being looked up as wildcards (MATCH,
+    // VLOOKUP and HLOOKUP), matching text only.
+    if (typeof x === "string" && /[*?~]/.test(x)) {
+      const ok = wildcard(x);
+      return list.findIndex((v) => typeof v === "string" && ok(v));
+    }
+    return list.findIndex((v) => !(v instanceof CellError) && v !== null && compare("=", v, x));
+  }
   const keep: Comparison = type > 0 ? "<=" : ">=";
   let at = -1;
   for (const [i, v] of list.entries()) {
@@ -1842,7 +1850,8 @@ const cut = (take: boolean): Fn => (args) => {
   const part = (n: number, len: number): [number, number] =>
     take ? (n >= 0 ? [0, Math.min(n, len)] : [Math.max(0, len + n), len]) : n >= 0 ? [Math.min(n, len), len] : [0, Math.max(0, len + n)];
   const [r0, r1] = part(whole(args, 1, take ? rows : 0), rows), [c0, c1] = part(whole(args, 2, take ? a.cols : 0), a.cols);
-  if (r1 <= r0 || c1 <= c0) return fail("#CALC!", `${take ? "TAKE" : "DROP"} leaves nothing`);
+  // Nothing left is #VALUE!, as Excel answers (not #CALC!).
+  if (r1 <= r0 || c1 <= c0) return fail("#VALUE!", `${take ? "TAKE" : "DROP"} leaves nothing`);
   return fromRows(rowsOf(a).slice(r0, r1).map((row) => row.slice(c0, c1)));
 };
 def("TAKE", 2, 3, cut(true));

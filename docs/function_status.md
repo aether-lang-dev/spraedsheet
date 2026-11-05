@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1403 cases, 1403 passing);
-70 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (309, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1407 cases, 1407 passing);
+68 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (293, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -137,7 +137,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | DOLLARDE | function | 2 values | passes | 3 | `DOLLARDE(1.02, 16)` = 1.125 |  | TRUE/FALSE refused |
 | DOLLARFR | function | 2 values | passes | 3 | `DOLLARFR(1.125, 16)` = 1.02 |  | TRUE/FALSE refused |
 | DPRODUCT | function | 3 values | passes | 2 | `DPRODUCT(H1:J5, "Profit", L1:L2)` = 12000 |  |  |
-| DROP | function | 2 or 3 values | passes | 3 | `ROWS(DROP({1; 2; 3; 4}, 1))` = 3 | 5 |  |
+| DROP | function | 2 or 3 values | passes | 3 | `ROWS(DROP({1; 2; 3; 4}, 1))` = 3 |  |  |
 | DSTDEV | function | 3 values | passes | 2 | `DSTDEV(H1:J5, "Profit", L1:L2)` = 14.1421356237 |  |  |
 | DSTDEVP | function | 3 values | passes | 2 | `DSTDEVP(H1:J5, "Profit", L1:L2)` = 10 |  |  |
 | DSUM | function | 3 values | passes | 4 | `DSUM(H1:J5, "Profit", L1:L2)` = 220 |  |  |
@@ -284,7 +284,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | LOWER | function | 1 value | passes | 2 | `LOWER("aBc")` = "abc" |  |  |
 | MAKEARRAY | special form | (its own) | passes | 3 | `INDEX(MAKEARRAY(2, 3, LAMBDA(r, c, r * c)), 2, 3)` = 6 |  |  |
 | MAP | special form | (its own) | passes | 2 | `INDEX(MAP({1, 2, 3}, LAMBDA(x, x * 2)), 1, 3)` = 6 |  |  |
-| MATCH | function | 2 or 3 values | passes | 3 | `MATCH(3, {1, 2, 3}, 0)` = 3 | 9 |  |
+| MATCH | function | 2 or 3 values | passes | 6 | `MATCH(3, {1, 2, 3}, 0)` = 3 | 3 |  |
 | MAX | function | at least 1 value | passes | 4 | `MAX({1, 5, 3})` = 5 | 3 |  |
 | MAXA | function | at least 1 value | passes | 3 | `MAXA({1, TRUE, "a"})` = 1 | 3 |  |
 | MAXIFS | function | at least 3 values | passes | 2 | `MAXIFS(B1:B3, A1:A3, "<3")` = 20 |  |  |
@@ -439,7 +439,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | T.INV | function | 2 values | passes | 3 | `T.INV(0.5, 5)` = 0 |  |  |
 | T.INV.2T | function | 2 values | passes | 3 | `T.INV.2T(0.05, 10)` = 2.22813885196 |  |  |
 | T.TEST | function | 4 values | passes | 3 | `T.TEST({1, 2, 3, 4}, {2, 3, 4, 5}, 2, 2)` = 0.315333596201 |  |  |
-| TAKE | function | 2 or 3 values | passes | 3 | `ROWS(TAKE({1; 2; 3; 4}, 2))` = 2 | 5 |  |
+| TAKE | function | 2 or 3 values | passes | 3 | `ROWS(TAKE({1; 2; 3; 4}, 2))` = 2 |  |  |
 | TAN | function | 1 value | passes | 2 | `TAN(PI() / 4)` = 1 |  |  |
 | TANH | function | 1 value | passes | 3 | `TANH(1)` = 0.761594155956 |  |  |
 | TBILLEQ | function | 3 values | passes | 2 | `TBILLEQ(DATE(2024, 1, 1), DATE(2024, 3, 1), 0.05)` = 0.0511204481793 |  |  |
@@ -479,7 +479,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | VARP | function | at least 1 value | passes | 2 | `VARP({1, 2, 3, 4})` = 1.25 |  |  |
 | VARPA | function | at least 1 value | passes | 2 | `VARPA({1, 3})` = 1 |  |  |
 | VDB | function | 5 to 7 values | passes | 3 | `VDB(10000, 1000, 5, 0, 1)` = 4000 |  |  |
-| VLOOKUP | function | 3 or 4 values | passes | 3 | `VLOOKUP(2, {1, "a"; 2, "b"}, 2, FALSE)` = "b" |  |  |
+| VLOOKUP | function | 3 or 4 values | passes | 4 | `VLOOKUP(2, {1, "a"; 2, "b"}, 2, FALSE)` = "b" |  |  |
 | VSTACK | function | at least 1 value | passes | 3 | `INDEX(VSTACK({1, 2}, {3, 4}), 2, 1)` = 3 |  |  |
 | WEEKDAY | function | 1 or 2 values | passes | 3 | `WEEKDAY(45292)` = 2 | 8 | TRUE/FALSE refused |
 | WEEKNUM | function | 1 or 2 values | passes | 5 | `WEEKNUM(DATE(2024, 1, 1))` = 1 | 8 | TRUE/FALSE refused |
