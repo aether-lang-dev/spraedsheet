@@ -260,8 +260,14 @@ export const CASES: Record<string, [string, Want][]> = {
   "MODE.MULT": [["INDEX(MODE.MULT({1, 1, 2, 2, 3}), 2)", 2], ["ROWS(MODE.MULT({1, 1, 2, 2, 3}))", 2], ["MODE.MULT({1, 2, 3})", "#N/A"]],
   COUNTA: [["COUNTA({1, \"a\", \"\"})", 3], ["COUNTA({1, 2})", 2], ["COUNTA(1 / 0)", 1]],
   COUNTBLANK: [["COUNTBLANK({1, \"\", 2})", 1], ["COUNTBLANK({1, 2})", 0]],
-  TREND: [["TREND({2, 4, 6}, {1, 2, 3}, 4)", 8], ["TREND({5, 5, 5}, {1, 2, 3}, 9)", 5]],
-  GROWTH: [["GROWTH({2, 4, 8}, {1, 2, 3}, 4)", 16], ["GROWTH({3, 3, 3}, {1, 2, 3}, 9)", 3]],
+  TREND: [["TREND({2, 4, 6}, {1, 2, 3}, 4)", 8], ["TREND({5, 5, 5}, {1, 2, 3}, 9)", 5],
+    // const FALSE fits through the origin: the slope is the sum of xy over the sum of x squared, 34/14 here, not the line 2x + 1.
+    ["TREND({3, 5, 7}, {1, 2, 3}, 4, FALSE)", 68 / 7], ["TREND({3, 5, 7}, {1, 2, 3}, 4, TRUE)", 9],
+    // Excel's refusals: cells that are not numbers are #VALUE!, known_x of another size #REF!.
+    ["TREND(A1:A4)", "#VALUE!"], ["TREND(A1:A5)", "#VALUE!"], ["TREND(A1:A3, B1:B2)", "#REF!"], ["TREND({1, 2, 3}, {1, 2})", "#REF!"], ["TREND(A1:A3, E1:E3)", "#VALUE!"]],
+  GROWTH: [["GROWTH({2, 4, 8}, {1, 2, 3}, 4)", 16], ["GROWTH({3, 3, 3}, {1, 2, 3}, 9)", 3],
+    ["GROWTH({2, 4, 9}, {1, 2, 3}, 2, FALSE)", 4.207096763645164],
+    ["GROWTH(A1:A4)", "#VALUE!"], ["GROWTH(A1:A3, B1:B2)", "#REF!"], ["GROWTH({1, 2, 3}, {1, 2})", "#REF!"], ["GROWTH({0, 1, 2})", "#NUM!"]],
   LINEST: [["INDEX(LINEST({2, 4, 6}, {1, 2, 3}), 1, 1)", 2], ["INDEX(LINEST({3, 5, 7}, {1, 2, 3}), 1, 2)", 1]],
   LOGEST: [["INDEX(LOGEST({2, 4, 8}, {1, 2, 3}), 1, 1)", 2], ["INDEX(LOGEST({2, 4, 8}, {1, 2, 3}), 1, 2)", 1]],
   "CONFIDENCE.NORM": [["CONFIDENCE.NORM(0.05, 1, 100)", 0.19599639845400545], ["CONFIDENCE.NORM(0, 1, 100)", "#NUM!"], ["CONFIDENCE.NORM(0.05, 0, 100)", "#NUM!"], ["CONFIDENCE.NORM(0.05, 1, 0)", "#NUM!"]],

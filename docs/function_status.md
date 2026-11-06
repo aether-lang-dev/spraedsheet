@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1416 cases, 1416 passing);
-61 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (246, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1428 cases, 1428 passing);
+59 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (234, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -199,7 +199,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | GEOMEAN | function | at least 1 value | passes | 3 | `GEOMEAN({1, 4})` = 2 |  |  |
 | GESTEP | function | 1 or 2 values | passes | 3 | `GESTEP(3, 2)` = 1 |  | TRUE/FALSE refused |
 | GROUPBY | form | (its own) | passes | 4 | `INDEX(GROUPBY({"a"; "b"; "a"}, {1; 2; 3}, SUM, 0, 0), 1, 2)` = 4 |  |  |
-| GROWTH | function | 1 to 3 values | passes | 2 | `GROWTH({2, 4, 8}, {1, 2, 3}, 4)` = 16 | 6 |  |
+| GROWTH | function | 1 to 4 values | passes | 7 | `GROWTH({2, 4, 8}, {1, 2, 3}, 4)` = 16 |  |  |
 | HARMEAN | function | at least 1 value | passes | 3 | `HARMEAN({1, 4})` = 1.6 |  |  |
 | HEX2BIN | function | 1 or 2 values | passes | 4 | `HEX2BIN("F")` = "1111" |  | TRUE/FALSE refused |
 | HEX2DEC | function | 1 value | passes | 2 | `HEX2DEC("FF")` = 255 |  | TRUE/FALSE refused |
@@ -458,7 +458,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | TODAY | function | no values | passes | 3 | `TODAY() = INT(TODAY())` = true |  |  |
 | TOROW | function | 1 to 3 values | passes | 2 | `INDEX(TOROW({1, 2; 3, 4}), 3)` = 3 |  |  |
 | TRANSPOSE | function | 1 value | passes | 3 | `INDEX(TRANSPOSE({1, 2, 3}), 3, 1)` = 3 |  |  |
-| TREND | function | 1 to 3 values | passes | 2 | `TREND({2, 4, 6}, {1, 2, 3}, 4)` = 8 | 6 |  |
+| TREND | function | 1 to 4 values | passes | 9 | `TREND({2, 4, 6}, {1, 2, 3}, 4)` = 8 |  |  |
 | TRIM | function | 1 value | passes | 2 | `TRIM("  a   b ")` = "a b" |  |  |
 | TRIMMEAN | function | 2 values | passes | 3 | `TRIMMEAN({1, 2, 3, 4, 100}, 0.4)` = 3 |  |  |
 | TRIMRANGE | function | 1 to 3 values | passes | 2 | `ROWS(TRIMRANGE(A1:A5))` = 4 |  |  |

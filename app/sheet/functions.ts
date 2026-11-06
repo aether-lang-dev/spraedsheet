@@ -1058,16 +1058,36 @@ def("FORECAST.ETS.STAT", 3, 6, (args) => {
   const { ys, step } = etsSeries("FORECAST.ETS.STAT", args, 0, 1), m = etsModel("FORECAST.ETS.STAT", ys, etsSeason(args, 3)), kind = Math.trunc(num(args, 2));
   try { return etsStat(m, ys, kind, step); } catch (e) { return fail("#NUM!", (e as Error).message); }
 });
+// TREND and GROWTH(known_y, [known_x], [new_x], [const]): the line (or, for
+// GROWTH, the exponential) through the known points, read at new_x (known_x
+// left out); const FALSE fits through the origin (y = m x, or b = 1). Excel
+// refuses what is not a number in either list (text, a blank, TRUE: #VALUE!,
+// y read first), known_x of another size than known_y (#REF!), and a GROWTH
+// of a y that is not above 0 (#NUM!); it does not pair the cells off and
+// pass over the odd one, as SLOPE and the like do.
 const line = (name: string, args: readonly Arg[], log: boolean): Result => {
-  const [y0, x] = pairs(name, known(args, 1), 0, 1, 2);
+  const numbersOnly = (a: Arg, what: string): number[] =>
+    a.values.map((v) => { const t = scalar(v); return typeof t === "number" ? t : fail("#VALUE!", `${name}'s ${what} has a cell that is not a number`); });
+  const y0 = numbersOnly(args[0], "known_y");
+  const x = absent(args, 1) ? y0.map((_, i) => i + 1) : numbersOnly(args[1], "known_x");
+  if (x.length !== y0.length) return fail("#REF!", `${name}'s known_x has ${x.length} values, known_y ${y0.length}`);
+  if (y0.length < 2) return fail("#DIV/0!", `${name} needs 2 values or more`);
   if (log && y0.some((v) => v <= 0)) return fail("#NUM!", `${name} of a y that is not positive`);
-  const f = fit(name, log ? y0.map(Math.log) : y0, x);
-  const at = absent(args, 2) ? { values: x, cols: 1 } : args[2];
-  const out = at.values.map((v) => { const t = f.intercept + f.slope * toNumber(v); return log ? Math.exp(t) : t; });
+  const y = log ? y0.map(Math.log) : y0;
+  const through = !absent(args, 3) && !flag(args, 3);
+  let slope: number, intercept: number;
+  if (through) {
+    const sxx = sum(x.map((v) => v * v));
+    if (sxx === 0) return fail("#DIV/0!", `${name}: the x values are all 0`);
+    slope = sum(x.map((v, i) => v * y[i])) / sxx;
+    intercept = 0;
+  } else ({ slope, intercept } = fit(name, y, x));
+  const at = absent(args, 2) ? { values: x, cols: absent(args, 1) ? 1 : args[1].cols } : args[2];
+  const out = at.values.map((v) => { const t = intercept + slope * toNumber(v); return log ? Math.exp(t) : t; });
   return out.length === 1 ? out[0] : array(out.length / at.cols, at.cols, out);
 };
-def("TREND", 1, 3, (args) => line("TREND", args, false));
-def("GROWTH", 1, 3, (args) => line("GROWTH", args, true));
+def("TREND", 1, 4, (args) => line("TREND", args, false));
+def("GROWTH", 1, 4, (args) => line("GROWTH", args, true));
 // LINEST(known_y, [known_x], [const], [stats]): least squares on one or more
 // predictors (one column of known_x each when known_y is a column, one row each
 // when it is a row), coefficients last predictor first and the intercept

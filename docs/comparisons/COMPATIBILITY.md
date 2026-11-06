@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 83 | this app gives an error where Excel stored a value |
-| `excel-error` | 41 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `we-error` | 81 | this app gives an error where Excel stored a value |
+| `excel-error` | 37 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 43 | both give a value, and they differ |
 
-Counted 2026-11-06 (205 cells with the 38 `legacy`, in 61 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-06 (199 cells with the 38 `legacy`, in 60 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -107,6 +107,16 @@ where it divided that period's 30/360 days by its length: 31 August 2007 to 29 F
 days of 180 on the US count (a start on the 31st, an end on the last of February), which lost a
 day in `ACCRINT(1 Mar 2007, 31 Aug 2008, 1 May 2008, 0.1, 1000, 2, 0)` (116.667; Excel 116.944).
 (`accrued`, `bonds.ts`; the case is in `examples.ts`.) ACCRINT.xlsx B4 and B23.
+
+2026-11-06, 6 cells: TREND and GROWTH take their fourth argument, const (FALSE fits through the
+origin, y = m x, and for GROWTH b = 1; a fourth argument was #VALUE!, as one too many),
+and check their arguments as Excel does where they paired the cells off and passed over the odd one
+(as SLOPE and the like do, rightly): a cell of known_y or known_x that is not a number (text, a blank,
+TRUE) is #VALUE!, known_y read first; known_x of another size than known_y is #REF! (it was #N/A); a
+GROWTH of a y that is not above 0 stays #NUM!. `line`, `functions.ts`; cases in `examples.ts`.
+TREND_GROWTH.xlsx E2, J2 (const), D10, E10 (text, so a cell passed over made a value), G10, I10
+(sizes). Not done: more than one known_x column (multiple regression, which LINEST has) in TREND
+and GROWTH, which Excel takes and which this app answers #REF! when the counts differ.
 
 ## Intended (found while looking)
 

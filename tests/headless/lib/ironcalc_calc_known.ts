@@ -263,14 +263,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "STATISTICAL/PROB.xlsx": {
     "Sheet1!O2": "excel-error",
   },
-  "STATISTICAL/TREND_GROWTH.xlsx": {
-    "Sheet1!E2": "we-error",
-    "Sheet1!J2": "we-error",
-    "Sheet1!D10": "excel-error",
-    "Sheet1!E10": "excel-error",
-    "Sheet1!G10": "excel-error",
-    "Sheet1!I10": "excel-error",
-  },
   "STATISTICAL/T_DIST.xlsx": {
     "T.DIST T.INV T.DIST.RT!E19": "value",
     "T.DIST.2T T.INV.2T!D62": "value",

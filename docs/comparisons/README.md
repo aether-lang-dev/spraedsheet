@@ -11,7 +11,7 @@ for Paul.
 
 | Project | Licence / reuse | Top actions |
 |---|---|---|
-| [IronCalc](IRONCALC.md) | MIT OR Apache-2.0: copy or port with attribution (`third_party/ironcalc/PROVENANCE.md`) | the calc_tests workbooks with more differences (61 workbooks, 205 cells on 2026-11-06); small formatter ports where a test shows a gap |
+| [IronCalc](IRONCALC.md) | MIT OR Apache-2.0: copy or port with attribution (`third_party/ironcalc/PROVENANCE.md`) | the calc_tests workbooks with more differences (60 workbooks, 199 cells on 2026-11-06); small formatter ports where a test shows a gap |
 | [Grist](GRIST.md) | Apache-2.0, ideas only | record identity; keyed JSON reconcile; reference fields |
 | [Airtable](AIRTABLE.md) | proprietary, public docs ideas only | saved views and record form; trigger run log |
 | [VisiData](VISIDATA.md) | GPL-3.0, ideas only | record by identity and deferred patches (the record model); lineage for group/pivot results (typed group keys first) |
