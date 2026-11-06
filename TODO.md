@@ -31,7 +31,15 @@ sae 61/61. The merge (aether-ui main + 7566ca4d, sae ba2abd7, spraedsheet with t
 aether-ui `./ci.sh` all phases, spraedsheet `./run-tests.sh` 9 passed (and spec_sheet again, passed); aether-linux sae 61/61, spraedsheet 10 passed
 (`sheet_large`'s save and open timings failed once while macOS ran spec_sheet beside it, passed alone; they are
 unchanged by this work, 2.2 s and 2.5 s on macOS before and after).
-Aether 0.889.0 (released, `SAE_AETHER_HOME=none`, aeb v0.340): see the note after this one when it is in.
+Aether 0.889.0, the release (`~/.aether/versions/v0.889.0/bin` first on PATH, `SAE_AETHER_HOME=none`, aeb v0.340; no
+dev tree): it builds sae now (the bare release links: contrib/sqlite's archive ships), and every suite is green on
+macOS: spraedsheet 9 passed, sae lower 70 and run_all 61/61, aether-ui `./ci.sh` all phases. Not tried on the lanes
+(aether-linux has 0.888 and a v0889 dir, not checked), so sae's `pins` stay at 0.842.0 / v0.333: a tracking move to
+0.889.0 is possible and needs no code change, as its own commit once the lanes agree. (`ae` through
+`~/.local/bin/ae` is 0.890.0 since 2026-11-05 23:01 and reads its runtime from a stale `~/.local/share/aether`,
+which breaks aeb's own build: use the versioned bin directory.) cachyos (ae 0.860, GTK 4.24) runs aether-ui's
+`./ci.sh` green but for `font_picker` (two cases: a second category widening the list, each row in its own face),
+which reads the host's fonts and came with main's font work (bf0bb8d4), not this.
 
 **Done 2026-11-05 (each test first):**
 - Univer 5 follow-ups: the cells and notes recorded at the mutation (`overlay.ts`: a snapshot is the keys changed,
