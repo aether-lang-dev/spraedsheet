@@ -148,7 +148,9 @@ export const CASES: Record<string, [string, Want][]> = {
   DAY: [["DAY(45351)", 29], ["DAY(45322)", 31], ["DAY(-1)", "#NUM!"]],
   EDATE: [["EDATE(DATE(2024, 1, 31), 1)", 45351], ["EDATE(DATE(2024, 3, 31), -1)", 45351], ["EDATE(45351, 0)", 45351], ["EDATE(DATE(1900, 3, 1), -7)", "#NUM!"], ["EDATE(DATE(9999, 12, 1), 1)", "#NUM!"]],
   EOMONTH: [["EOMONTH(DATE(2024, 1, 15), 0)", 45322], ["EOMONTH(DATE(2024, 1, 15), 1)", 45351], ["EOMONTH(\"44987\", 1)", 45046], ["EOMONTH(-1, 0)", "#NUM!"]],
-  WEEKDAY: [["WEEKDAY(45292)", 2], ["WEEKDAY(45292, 2)", 1], ["WEEKDAY(45292, 3)", 0]],
+  WEEKDAY: [["WEEKDAY(45292)", 2], ["WEEKDAY(45292, 2)", 1], ["WEEKDAY(45292, 3)", 0],
+    // Arguments are read left to right and the first failure answers: the first one is no date, the second an error.
+    ["WEEKDAY(\"abc\", D2)", "#VALUE!"], ["WEEKDAY(D2, \"abc\")", "#DIV/0!"], ["WEEKDAY(45292, D2)", "#DIV/0!"], ["WEEKDAY(TRUE, D2)", "#VALUE!"]],
   DAYS: [["DAYS(45352, 45351)", 1], ["DAYS(45351, 45352)", -1], ["DAYS(45351, 45351)", 0]],
   DATEDIF: [["DATEDIF(DATE(2020, 1, 1), DATE(2024, 1, 1), \"Y\")", 4], ["DATEDIF(DATE(2024, 1, 1), DATE(2020, 1, 1), \"Y\")", "#NUM!"], ["DATEDIF(DATE(2020, 1, 31), DATE(2020, 3, 1), \"M\")", 1], ["DATEDIF(DATE(2025, 1, 10) + 0.8, DATE(2025, 1, 10) + 0.2, \"D\")", 0], ["DATEDIF(-5, 10, \"D\")", "#NUM!"]],
   BIN2DEC: [["BIN2DEC(\"1010\")", 10], ["BIN2DEC(\"102\")", "#NUM!"], ["BIN2DEC(\"1111111111\")", 1023 - 1024]],

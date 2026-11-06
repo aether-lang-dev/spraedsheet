@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1411 cases, 1411 passing);
-64 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (272, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1415 cases, 1415 passing);
+61 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (248, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -260,7 +260,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ISO.CEILING | function | 1 or 2 values | passes | 3 | `ISO.CEILING(4.3, 2)` = 6 |  |  |
 | ISODD | function | 1 value | passes | 4 | `ISODD(3)` = true | 1 | TRUE/FALSE refused |
 | ISOMITTED | form | (its own) | passes | 4 | `LAMBDA(x, [y], ISOMITTED(y))(1)` = true | 2 |  |
-| ISOWEEKNUM | function | 1 value | passes | 4 | `ISOWEEKNUM(DATE(2021, 1, 3))` = 53 | 8 | TRUE/FALSE refused |
+| ISOWEEKNUM | function | 1 value | passes | 4 | `ISOWEEKNUM(DATE(2021, 1, 3))` = 53 |  | TRUE/FALSE refused |
 | ISPMT | function | 4 values | passes | 3 | `ISPMT(0.1, 1, 4, 1000)` = -75 |  |  |
 | ISREF | form | (its own) | passes | 4 | `ISREF(A1)` = true | 11 |  |
 | ISTEXT | function | 1 value | passes | 2 | `ISTEXT("a")` = true |  |  |
@@ -481,8 +481,8 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | VDB | function | 5 to 7 values | passes | 3 | `VDB(10000, 1000, 5, 0, 1)` = 4000 |  |  |
 | VLOOKUP | function | 3 or 4 values | passes | 4 | `VLOOKUP(2, {1, "a"; 2, "b"}, 2, FALSE)` = "b" |  |  |
 | VSTACK | function | at least 1 value | passes | 3 | `INDEX(VSTACK({1, 2}, {3, 4}), 2, 1)` = 3 |  |  |
-| WEEKDAY | function | 1 or 2 values | passes | 3 | `WEEKDAY(45292)` = 2 | 8 | TRUE/FALSE refused |
-| WEEKNUM | function | 1 or 2 values | passes | 5 | `WEEKNUM(DATE(2024, 1, 1))` = 1 | 8 | TRUE/FALSE refused |
+| WEEKDAY | function | 1 or 2 values | passes | 7 | `WEEKDAY(45292)` = 2 |  | TRUE/FALSE refused |
+| WEEKNUM | function | 1 or 2 values | passes | 5 | `WEEKNUM(DATE(2024, 1, 1))` = 1 |  | TRUE/FALSE refused |
 | WEIBULL | function | 4 values | passes | 2 | `WEIBULL(1, 1, 1, TRUE)` = 0.632120558829 |  |  |
 | WEIBULL.DIST | function | 4 values | passes | 3 | `WEIBULL.DIST(1, 1, 1, TRUE)` = 0.632120558829 |  |  |
 | WORKDAY | function | 2 or 3 values | passes | 4 | `WORKDAY(DATE(2024, 1, 5), 1)` = 45299 |  | TRUE/FALSE refused |

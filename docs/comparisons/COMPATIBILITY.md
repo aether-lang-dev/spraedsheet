@@ -36,10 +36,10 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 | Kind | Cells | Means |
 |---|---|---|
 | `we-error` | 83 | this app gives an error where Excel stored a value |
-| `excel-error` | 49 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `excel-error` | 41 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 45 | both give a value, and they differ |
 
-Counted 2026-11-05 (215 cells with the 38 `legacy`, in 62 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-06 (207 cells with the 38 `legacy`, in 61 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -93,6 +93,14 @@ text that reads as TRUE, FALSE or an error as text (a cell holding the text "tru
 a TRUE/FALSE argument of a function (cumulative ...) reads the text "TRUE" and "FALSE" as those.
 Headless `sheet_typederrors`. ERROR.TYPE.xlsx B8 and B14 now differ as values: Excel stored #VALUE! in
 the file for errors that are #CALC! and #SPILL! (rich values), which the file does not say.
+
+2026-11-06, 8 cells: arguments are read left to right and the first failure answers. A function
+that refuses TRUE and FALSE (WEEKDAY, EDATE, DAYS, YEARFRAC ...) looked through every argument for an
+error value first, so `WEEKDAY("1/1/10000", 1/0)` gave the second argument's #DIV/0! where Excel
+stores the first argument's #VALUE!. The look now stops at the first error value, which the function
+meets itself when it reads that argument (after the failures of those before it); a TRUE or FALSE
+before it is still #VALUE!. (`call`, `functions.ts`; the case is in `examples.ts`.) The ledger's
+WEEKDAY_WEEKNUM_ISOWEEKNUM_issue_1502.xlsx (8 cells) is off it; no other workbook's cells depended on it.
 
 ## Intended (found while looking)
 

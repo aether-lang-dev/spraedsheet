@@ -52,7 +52,7 @@ const takes = (min: number, max: number): string =>
 export function call(name: string, args: readonly Arg[]): Result {
   const spec = library.get(name);
   if (!spec) return fail("#NAME?", `no function ${name}`);
-  if (NO_LOGICALS.has(name) && args.some((a) => a.values.some((v) => typeof scalar(v) === "boolean"))) return fail("#VALUE!", `${name} takes numbers: TRUE and FALSE are not`);
+  if (NO_LOGICALS.has(name) && refusesLogical(args)) return fail("#VALUE!", `${name} takes numbers: TRUE and FALSE are not`);
   if (args.length < spec.min || args.length > spec.max) return fail("#VALUE!", `${name} takes ${takes(spec.min, spec.max)}`);
   return lifted(spec.fn, args, new Set());
 }
@@ -66,6 +66,19 @@ const NO_LOGICALS = new Set(["ERF", "ERFC", "ERF.PRECISE", "ERFC.PRECISE", "GEST
   "ISODD", "ISEVEN", "EOMONTH", "EDATE", "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "YEARFRAC", "DATEDIF", "DAYS", "NETWORKDAYS", "NETWORKDAYS.INTL",
   "WORKDAY", "WORKDAY.INTL", "DATEVALUE", "TIMEVALUE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX",
   "XNPV", "XIRR", "CUMIPMT", "CUMPRINC"]);
+
+// Whether a TRUE or FALSE comes before any error among the arguments, read left
+// to right as Excel reads them: the first failure answers. An error value met
+// first is left to the function, which meets it as it reads that argument
+// (after the arguments before it, whose own failures come first):
+// WEEKDAY("abc", 1/0) is #VALUE!, not #DIV/0!.
+const refusesLogical = (args: readonly Arg[]): boolean => {
+  for (const a of args) for (const v of a.values) {
+    if (v instanceof CellError) return false;
+    if (typeof v === "boolean") return true;
+  }
+  return false;
+};
 
 export const NO_LOGICALS_LIST: readonly string[] = [...NO_LOGICALS];
 

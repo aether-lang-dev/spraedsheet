@@ -26,16 +26,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "DATE_AND_TIME/TIMEVALUE_issue_1402.xlsx": {
     "Sheet1!B2": "we-error",
   },
-  "DATE_AND_TIME/WEEKDAY_WEEKNUM_ISOWEEKNUM_issue_1502.xlsx": {
-    "WEEKDAY!B2": "excel-error",
-    "WEEKDAY!C2": "excel-error",
-    "WEEKDAY!B3": "excel-error",
-    "WEEKDAY!C3": "excel-error",
-    "WEEKDAY!B4": "excel-error",
-    "WEEKDAY!C4": "excel-error",
-    "WEEKDAY!B5": "excel-error",
-    "WEEKDAY!C5": "excel-error",
-  },
   "DATE_AND_TIME/YEARFRAC_DATEDIF.xlsx": {
     "YEARFRAC_DATEDIF!A30": "legacy",
     "YEARFRAC_DATEDIF!C30": "we-error",
