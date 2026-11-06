@@ -35,9 +35,7 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "YEARFRAC_DATEDIF!D31": "legacy",
   },
   "FINANCIAL/ACCRINT.xlsx": {
-    "Sheet1!B4": "value",
     "Sheet1!B5": "value",
-    "Sheet1!B23": "value",
     "Sheet1!B32": "value",
     "Sheet1!B33": "value",
     "Sheet1!B34": "value",

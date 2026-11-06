@@ -47,7 +47,7 @@ the number-format cases, the series-detection cases.
    SUMSQ and base-conversion edges, and 17 of wildcard lookups and DROP/TAKE:
    9 more of typed arguments (SMALL, MINA ...), and 17 of error values and logical
    text as cells hold them; 2026-11-06: 8 of error precedence (the first argument's failure
-   answers before a later argument's error): 207 left in 61 workbooks; the cells looked at
+   answers before a later argument's error) and 2 of ACCRINT's full periods: 205 left in 61 workbooks; the cells looked at
    and kept, with why, are in COMPATIBILITY.md.
 3. **Small ports, only where a test shows a gap:** a routine from
    `base/src/formatter/` for `numfmt.ts` (the cases are in; no code ported yet).

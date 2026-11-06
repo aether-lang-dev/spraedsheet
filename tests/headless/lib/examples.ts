@@ -487,7 +487,10 @@ export const CASES: Record<string, [string, Want][]> = {
   TBILLYIELD: [["TBILLYIELD(DATE(2024, 1, 1), DATE(2024, 3, 1), 99)", (100 - 99) / 99 * 360 / 60], ["TBILLYIELD(DATE(2024, 3, 1), DATE(2024, 1, 1), 99)", "#NUM!"]],
   TBILLEQ: [["TBILLEQ(DATE(2024, 1, 1), DATE(2024, 3, 1), 0.05)", 365 * 0.05 / (360 - 0.05 * 60)], ["TBILLEQ(DATE(2024, 1, 1), DATE(2024, 3, 1), 0)", "#NUM!"]],
   ACCRINTM: [["ACCRINTM(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 1000, 0)", 30], ["ACCRINTM(DATE(2024, 7, 1), DATE(2024, 1, 1), 0.06, 1000, 0)", "#NUM!"]],
-  ACCRINT: [["ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0.06, 1000, 2)", 15], ["ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0, 1000, 2)", "#NUM!"]],
+  ACCRINT: [["ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0.06, 1000, 2)", 15], ["ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0, 1000, 2)", "#NUM!"],
+    // A quasi-coupon period lived through whole counts as 1 even where the 30/360 count of it is a day short
+    // (31 August 2007 to 29 February 2008 is 179 days of 180): 50 * (1 + 1 + 61/180), as Excel stored it.
+    ["ACCRINT(DATE(2007, 3, 1), DATE(2008, 8, 31), DATE(2008, 5, 1), 0.1, 1000, 2, 0)", 116.94444444444446]],
   PRICEMAT: [["PRICEMAT(DATE(2024, 4, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 0.05, 0)", (100 + 100 * 0.06) / (1 + 270 / 360 * 0.05) - 90 / 360 * 6], ["PRICEMAT(DATE(2025, 2, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 0.05, 0)", "#NUM!"]],
   YIELDMAT: [["YIELDMAT(DATE(2024, 4, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 100.5, 0)", ((106) - (100.5 + 1.5)) / (100.5 + 1.5) * 360 / 270], ["YIELDMAT(DATE(2025, 2, 1), DATE(2025, 1, 1), DATE(2024, 1, 1), 0.06, 100.5, 0)", "#NUM!"]],
   PRICE: [["PRICE(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 100, 2)", 100], ["PRICE(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.05, 100, 1)", [1, 2, 3, 4, 5].reduce((s, t) => s + 6 / Math.pow(1.05, t), 0) + 100 / Math.pow(1.05, 5)], ["PRICE(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.05, 100, 3)", "#NUM!"]],

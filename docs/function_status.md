@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1415 cases, 1415 passing);
-61 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (248, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1416 cases, 1416 passing);
+61 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (246, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -16,7 +16,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | function | kind | takes | status | cases | example | differs | notes |
 |---|---|---|---|---|---|---|---|
 | ABS | function | 1 value | passes | 3 | `ABS(-5)` = 5 |  |  |
-| ACCRINT | function | 6 to 8 values | passes | 2 | `ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0.06, 1000, 2)` = 15 | 9 |  |
+| ACCRINT | function | 6 to 8 values | passes | 3 | `ACCRINT(DATE(2024, 1, 1), DATE(2024, 7, 1), DATE(2024, 4, 1), 0.06, 1000, 2)` = 15 | 7 |  |
 | ACCRINTM | function | 4 or 5 values | passes | 2 | `ACCRINTM(DATE(2024, 1, 1), DATE(2024, 7, 1), 0.06, 1000, 0)` = 30 |  |  |
 | ACOS | function | 1 value | passes | 3 | `ACOS(0.5)` = 1.0471975512 |  |  |
 | ACOSH | function | 1 value | passes | 3 | `ACOSH(1)` = 0 |  |  |

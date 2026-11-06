@@ -129,7 +129,10 @@ export function accrued(from: number, to: number, anchor: number, rate: number, 
   for (let start = addMonthsKeep(anchor, -step * k, eom); start < to; k--) {
     const end = addMonthsKeep(anchor, -step * (k - 1), eom);
     const lo = Math.max(start, from), hi = Math.min(end, to);
-    if (hi > lo) total += dayCount(lo, hi, basis) / periodDays(start, end, freq, basis);
+    // A period lived through whole is 1 (its days over its own length, which
+    // the 30/360 count of a period ending on the last of February does not
+    // equal: 31 August to 29 February is 179 days of 180).
+    if (hi > lo) total += lo === start && hi === end ? 1 : dayCount(lo, hi, basis) / periodDays(start, end, freq, basis);
     start = end;
   }
   return (par * rate * total) / freq;

@@ -37,9 +37,9 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 |---|---|---|
 | `we-error` | 83 | this app gives an error where Excel stored a value |
 | `excel-error` | 41 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 45 | both give a value, and they differ |
+| `value` | 43 | both give a value, and they differ |
 
-Counted 2026-11-06 (207 cells with the 38 `legacy`, in 61 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-06 (205 cells with the 38 `legacy`, in 61 workbooks; 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -102,6 +102,12 @@ meets itself when it reads that argument (after the failures of those before it)
 before it is still #VALUE!. (`call`, `functions.ts`; the case is in `examples.ts`.) The ledger's
 WEEKDAY_WEEKNUM_ISOWEEKNUM_issue_1502.xlsx (8 cells) is off it; no other workbook's cells depended on it.
 
+2026-11-06, 2 cells: ACCRINT counts a quasi-coupon period lived through whole as 1 (A = NL),
+where it divided that period's 30/360 days by its length: 31 August 2007 to 29 February 2008 is 179
+days of 180 on the US count (a start on the 31st, an end on the last of February), which lost a
+day in `ACCRINT(1 Mar 2007, 31 Aug 2008, 1 May 2008, 0.1, 1000, 2, 0)` (116.667; Excel 116.944).
+(`accrued`, `bonds.ts`; the case is in `examples.ts`.) ACCRINT.xlsx B4 and B23.
+
 ## Intended (found while looking)
 
 - `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`): the workbook was saved where dates are
@@ -113,9 +119,20 @@ WEEKDAY_WEEKNUM_ISOWEEKNUM_issue_1502.xlsx (8 cells) is off it; no other workboo
 - `XNPV.xlsx` R2, R5 (`XIRR`): the two agree to 1e-8 of the rate; Excel stops its iteration
   sooner than this app does. Matching would mean copying Excel's stopping rule, which is not
   documented; the difference is under the displayed precision.
-- `ACCRINT.xlsx` (9 cells): Excel's accrual by quasi-coupon periods counts the days of each
-  period on the basis differently from this app's (30/360 from 1 March 2007 to 1 May 2008 is
-  420 days here, 421 in Excel's answer); not yet worked out from the documentation.
+- `ACCRINT.xlsx` (7 cells left of 9; B4 and B23 were the day count, see the entry above): what Excel
+  stored for the rest does not follow from the documented formula (par * rate / frequency * the sum
+  over the quasi-coupon periods of A / NL), on any day count tried, so they stay.
+  Basis 2: B33 (1 January to 1 April 2017, quarterly) is 86 days over 360 in Excel's answer, the span
+  being 90; B36 (1 June to 1 September 2016) is 87 days, the span 92. Basis 3: B34 is 88.5 days over
+  365 for the 90-day span. Basis 1: B38 (the same 2016 span) is 93 over 366 for 92 days, B39 (30 days,
+  quarterly) 29 over 364, B32 59/90 + 29/91 where the days are 59/90 + 31/92; B37, basis 3 with the
+  dates of B36, is right at 92/365, and B24 to B26 (2020) are right on bases 1 to 3, so a rule that
+  moved A or NL by a day or more for these would have to be found from the cases themselves.
+  B5 (calc_method FALSE) is 241 days of 180, from 31 August 2007, the first quasi-coupon date after
+  the issue; B2 and B31 (FALSE too, and right) start at the issue because the settlement is in the
+  issue's own period. Microsoft's text (FALSE: from first_interest to settlement) does not give
+  that either, as the settlement is before the first interest. Not changed: three cases make a rule
+  to guess at, not one to copy.
 - `RATE.xlsx` F17, G17: Excel answers #NUM! where this app's iteration finds a root below -1
   (-1.87) or at -1; Excel's guess-driven Newton search does not reach it. Not changed until
   Excel's rule for refusing such roots is known.
