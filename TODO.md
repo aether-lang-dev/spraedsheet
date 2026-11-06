@@ -63,11 +63,25 @@ which reads the host's fonts and came with main's font work (bf0bb8d4), not this
   `effect` instead changes what a macro records (zoom, selection, the view: Excel's recorder takes those), which is a
   behaviour choice for Paul. MCP discovery lists REXX functions (`described.ts`), not commands, so `effect` needs a
   table of the ~400 functions' effects first (or MCP tools for the commands themselves).
-- IronCalc: 215 cells in 62 workbooks; the ones looked at and why they stay are in COMPATIBILITY.md.
+- IronCalc: 199 cells in 60 workbooks (2026-11-06); the ones looked at and why they stay are in COMPATIBILITY.md.
 
-**Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger: the error-precedence rule
-(WEEKDAY of a text that is no date with an error type argument: Excel answers the first argument's #VALUE!), ACCRINT's
-day count, GROWTH/TREND's argument checks, the `legacy` cells (Paul's `@` decision).
+**Done 2026-11-06 (IronCalc ledger, each test first; 215 cells to 199, 62 workbooks to 60):**
+- The first argument's failure answers first (`call`'s TRUE/FALSE look stopped meeting a later argument's
+  error before the function read the earlier ones): WEEKDAY_WEEKNUM_ISOWEEKNUM_issue_1502, 8 cells. 381b29d.
+- ACCRINT counts a quasi-coupon period lived through whole as 1: ACCRINT.xlsx B4, B23. The other 7 stay, with
+  the numbers, in COMPATIBILITY.md ("Examined, not changed"): Excel's bases 1 to 3 imply day counts that differ
+  from the span and follow from no documented rule; B5 (calc_method FALSE) is a fit to three cells. 5cc92ac.
+- TREND and GROWTH take const (FALSE: through the origin) and refuse as Excel does (a cell that is no number
+  #VALUE!, known_x of another size #REF!): TREND_GROWTH.xlsx, 6 cells. Not done there: several known_x columns
+  (multiple regression). c2b3e05.
+Run on the release 0.889.0 (see above): headless 172 passed before and after; sae was rebuilt in a clone on
+Mini3 (`/Volumes/Mini3/claude-scratch/spr-w`, SAE_DIR) because `sae/target/toolchain` is a 0.841 toolchain
+whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 std.
+
+**Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger (199 cells: 38 `legacy`,
+161 others in 60 workbooks; the cells looked at and kept are in COMPATIBILITY.md): the remaining we-error and
+excel-error cells by function (`docs/function_status.md` counts them), the `legacy` cells (Paul's `@` decision),
+multiple known_x in TREND/GROWTH.
 
 ## Paused 2026-10-25 (resumed 2026-11-05, above)
 
