@@ -265,7 +265,7 @@ export class SheetView {
     const many = sel && (others.length > 0 || sel[0].col !== sel[1].col || sel[0].row !== sel[1].row);
     const cells = this.wb.sheet.keys().length;
     const words = (s: string) => (this.wb.locale === "en" ? s : s.replace(/\b(Ready|Average|Numerical Count|Count|Min|Max|Sum)\b/g, (w) => t(this.wb.locale, w)));
-    const bar = [words(many ? statsLine(this.wb.stats([...others, sel!])) : "Ready"), `${cells} cell${cells === 1 ? "" : "s"}`, `Zoom ${this.wb.zoom}%`, this.wb.calculation.manual && this.wb.stale().length ? "Calculate" : "", this.bus ? "Control bus" : "", this.wb.editMode ? "" : "Read view (F2: edit mode)", checksLine(this.wb.checkResults)];
+    const bar = [words(many ? statsLine(this.wb.stats([...others, sel!])) : "Ready"), `${cells} cell${cells === 1 ? "" : "s"}`, `Zoom ${this.wb.zoom}%`, this.wb.stale().length ? "Calculate" : "", this.bus ? "Control bus" : "", this.wb.editMode ? "" : "Read view (F2: edit mode)", checksLine(this.wb.checkResults)];
     if (this.zoomSlider && sliderToZoom(ui.get_slider(this.zoomSlider)) !== this.wb.zoom) ui.set_slider(this.zoomSlider, zoomToSlider(this.wb.zoom));
     if (this.zoomLabel) ui.set_text(this.zoomLabel, `${this.wb.zoom}%`);
     if (this.#extras) ui.set_visible(this.#extras, this.wb.extraControls);

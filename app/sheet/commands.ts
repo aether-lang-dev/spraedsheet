@@ -5150,15 +5150,20 @@ export class Commands {
     return o;
   }
 
+  // The page's time limit stopped some work of the page's (a handler's
+  // recalculation as well as a request's): a stopped job never comes back,
+  // so the turn it held fails, and the changes behind it are not left
+  // waiting for it. The cells it was working out are worked out by the next
+  // turn (Sheet). True when a turn was in progress.
+  interrupted(): boolean { return this.#wb.interruptTurns("the page's time limit"); }
+
   // The request in flight, which sae's control bus answered without it
   // (bus.serve's stopped): "interrupted", the page's time limit stopped it
   // and it will not come back, so it is taken back now; "deadline", it was
   // still running at the bus's 10 s, so it is cancelled: its next command
   // fails, and it is taken back as any failed request is.
   async stopped(reason: string): Promise<string> {
-    // An interrupted job never comes back: the turn it held fails, so the
-    // changes behind it are not left waiting for it.
-    if (reason === "interrupted") this.#wb.interruptTurns("the page's time limit");
+    if (reason === "interrupted") this.interrupted();
     const request = this.#request;
     if (!request) return "";
     request.cancelled = true;

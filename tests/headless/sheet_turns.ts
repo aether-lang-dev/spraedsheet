@@ -55,6 +55,7 @@ const settle = async () => { for (let i = 0; i < 200; i++) await Promise.resolve
   await cmds.run("cell.set cell=A1 input=1");
   eq("a workbook's turns are interrupted by an interrupted request",
     [wb.interruptTurns("page time limit"), (await cmds.run("cell.set cell=A2 input=2")).ok, wb.sheet.value("A2")], [false, true, 2]);
+  eq("and so are they by the page's own time limit (ui.on_interrupted), with none in progress said", cmds.interrupted(), false);
 }
 
 // expect: ok a job that throws fails its turn, and the next turn runs
@@ -65,3 +66,4 @@ const settle = async () => { for (let i = 0; i < 200; i++) await Promise.resolve
 // expect: ok and the queue is still usable
 // expect: ok a late answer from an interrupted job changes nothing
 // expect: ok a workbook's turns are interrupted by an interrupted request
+// expect: ok and so are they by the page's own time limit (ui.on_interrupted), with none in progress said

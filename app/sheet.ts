@@ -46,13 +46,15 @@ import { panelTabs } from "./sheet/view/paneltabs.ts";
 // some, and the page then stopped partway, its grid half wired (a click on
 // it scrolled the page away and typing did nothing). Each one missing is
 // said, on the page and the console, and stood in for where it can be.
-const NEEDS = ["wrap", "datagrid_widget", "datagrid_show_header", "datagrid_set_row_heights", "datagrid_cell_picture", "datagrid_selection_glide", "context_menu", "on_double_click"];
+const NEEDS = ["wrap", "datagrid_widget", "datagrid_show_header", "datagrid_set_row_heights", "datagrid_cell_picture", "datagrid_selection_glide", "context_menu", "on_double_click", "on_interrupted"];
 const lacking = NEEDS.filter((n) => typeof (ui as any)[n] !== "function");
 if (typeof (ui as any).wrap !== "function") (ui as any).wrap = ui.hstack;
 if (typeof (ui as any).datagrid_widget !== "function") (ui as any).datagrid_widget = () => 0;
 // No right-click menus or double clicks on a tab: the sheet buttons still do it all.
 if (typeof (ui as any).context_menu !== "function") (ui as any).context_menu = () => {};
 if (typeof (ui as any).on_double_click !== "function") (ui as any).on_double_click = () => {};
+// Not told when work is stopped at the time limit.
+if (typeof (ui as any).on_interrupted !== "function") (ui as any).on_interrupted = () => {};
 if (lacking.length) print(`sheet: this sae lacks ui.${lacking.join(", ui.")}: rebuild it (../sae, its ./build.sh)`);
 
 const sheet = new SheetView();
@@ -97,6 +99,14 @@ sheet.panel("lists", () => { functionList(sheet); problemList(sheet); });
 // The menus run the panels' actions: made once the panels are.
 menuBar(sheet);
 sheet.refresh();
+
+// A handler's work the page's time limit stopped (a recalculation started
+// from a click or a key, say) never comes back and runs no finally: sae
+// tells the page, which fails the turn that work held, so later changes run.
+ui.on_interrupted(() => {
+  if (sheet.cmds.interrupted()) print("sheet: work was stopped at the page's time limit; the cells it was on are worked out again at the next change");
+  sheet.refresh();
+});
 
 // The control bus (an installed app started with --control-bus): another
 // program drives the sheet as the Tauri app's clients do, each request a

@@ -252,6 +252,15 @@ export class Sheet {
   // Manual calculation: the cells a change has made out of date, until the
   // sheet is calculated.
   readonly #stale = new Set<string>();
+  // The cells a recalculation has in hand, until it is done. One still
+  // here when the next starts never finished (sae's page time limit killed
+  // the job it was awaiting; no finally runs), so those cells may be out of
+  // date and unsaid: the next recalculation works them out as if set. Once:
+  // a cell it also fails to finish (#retried, those it took on) is left
+  // #stale, for Calculate, so one too heavy for the limit does not hold up
+  // every change after it.
+  #unsettled = new Set<string>();
+  #retried = new Set<string>();
 
   // The sheet as saved() last gave it, and what changed since: the cells
   // (keys recorded as each is set, so the next snapshot is an Overlay of
@@ -703,6 +712,12 @@ export class Sheet {
   // cells are worked round (#iterate) instead of being #CYCLE!.
   async #recompute(set: readonly string[], depth = 0, all = false): Promise<string[]> {
     this.#extent = null;
+    if (depth === 0) {
+      const again = [...this.#unsettled].filter((k) => !this.#retried.has(k));
+      for (const k of this.#unsettled) if (this.#retried.has(k)) this.#stale.add(k);
+      this.#retried = new Set(again);
+      if (again.length) set = [...new Set([...set, ...again])];
+    }
     const calc = this.#context.calc?.() ?? AUTOMATIC;
     const before = new Map<string, string>();
     // As a set: includes() over a big change (a file opened, 100,000 cells)
@@ -718,6 +733,10 @@ export class Sheet {
     }
     this.#spillChanged = new Set();
     const mine = [...affected].filter((k) => !k.includes("!"));
+    if (depth === 0) {
+      this.#unsettled = new Set(mine);
+      for (const k of mine) this.#stale.delete(k);
+    }
     this.#work.passes++;
     this.#work.considered += mine.length;
     for (const k of mine) before.set(k, show(this.value(k)));
@@ -744,6 +763,7 @@ export class Sheet {
     for (const k of changed) this.#listener?.changed(k, this.value(k));
     const moved = [...this.#spillChanged];
     if (moved.length && depth < 4) changed = [...new Set([...changed, ...(await this.#recompute(moved, depth + 1, all))])].sort(byOrder);
+    if (depth === 0) { this.#unsettled = new Set(); this.#retried = new Set(); }
     return changed;
   }
 
