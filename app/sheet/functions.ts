@@ -2117,14 +2117,26 @@ def("LOOKUP", 2, 3, (args) => {
   const at = position(x, Array.from({ length: rows }, (_, i) => values[i * cols]), 1);
   return at < 0 ? notFound(x) : values[at * cols + cols - 1];
 });
-def("INDEX", 2, 3, (args) => {
+// The block INDEX(array, row, column, area) picks out of an array of `rows` by `cols`, as
+// its rows and columns, counted from 0 and both ends in: a row or column of 0 (or left out)
+// is the whole of it, so INDEX(array, 0, 1) is a column and INDEX(array, , ) the array; of
+// an array of one row a row given alone counts along it (INDEX({1,2,3}, 2) is 2). A
+// negative number or an area under 1 is #VALUE!, one past the array (or an area past
+// the first: there is one area) #REF!.
+export function indexBlock(rows: number, cols: number, row: number | null, col: number | null, area: number | null): { r0: number; r1: number; c0: number; c1: number } {
+  let r = row ?? 0, c = col ?? 0;
+  if (col === null && rows === 1) [r, c] = [0, r];
+  if (r < 0 || c < 0 || (area !== null && area < 1)) return fail("#VALUE!", "INDEX takes a row, a column and an area of 0 or more (1 or more)");
+  if (r > rows || c > cols || (area !== null && area > 1)) return fail("#REF!", `INDEX ${r}, ${c}${area !== null && area > 1 ? `, area ${area}` : ""} is outside ${rows} x ${cols}`);
+  return { r0: r === 0 ? 0 : r - 1, r1: r === 0 ? rows - 1 : r - 1, c0: c === 0 ? 0 : c - 1, c1: c === 0 ? cols - 1 : c - 1 };
+}
+def("INDEX", 2, 4, (args) => {
   const { values, cols } = args[0], rows = values.length / cols;
-  // INDEX(list, n) counts along a single row or column.
-  let r = num(args, 1), c = num(args, 2, 1);
-  if (args.length === 2 && rows === 1) [r, c] = [1, r];
-  return r >= 1 && r <= rows && c >= 1 && c <= cols
-    ? values[(r - 1) * cols + (c - 1)]
-    : fail("#REF!", `INDEX ${r}, ${c} is outside ${rows} x ${cols}`);
+  const given = (i: number): number | null => (absent(args, i) ? null : Math.trunc(num(args, i)));
+  const { r0, r1, c0, c1 } = indexBlock(rows, cols, given(1), given(2), given(3));
+  const out: Value[] = [];
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) out.push(values[r * cols + c]);
+  return out.length === 1 ? out[0] : array(r1 - r0 + 1, c1 - c0 + 1, out);
 });
 def("MATCH", 2, 3, (args) => {
   const x = lookedFor(args), at = position(x, args[1].values, Math.sign(num(args, 2, 1)));

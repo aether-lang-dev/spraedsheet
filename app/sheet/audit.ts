@@ -33,6 +33,7 @@ const kidsOf = (e: Expr): readonly Expr[] => {
     case "at":
       return [e.arg];
     case "binary": return [e.left, e.right];
+    case "span": return [e.from, e.to];
     case "call": return e.args;
     case "let": return [...e.bindings.map(([, v]) => v), e.body];
     case "lambda": return [e.body];
@@ -81,6 +82,7 @@ function printed(n: Node): string {
       const l = LEVEL[e.op];
       return `${wrap(n.kids[0], level(n.kids[0]) < l)}${e.op}${wrap(n.kids[1], level(n.kids[1]) <= l)}`;
     }
+    case "span": return `${printed(n.kids[0])}:${printed(n.kids[1])}`;
     case "call": return `${e.name}(${n.kids.map(printed).join(",")})`;
     case "missing": return "";
     case "local": return e.name;

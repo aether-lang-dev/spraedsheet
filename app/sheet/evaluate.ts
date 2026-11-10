@@ -19,7 +19,7 @@ import { COLS, ROWS, addrOf, cellAddr, keyOf, range, span, splitKey } from "./ad
 import type { Addr } from "./address.ts";
 import { resolve } from "./structured.ts";
 import type { Expr } from "./parser.ts";
-import { call, single } from "./functions.ts";
+import { call, indexBlock, single } from "./functions.ts";
 import { groupBy, pivotBy } from "./groupby.ts";
 import type { Arg } from "./functions.ts";
 import { CellError, array, collapsed, compare, fail, finite, isArray, power, toNumber, toText, trimmed } from "./values.ts";
@@ -112,11 +112,21 @@ interface Closure {
 // sees it, and anything else reads it as empty.
 const OMITTED = { kind: "omitted" } as const;
 
+// A name bound to a reference (LET(x, A1:A3, ...), LAMBDA(x, ...)(A1)): what ISREF, ROW
+// and OFFSET ask of it, and its values (worked out once, when first used).
+interface Held {
+  readonly kind: "reference";
+  readonly ref: Reference;
+  readonly dynamic: boolean;
+  value?: Result;
+}
+
 // What a name in scope stands for.
-type Bound = Result | Closure | typeof OMITTED;
+type Bound = Result | Closure | Held | typeof OMITTED;
 type Scope = ReadonlyMap<string, Bound>;
 
 const isClosure = (v: Bound): v is Closure => typeof v === "object" && v !== null && (v as Closure).kind === "lambda";
+const isHeld = (v: Bound | undefined): v is Held => typeof v === "object" && v !== null && (v as Held).kind === "reference";
 
 // One operator on two values.
 function operate(op: Op, a: Value, b: Value): Value {
@@ -190,12 +200,13 @@ class Evaluator {
     switch (e.kind) {
       case "local": {
         const v = this.#scope.get(e.name);
+        if (isHeld(v)) return (v.value ??= this.#values(v.ref, v.dynamic));
         return v === undefined ? fail("#NAME?", `no name ${e.name}`) : v === OMITTED ? null : v;
       }
       case "let": {
         const scope = new Map(this.#scope);
         return this.#within(scope, () => {
-          for (const [name, value] of e.bindings) scope.set(name, this.any(value));
+          for (const [name, value] of e.bindings) scope.set(name, this.#bind(value));
           return this.any(e.body);
         });
       }
@@ -208,10 +219,31 @@ class Evaluator {
       case "apply": {
         const fn = this.any(e.fn);
         if (!isClosure(fn)) return fail("#VALUE!", "only a LAMBDA can be called");
-        return this.#invoke(fn, e.args.map((a) => (a.kind === "missing" ? OMITTED : this.any(a))));
+        return this.#invoke(fn, e.args.map((a) => (a.kind === "missing" ? OMITTED : this.#bind(a))));
       }
       default:
         return this.result(e);
+    }
+  }
+
+  // What a LET name or a LAMBDA parameter is given: a reference stays one (ISREF(x) is
+  // TRUE), and an error is kept as the value, not raised until the name is used (LET(x, 1/0, 5)
+  // is 5).
+  #bind(e: Expr): Bound {
+    try {
+      const refers = e.kind === "ref" || (e.kind === "range" && !e.trim) || e.kind === "span" || e.kind === "local"
+        || (e.kind === "call" && (e.name === "OFFSET" || e.name === "INDIRECT" || e.name === "INDEX" || e.name === "CHOOSE" || e.name === "IF"));
+      if (e.kind === "local") {
+        const v = this.#scope.get(e.name);
+        if (isHeld(v)) return v;
+      } else if (refers) {
+        const ref = this.#reference(e);
+        if (ref) return { kind: "reference", ref, dynamic: e.kind !== "ref" && e.kind !== "range" };
+      }
+      return this.any(e);
+    } catch (err) {
+      if (err instanceof CellError) return err;
+      throw err;
     }
   }
 
@@ -259,6 +291,10 @@ class Evaluator {
         return this.#intersect(e.arg);
       case "span3d":
         return this.#span3d(e);
+      case "span": {
+        const r = this.#reference(e);
+        return r ? this.#values(r, true) : fail("#VALUE!", "the range operator takes references");
+      }
       // A table reference: its cells as the table is now (its header row
       // read for a column's name); one cell is its value.
       case "table": {
@@ -617,11 +653,51 @@ class Evaluator {
         if (!a || !b) return fail("#REF!", `${a ? to : from} is not on the sheet`);
         return { sheet: splitKey(e.from).sheet, a, b };
       }
+      case "local": {
+        const v = this.#scope.get(e.name);
+        return isHeld(v) ? v.ref : null;
+      }
+      // The range operator: the rectangle of the two references.
+      case "span": {
+        const a = this.#reference(e.from), b = this.#reference(e.to);
+        if (!a || !b) return fail("#VALUE!", "the range operator takes references");
+        if (a.sheet !== b.sheet) return fail("#VALUE!", "a range on two sheets");
+        const rows = [a.a.row, a.b.row, b.a.row, b.b.row], cols = [a.a.col, a.b.col, b.a.col, b.b.col];
+        return { sheet: a.sheet, a: { row: Math.min(...rows), col: Math.min(...cols) }, b: { row: Math.max(...rows), col: Math.max(...cols) } };
+      }
       case "call":
-        return e.name === "OFFSET" ? this.#offset(e.args) : e.name === "INDIRECT" ? this.#indirect(e.args) : null;
+        switch (e.name) {
+          case "OFFSET": return this.#offset(e.args);
+          case "INDIRECT": return this.#indirect(e.args);
+          case "INDEX": return this.#index(e.args);
+          // CHOOSE and IF give the reference of the choice taken.
+          case "CHOOSE": {
+            if (e.args.length < 2) return null;
+            const i = Math.trunc(toNumber(this.#scalar(e.args[0])));
+            return i >= 1 && i < e.args.length ? this.#reference(e.args[i]) : fail("#VALUE!", `CHOOSE has no choice ${i}`);
+          }
+          case "IF": {
+            if (e.args.length < 2 || e.args.length > 3) return null;
+            const pick = truth(this.#scalar(e.args[0])) ? e.args[1] : e.args[2];
+            return pick ? this.#reference(pick) : null;
+          }
+          default: return null;
+        }
       default:
         return null;
     }
+  }
+
+  // INDEX of a reference: the cell, row or column of it picked out (null for an array).
+  #index(args: readonly Expr[]): Reference | null {
+    if (args.length < 2 || args.length > 4) return null;
+    const base = this.#reference(args[0]);
+    if (!base) return null;
+    const given = (i: number): number | null => (i < args.length && args[i].kind !== "missing" ? Math.trunc(toNumber(this.#scalar(args[i]))) : null);
+    const top = Math.min(base.a.row, base.b.row), left = Math.min(base.a.col, base.b.col);
+    const rows = Math.abs(base.a.row - base.b.row) + 1, cols = Math.abs(base.a.col - base.b.col) + 1;
+    const { r0, r1, c0, c1 } = indexBlock(rows, cols, given(1), given(2), given(3));
+    return { sheet: base.sheet, a: { row: top + r0, col: left + c0 }, b: { row: top + r1, col: left + c1 } };
   }
 
   // A reference's cells: one value, or an array; each told the Env when

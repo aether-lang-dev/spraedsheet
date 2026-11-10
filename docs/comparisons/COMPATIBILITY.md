@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 39 | this app gives an error where Excel stored a value |
-| `excel-error` | 14 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 38 | both give a value, and they differ |
+| `we-error` | 20 | this app gives an error where Excel stored a value |
+| `excel-error` | 12 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 32 | both give a value, and they differ |
 
-Counted 2026-11-10 (129 cells with the 38 `legacy`, in 39 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (102 cells with the 38 `legacy`, in 34 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -165,6 +165,21 @@ worked out again when the cell is retyped, in no order with it (`Sheet`'s `#inpu
 `[b]`, so ISOMITTED sees it), and a defined name that holds a LAMBDA (`CountWords`, `Temperature`) is
 stored with its `_xlfn.` and `_xlpm.` prefixes, which are taken off as a cell's formula's are, so calling it
 is no longer #NAME?. ISOMITTED.xlsx A6, A7; LAMBDA.xlsx F2, B5 to B8; headless `sheet_xlfn`.
+
+2026-11-10, 27 cells (references, INDEX, the postfix %): the range operator takes a call that makes a
+reference as a corner, `A1:OFFSET(A1, 4, 0)`, `A1:INDEX(B:B, 5)`, `OFFSET(...):OFFSET(...)`,
+`CHOOSE(...):CHOOSE(...)`, `INDIRECT("A1"):INDIRECT("A3")` (the Expr `span`: the rectangle of the two,
+its cells told the Env as OFFSET's are); INDEX, CHOOSE and IF of a reference are references (`ISREF(INDEX(K1:K2, 1))`
+is TRUE, so is `ISREF(IF(TRUE, A1, 5))`); a LET name or LAMBDA parameter given a reference stays one (ISREF,
+ROW, OFFSET see it) and one given an error holds it unraised (`LET(x, 1/0, 5)` is 5, `ISREF(x)` of an
+error FALSE); INDEX takes the area argument, a row or column of 0 or left out is the whole of it
+(`INDEX(array, , )` is the array, `INDEX(array, 0, 1)` a column), a negative number is #VALUE! and an area
+past the first #REF!; the formula's own cell in the branch of IF or CHOOSE not taken is no cycle
+(`=CHOOSE(2, B40, "Not a cycle")` in B40); and the postfix `%` (it was a parse error: `=A3*50%`,
+`B1:B4%`, `{10,20}%`) divides by 100 and binds tighter than ^. CHOOSE.xlsx (2), INDEX.xlsx (6),
+ISREF.xlsx (7), ISREF_ISFORMULA_ISODD_ISEVEN.xlsx F8, error_broadcast.xlsx E76, MINUS_MINUS.xlsx (2),
+percentage.xlsx, range_operator.xlsx (7); examples.ts and headless `sheet_references`. Not done: ROW,
+OFFSET and the like of a LET (a name that comes to a reference by LET's body, `ROW(LET(...))`).
 
 ## Intended (found while looking)
 

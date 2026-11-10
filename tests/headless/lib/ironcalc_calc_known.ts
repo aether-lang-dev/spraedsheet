@@ -40,27 +40,14 @@ export const KNOWN: Record<string, Record<string, string>> = {
   },
   "INFORMATION/ISREF.xlsx": {
     "Sheet1!D2": "excel-error",
-    "Sheet1!A6": "value",
     "Sheet1!D7": "excel-error",
     "Sheet1!D9": "legacy",
-    "Sheet1!A19": "value",
-    "Sheet1!A20": "value",
-    "Sheet1!A22": "we-error",
-    "Sheet1!A23": "value",
-    "Sheet1!A24": "value",
-    "Sheet1!A26": "value",
-  },
-  "INFORMATION/ISREF_ISFORMULA_ISODD_ISEVEN.xlsx": {
-    "ISREF_ISFORMULA!F8": "we-error",
   },
   "INFORMATION/error_broadcast.xlsx": {
     "Sheet1!E68": "value",
-    "Sheet1!E76": "we-error",
   },
   "LOOKUP_AND_REFERENCE/CHOOSE.xlsx": {
-    "CHOOSE!B10": "we-error",
     "CHOOSE!B23": "legacy",
-    "CHOOSE!B40": "we-error",
   },
   "LOOKUP_AND_REFERENCE/FILTER_ERRORS.xlsx": {
     "Sheet1!E1": "excel-error",
@@ -70,14 +57,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "HLOOKUP!N13": "excel-error",
     "VLOOKUP!N12": "excel-error",
     "VLOOKUP!N13": "excel-error",
-  },
-  "LOOKUP_AND_REFERENCE/INDEX.xlsx": {
-    "INDEX!A4": "we-error",
-    "INDEX!A6": "we-error",
-    "INDEX!A9": "we-error",
-    "INDEX!C9": "excel-error",
-    "INDEX!E18": "we-error",
-    "INDEX!E20": "excel-error",
   },
   "LOOKUP_AND_REFERENCE/SORT.xlsx": {
     "Sheet1!E1": "excel-error",
@@ -182,10 +161,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "TEXT/CONCATENATE.xlsx": {
     "Sheet2!B2": "legacy",
   },
-  "TEXT/MINUS_MINUS.xlsx": {
-    "Sheet1!A44": "we-error",
-    "Sheet1!C44": "we-error",
-  },
   "TEXT/T_VALUE_VALUETOTEXT.xlsx": {
     "Sheet1!I5": "value",
     "Sheet1!C15": "value",
@@ -195,20 +170,8 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!B10": "we-error",
     "Sheet1!B11": "we-error",
   },
-  "percentage.xlsx": {
-    "Sheet1!B3": "we-error",
-  },
   "quotes.xlsx": {
     "Sheet1!C8": "we-error",
-  },
-  "range_operator.xlsx": {
-    "Sheet1!C3": "we-error",
-    "Sheet1!D3": "we-error",
-    "Sheet1!G4": "we-error",
-    "Sheet1!C13": "we-error",
-    "Sheet1!C15": "we-error",
-    "Sheet2!A1": "we-error",
-    "Sheet2!A2": "we-error",
   },
   "spill_operator.xlsx": {
     "Sheet1!G2": "we-error",

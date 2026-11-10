@@ -22,7 +22,7 @@ const INPUT_READERS: ReadonlySet<string> = new Set(["FORMULATEXT", "ISFORMULA"])
 
 // The cells an expression reads, ranges spelled out; off-sheet ones are left
 // to the evaluator (#REF!).
-export function* refsOf(e: Expr, seen: Set<string> = new Set()): Generator<string, void, undefined> {
+export function* refsOf(e: Expr, seen: Set<string> = new Set(), self: string | null = null): Generator<string, void, undefined> {
   switch (e.kind) {
     case "ref":
     case "spill":
@@ -62,26 +62,32 @@ export function* refsOf(e: Expr, seen: Set<string> = new Set()): Generator<strin
     }
     case "neg":
     case "at":
-      return yield* refsOf(e.arg, seen);
+      return yield* refsOf(e.arg, seen, self);
     case "binary":
-      yield* refsOf(e.left, seen);
-      return yield* refsOf(e.right, seen);
+      yield* refsOf(e.left, seen, self);
+      return yield* refsOf(e.right, seen, self);
+    case "span":
+      yield* refsOf(e.from, seen, self);
+      return yield* refsOf(e.to, seen, self);
     // FORMULATEXT and ISFORMULA read their reference's input, not its value: marked
     // "^", so that cell is no cycle through them (=FORMULATEXT(A1) in A1 gives its own text).
     case "call":
       if (INPUT_READERS.has(e.name) && e.args.length === 1 && (e.args[0].kind === "ref" || (e.args[0].kind === "range" && !e.args[0].whole))) {
-        for (const k of refsOf(e.args[0], seen)) yield `^${k}`;
+        for (const k of refsOf(e.args[0], seen, self)) yield `^${k}`;
         return;
       }
-      for (const a of e.args) yield* refsOf(a, seen);
+      // IF and CHOOSE work out only the branch taken: the formula's own cell in another is no cycle.
+      for (const [i, a] of e.args.entries()) {
+        for (const k of refsOf(a, seen, self)) if (!(i > 0 && (e.name === "IF" || e.name === "CHOOSE") && k === self)) yield k;
+      }
       return;
     case "let":
-      for (const [, v] of e.bindings) yield* refsOf(v, seen);
-      return yield* refsOf(e.body, seen);
-    case "lambda": return yield* refsOf(e.body, seen);
+      for (const [, v] of e.bindings) yield* refsOf(v, seen, self);
+      return yield* refsOf(e.body, seen, self);
+    case "lambda": return yield* refsOf(e.body, seen, self);
     case "apply":
-      yield* refsOf(e.fn, seen);
-      for (const a of e.args) yield* refsOf(a, seen);
+      yield* refsOf(e.fn, seen, self);
+      for (const a of e.args) yield* refsOf(a, seen, self);
       return;
     // What a named formula reads, once however often it is named (or calls
     // itself).
@@ -106,6 +112,7 @@ function calls(e: Expr, forms: ReadonlySet<string>, seen: Set<string> = new Set(
     case "at":
       return calls(e.arg, forms, seen);
     case "binary": return calls(e.left, forms, seen) || calls(e.right, forms, seen);
+    case "span": return calls(e.from, forms, seen) || calls(e.to, forms, seen);
     case "let": return e.bindings.some(([, v]) => calls(v, forms, seen)) || calls(e.body, forms, seen);
     case "lambda": return calls(e.body, forms, seen);
     case "apply": return calls(e.fn, forms, seen) || e.args.some((a) => calls(a, forms, seen));
@@ -320,7 +327,7 @@ export const EXCEL: Language = {
       const expr = parse(formula, names ?? (() => null), formulas, tables, at ? cellAddr(at)?.row ?? null : null);
       // One calling OFFSET or INDIRECT makes references at run time: it
       // is worked out again on every change.
-      const all = [...refsOf(expr)];
+      const all = [...refsOf(expr, new Set(), at ?? null)];
       const reads = all.flatMap((k) => (k.startsWith("~") ? [] : k.startsWith("@") ? (k.slice(1) === at ? [] : [k.slice(1)]) : [k.startsWith("^") ? k.slice(1) : k]));
       const inputs = all.filter((k) => k.startsWith("^") && !all.includes(k.slice(1))).map((k) => k.slice(1));
       const wide = all.filter((k) => k.startsWith("~")).map((k): Wide => {

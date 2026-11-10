@@ -24,7 +24,7 @@ export type Token = (
   // as written.
   | { readonly kind: "table"; readonly name: string; readonly spec: string }
   | { readonly kind: "op"; readonly op: Op }
-  | { readonly kind: "(" | ")" | "," | "{" | "}" | ";" | "@" }
+  | { readonly kind: "(" | ")" | "," | "{" | "}" | ";" | "@" | "%" }
   // A range's colon; a trim ref's (A1:.E10, A1.:E10, A1.:.E10) says which
   // ends to trim of empty rows and columns.
   | { readonly kind: ":"; readonly trim?: "leading" | "trailing" | "both" }
@@ -159,7 +159,7 @@ export function* tokens(formula: string, from = 2): Generator<Token, void, undef
       i += optional[0].length;
       continue;
     }
-    if (c === "(" || c === ")" || c === "," || c === ":" || c === "{" || c === "}" || c === ";" || c === "@") {
+    if (c === "(" || c === ")" || c === "," || c === ":" || c === "{" || c === "}" || c === ";" || c === "@" || c === "%") {
       yield { kind: c, at, text: c };
       i++;
       continue;

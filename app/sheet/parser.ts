@@ -26,6 +26,9 @@ export type Expr =
   // A 3-D reference: the same cell or range on every sheet from `first`
   // to `last` (upper case) in the workbook's tab order, then.
   | { readonly kind: "span3d"; readonly first: string; readonly last: string; readonly from: string; readonly to: string }
+  // The range operator between references that are not both cells: A1:OFFSET(A1, 4, 0),
+  // OFFSET(A1, 0, 0):OFFSET(A1, 4, 0), A1:INDEX(B:B, 5): the rectangle the two make.
+  | { readonly kind: "span"; readonly from: Expr; readonly to: Expr }
   // Implicit intersection: @A1:A9, the cell in the formula's own row.
   | { readonly kind: "at"; readonly arg: Expr }
   | { readonly kind: "spill"; readonly name: string }
@@ -248,7 +251,16 @@ class Parser {
       this.#next();
       return { kind: "at", arg: this.#unary() };
     }
-    return this.#primary();
+    return this.#percent(this.#primary());
+  }
+
+  // A postfix %: the operand over 100 (it binds tighter than ^, as Excel's does).
+  #percent(e: Expr): Expr {
+    while (this.#tok.kind === "%") {
+      this.#next();
+      e = { kind: "binary", op: "/", left: e, right: { kind: "num", value: 100 } };
+    }
+    return e;
   }
 
   // Jan:Mar!A1, or Jan:Mar!A1:B2 (the second corner on no sheet of its own).
@@ -309,7 +321,19 @@ class Parser {
     return { kind: "array", rows: rows.length, cols, values: rows.flat() };
   }
 
+  // An operand, and then the range operator after a call that makes a reference:
+  // OFFSET(A1, 0, 0):OFFSET(A1, 4, 0).
   #primary(): Expr {
+    let e = this.#operand();
+    while (this.#tok.kind === ":" && (e.kind === "call" || e.kind === "span")) {
+      this.#next();
+      if (this.#tok.kind !== "name" && this.#tok.kind !== "ref") throw new FormulaError(this.#tok.at, `expected a reference after ':' but found ${shown(this.#tok)}`);
+      e = { kind: "span", from: e, to: this.#operand() };
+    }
+    return e;
+  }
+
+  #operand(): Expr {
     const t = this.#next();
     switch (t.kind) {
       case "num": return { kind: "num", value: t.value };
@@ -336,6 +360,8 @@ class Parser {
         const trim = (this.#tok as { trim?: "leading" | "trailing" | "both" }).trim;
         this.#next();
         const to = this.#tok;
+        // A1:OFFSET(...), A1:INDEX(...): the range operator with a reference a call makes.
+        if (to.kind === "name") return { kind: "span", from: { kind: "ref", name: t.name }, to: this.#operand() };
         if (to.kind !== "ref") throw new FormulaError(to.at, `expected a cell after ':' but found ${shown(to)}`);
         this.#next();
         // Costs!B1:B3 is all on Costs.

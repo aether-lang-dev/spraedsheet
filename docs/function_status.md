@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1504 cases, 1504 passing);
-42 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (151, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1529 cases, 1529 passing);
+38 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (132, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -72,7 +72,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | CHISQ.INV.RT | function | 2 values | passes | 2 | `CHISQ.INV.RT(EXP(-1), 2)` = 2 |  |  |
 | CHISQ.TEST | function | 2 values | passes | 3 | `CHISQ.TEST({10, 20; 30, 40}, {12, 18; 28, 42})` = 0.372998483613 |  |  |
 | CHITEST | function | 2 values | passes | 2 | `CHITEST({10, 20; 30, 40}, {12, 18; 28, 42})` = 0.372998483613 |  |  |
-| CHOOSE | function | at least 2 values | passes | 3 | `CHOOSE(2, "a", "b")` = "b" | 3 |  |
+| CHOOSE | function | at least 2 values | passes | 5 | `CHOOSE(2, "a", "b")` = "b" | 1 |  |
 | CHOOSECOLS | function | at least 2 values | passes | 3 | `INDEX(CHOOSECOLS({1, 2, 3; 4, 5, 6}, 1, 3), 2, 2)` = 6 |  |  |
 | CHOOSEROWS | function | at least 2 values | passes | 3 | `INDEX(CHOOSEROWS({1, 2; 3, 4; 5, 6}, 3, 1), 1, 1)` = 5 |  |  |
 | CLEAN | function | 1 value | passes | 3 | `CLEAN("a" & CHAR(7) & "b")` = "ab" |  |  |
@@ -240,7 +240,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | IMSUB | function | 2 values | passes | 2 | `IMSUB("1+2i", "3+4i")` = "-2-2i" |  |  |
 | IMSUM | function | at least 1 value | passes | 3 | `IMSUM("1+2i", "3+4i")` = "4+6i" |  |  |
 | IMTAN | function | 1 value | passes | 2 | `IMTAN("0")` = "0" |  |  |
-| INDEX | function | 2 or 3 values | passes | 2 | `INDEX({1, 2; 3, 4}, 2, 1)` = 3 | 6 |  |
+| INDEX | function | 2 to 4 values | passes | 13 | `INDEX({1, 2; 3, 4}, 2, 1)` = 3 |  |  |
 | INDIRECT | form | (its own) | passes | 4 | `INDIRECT("B2")` = 20 |  | volatile |
 | INFO | form | (its own) | passes | 3 | `INFO("recalc")` = "Automatic" |  |  |
 | INT | function | 1 value | passes | 3 | `INT(1.5)` = 1 |  |  |
@@ -251,18 +251,18 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ISBLANK | function | 1 value | passes | 3 | `ISBLANK(A5)` = true |  |  |
 | ISERR | function | 1 value | passes | 3 | `ISERR(1 / 0)` = true |  |  |
 | ISERROR | function | 1 value | passes | 2 | `ISERROR(1 / 0)` = true |  |  |
-| ISEVEN | function | 1 value | passes | 3 | `ISEVEN(2)` = true | 1 | TRUE/FALSE refused |
-| ISFORMULA | form | (its own) | passes | 3 | `ISFORMULA(C1)` = true | 1 |  |
+| ISEVEN | function | 1 value | passes | 3 | `ISEVEN(2)` = true |  | TRUE/FALSE refused |
+| ISFORMULA | form | (its own) | passes | 3 | `ISFORMULA(C1)` = true |  |  |
 | ISLOGICAL | function | 1 value | passes | 3 | `ISLOGICAL(TRUE)` = true |  |  |
 | ISNA | function | 1 value | passes | 3 | `ISNA(NA())` = true |  |  |
 | ISNONTEXT | function | 1 value | passes | 3 | `ISNONTEXT(1)` = true |  |  |
 | ISNUMBER | function | 1 value | passes | 2 | `ISNUMBER(1)` = true |  |  |
 | ISO.CEILING | function | 1 or 2 values | passes | 3 | `ISO.CEILING(4.3, 2)` = 6 |  |  |
-| ISODD | function | 1 value | passes | 4 | `ISODD(3)` = true | 1 | TRUE/FALSE refused |
+| ISODD | function | 1 value | passes | 4 | `ISODD(3)` = true |  | TRUE/FALSE refused |
 | ISOMITTED | form | (its own) | passes | 4 | `LAMBDA(x, [y], ISOMITTED(y))(1)` = true |  |  |
 | ISOWEEKNUM | function | 1 value | passes | 4 | `ISOWEEKNUM(DATE(2021, 1, 3))` = 53 |  | TRUE/FALSE refused |
 | ISPMT | function | 4 values | passes | 3 | `ISPMT(0.1, 1, 4, 1000)` = -75 |  |  |
-| ISREF | form | (its own) | passes | 4 | `ISREF(A1)` = true | 11 |  |
+| ISREF | form | (its own) | passes | 14 | `ISREF(A1)` = true | 3 |  |
 | ISTEXT | function | 1 value | passes | 2 | `ISTEXT("a")` = true |  |  |
 | KURT | function | at least 1 value | passes | 2 | `KURT({1, 2, 3, 4, 10})` = 3.152 |  |  |
 | LAMBDA | special form | (its own) | passes | 4 | `LAMBDA(x, x + 1)(2)` = 3 |  |  |
@@ -270,7 +270,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | LCM | function | at least 1 value | passes | 4 | `LCM(4, 6)` = 12 |  |  |
 | LEFT | function | 1 or 2 values | passes | 4 | `LEFT("hello", 2)` = "he" |  |  |
 | LEN | function | 1 value | passes | 2 | `LEN("hello")` = 5 |  |  |
-| LET | special form | (its own) | passes | 4 | `LET(x, 2, x * 3)` = 6 |  |  |
+| LET | special form | (its own) | passes | 6 | `LET(x, 2, x * 3)` = 6 |  |  |
 | LINEST | function | 1 to 4 values | passes | 2 | `INDEX(LINEST({2, 4, 6}, {1, 2, 3}), 1, 1)` = 2 |  |  |
 | LN | function | 1 value | passes | 3 | `LN(EXP(3))` = 3 |  |  |
 | LOG | function | 1 or 2 values | passes | 3 | `LOG(8, 2)` = 3 |  |  |
