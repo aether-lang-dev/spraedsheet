@@ -110,7 +110,7 @@ export interface Wide {
 // A volatile formula (one calling OFFSET, INDIRECT ...) is worked out again
 // on every change, as Excel's are, whatever its `reads`.
 export type Formula =
-  | { readonly kind: "formula"; readonly reads: readonly string[]; readonly wide?: readonly Wide[]; readonly volatile?: boolean; run(env: Env): Result | Promise<Result> }
+  | { readonly kind: "formula"; readonly reads: readonly string[]; readonly wide?: readonly Wide[]; readonly inputs?: readonly string[]; readonly volatile?: boolean; run(env: Env): Result | Promise<Result> }
   | { readonly kind: "broken"; readonly error: CellError };
 
 export interface Language {

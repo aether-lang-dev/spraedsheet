@@ -227,6 +227,11 @@ export class Sheet {
   // How far the sheet is used, until a cell is set or a formula worked out again.
   #extent: { rows: number; cols: number } | null = null;
   readonly #readBy = new Map<string, Set<string>>();    // a cell -> the cells that read it
+  // The cells whose typed input, not value, a formula reads (FORMULATEXT, ISFORMULA): it
+  // is worked out again when they change, but need not wait for them, so a formula that
+  // asks about its own cell, or one that reads it, is no cycle.
+  readonly #inputsOf = new Map<string, Set<string>>();  // a formula -> those cells
+  readonly #inputBy = new Map<string, Set<string>>();   // a cell -> the formulas that read its input
   // What working things out has cost since resetWork(): see Work.
   #work: { evaluated: number; considered: number; passes: number; notified: number; reads: number } = { evaluated: 0, considered: 0, passes: 0, notified: 0, reads: 0 };
   readonly #volatile = new Set<string>();               // the cells whose formula is volatile
@@ -528,7 +533,14 @@ export class Sheet {
     this.#compiled.set(key, c);
     if (c.kind === "formula" && c.volatile) this.#volatile.add(key); else this.#volatile.delete(key);
     this.#link(key, new Set(c.kind === "formula" ? c.reads.map((k) => this.#local(k) ?? k) : []));
+    this.#linkInputs(key, c.kind === "formula" ? (c.inputs ?? []).map((k) => this.#local(k) ?? k) : []);
     this.#linkWide(key, c.kind === "formula" ? c.wide ?? [] : []);
+  }
+
+  #linkInputs(key: string, cells: readonly string[]): void {
+    for (const old of this.#inputsOf.get(key) ?? []) this.#inputBy.get(old)?.delete(key);
+    if (cells.length) this.#inputsOf.set(key, new Set(cells)); else this.#inputsOf.delete(key);
+    for (const k of cells) getOrAdd(this.#inputBy, k, () => new Set()).add(key);
   }
 
   // Whole columns and rows a formula reads: indexed by sheet and number, so a
@@ -577,7 +589,8 @@ export class Sheet {
   #readsOf(k: string, among?: ReadonlySet<string>): string[] {
     const by = this.#spilledBy.get(k);
     const wide = among && this.#wideOf.has(k) ? [...among].filter((c) => this.#inWide(k, c)) : [];
-    return [...(this.#reads.get(k) ?? []), ...(by ? [by] : []), ...wide];
+    const weak = this.#inputsOf.get(k);
+    return [...(weak ? [...(this.#reads.get(k) ?? [])].filter((r) => !weak.has(r)) : this.#reads.get(k) ?? []), ...(by ? [by] : []), ...wide];
   }
 
   // Whether a cell (a key, perhaps of another sheet) is in a whole column or row the formula reads.
@@ -589,8 +602,12 @@ export class Sheet {
       && (w.axis === "col" ? a.col >= w.lo && a.col <= w.hi : a.row >= w.lo && a.row <= w.hi));
   }
 
-  #readersOf(k: string): string[] {
-    return [...(this.#readBy.get(k) ?? []), ...this.#wideReaders(k), ...(this.#spills.has(k) ? this.#areas.get(k) ?? [] : [])];
+  // The formulas that must follow the cell; `changes` also the ones that read only its input
+  // (worked out again when it changes, in no order with it).
+  #readersOf(k: string, changes = false): string[] {
+    const by = this.#readBy.get(k) ?? [];
+    const readers = this.#inputsOf.size === 0 ? [...by] : [...by].filter((f) => !this.#inputsOf.get(f)?.has(k));
+    return [...readers, ...(changes ? this.#inputBy.get(k) ?? [] : []), ...this.#wideReaders(k), ...(this.#spills.has(k) ? this.#areas.get(k) ?? [] : [])];
   }
 
   // What formulas see: the cells, and what a cell spills (A1#); `read`
@@ -625,7 +642,7 @@ export class Sheet {
       const k = todo.pop()!;
       if (seen.has(k)) continue;
       seen.add(k);
-      for (const r of this.#readersOf(k)) if (!seen.has(r)) todo.push(r);
+      for (const r of this.#readersOf(k, true)) if (!seen.has(r)) todo.push(r);
     }
     return seen;
   }

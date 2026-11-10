@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 46 | this app gives an error where Excel stored a value |
-| `excel-error` | 15 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `we-error` | 41 | this app gives an error where Excel stored a value |
+| `excel-error` | 14 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 38 | both give a value, and they differ |
 
-Counted 2026-11-10 (137 cells with the 38 `legacy`, in 41 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (131 cells with the 38 `legacy`, in 40 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -154,6 +154,12 @@ LEFT of an error with a negative count is that error. `dates.ts` (`stamp`, `seco
 ARRAYTOTEXT.xlsx, STRING_HANDLING.xlsx H7, T_VALUE_VALUETOTEXT.xlsx (5), DATEVALUE_issue_1379.xlsx (4),
 DATEVALUE_issue_1380.xlsx, TIMEVALUE.xlsx (3), TIMEVALUE_issue_1402.xlsx, MATCH.xlsx C18, and
 arithmetic.xlsx (3).
+
+2026-11-10, 6 cells: FORMULATEXT and ISFORMULA read what their cell holds as typed, not its value, so
+that cell is no cycle through them: `=FORMULATEXT(A1)` in A1 is its own text, `E1 =CONCATENATE(FORMULATEXT(F1), "...")`
+with `F1 =E1` is no cycle, and what reads such a cell reads the text (`=E1-6+3` is #VALUE!). They are
+worked out again when the cell is retyped, in no order with it (`Sheet`'s `#inputsOf`, `excel.ts`'s
+`INPUT_READERS`); a cycle of values is still one. FORMULATEXT.xlsx, all six; headless `sheet_inputreads`.
 
 ## Intended (found while looking)
 

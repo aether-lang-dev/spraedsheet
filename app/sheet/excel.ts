@@ -17,6 +17,9 @@ import { parse } from "./parser.ts";
 import type { Expr } from "./parser.ts";
 import { CellError } from "./values.ts";
 
+// The functions that read what a cell holds as typed, not its value.
+const INPUT_READERS: ReadonlySet<string> = new Set(["FORMULATEXT", "ISFORMULA"]);
+
 // The cells an expression reads, ranges spelled out; off-sheet ones are left
 // to the evaluator (#REF!).
 export function* refsOf(e: Expr, seen: Set<string> = new Set()): Generator<string, void, undefined> {
@@ -63,7 +66,13 @@ export function* refsOf(e: Expr, seen: Set<string> = new Set()): Generator<strin
     case "binary":
       yield* refsOf(e.left, seen);
       return yield* refsOf(e.right, seen);
+    // FORMULATEXT and ISFORMULA read their reference's input, not its value: marked
+    // "^", so that cell is no cycle through them (=FORMULATEXT(A1) in A1 gives its own text).
     case "call":
+      if (INPUT_READERS.has(e.name) && e.args.length === 1 && (e.args[0].kind === "ref" || (e.args[0].kind === "range" && !e.args[0].whole))) {
+        for (const k of refsOf(e.args[0], seen)) yield `^${k}`;
+        return;
+      }
       for (const a of e.args) yield* refsOf(a, seen);
       return;
     case "let":
@@ -312,12 +321,13 @@ export const EXCEL: Language = {
       // One calling OFFSET or INDIRECT makes references at run time: it
       // is worked out again on every change.
       const all = [...refsOf(expr)];
-      const reads = all.flatMap((k) => (k.startsWith("~") ? [] : !k.startsWith("@") ? [k] : k.slice(1) === at ? [] : [k.slice(1)]));
+      const reads = all.flatMap((k) => (k.startsWith("~") ? [] : k.startsWith("@") ? (k.slice(1) === at ? [] : [k.slice(1)]) : [k.startsWith("^") ? k.slice(1) : k]));
+      const inputs = all.filter((k) => k.startsWith("^") && !all.includes(k.slice(1))).map((k) => k.slice(1));
       const wide = all.filter((k) => k.startsWith("~")).map((k): Wide => {
         const [sheet, axis, lo, hi] = k.slice(1).split("|");
         return { sheet: sheet === "" ? null : sheet, axis: axis as "col" | "row", lo: Number(lo), hi: Number(hi) };
       });
-      return { kind: "formula", reads, ...(wide.length ? { wide } : {}), volatile: calls(expr, VOLATILE_FORMS), run: (env) => evaluate(expr, env, at ?? null) };
+      return { kind: "formula", reads, ...(inputs.length ? { inputs } : {}), ...(wide.length ? { wide } : {}), volatile: calls(expr, VOLATILE_FORMS), run: (env) => evaluate(expr, env, at ?? null) };
     } catch (e) {
       if (!(e instanceof FormulaError)) throw e;
       return { kind: "broken", error: new CellError("#ERROR!", `parse error at ${e.at}: ${e.message}`) };

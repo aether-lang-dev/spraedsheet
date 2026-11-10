@@ -7,7 +7,7 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 fails while this page is not what the script prints (`function_status`).
 
 486 functions and forms; 486 with an example and boundary cases (1504 cases, 1504 passing);
-44 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (159, a cell counted for each function its workbook names).
+43 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (153, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -182,7 +182,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | FORECAST.ETS.SEASONALITY | function | 2 to 4 values | passes | 2 | `FORECAST.ETS.SEASONALITY({1, 5, 1, 5, 1, 5, 1, 5}, {1, 2, 3, 4, 5, 6, 7, 8})` = 2 |  |  |
 | FORECAST.ETS.STAT | function | 3 to 6 values | passes | 3 | `FORECAST.ETS.STAT({10, 20, 30, 40}, {1, 2, 3, 4}, 7)` = 0 |  |  |
 | FORECAST.LINEAR | function | 3 values | passes | 2 | `FORECAST.LINEAR(4, {2, 4, 6}, {1, 2, 3})` = 8 |  |  |
-| FORMULATEXT | form | (its own) | passes | 3 | `FORMULATEXT(C1)` = "=A1+4" | 6 |  |
+| FORMULATEXT | form | (its own) | passes | 3 | `FORMULATEXT(C1)` = "=A1+4" |  |  |
 | FREQUENCY | function | 2 values | passes | 6 | `INDEX(FREQUENCY({1, 2, 3, 4, 5}, {2, 4}), 1)` = 2 |  |  |
 | FTEST | function | 2 values | passes | 2 | `FTEST({1, 2, 3, 4}, {2, 4, 6, 9})` = 0.201861474799 |  |  |
 | FV | function | 3 to 5 values | passes | 3 | `FV(0, 10, -100)` = 1000 |  |  |

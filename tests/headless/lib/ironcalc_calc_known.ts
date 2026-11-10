@@ -38,14 +38,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!B8": "value",
     "Sheet1!B14": "value",
   },
-  "INFORMATION/FORMULATEXT.xlsx": {
-    "Sheet1!E1": "we-error",
-    "Sheet1!F1": "we-error",
-    "Sheet1!A7": "we-error",
-    "Sheet1!B7": "we-error",
-    "Sheet1!A12": "excel-error",
-    "Sheet1!A13": "we-error",
-  },
   "INFORMATION/ISOMITTED.xlsx": {
     "Sheet1!A6": "we-error",
     "Sheet1!A7": "we-error",
