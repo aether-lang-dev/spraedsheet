@@ -250,7 +250,7 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
         : typeof v === "string" ? `<c r="${k}" t="str"${attrS}>${f}<v>${escapeXml(v)}</v></c>`
         : typeof v === "boolean" ? `<c r="${k}" t="b"${attrS}>${f}<v>${v ? 1 : 0}</v></c>`
         : typeof v === "number" ? `<c r="${k}"${attrS}>${f}<v>${num(v)}</v></c>` : `<c r="${k}"${attrS}>${f}</c>`;
-    } else if (v === null || v === "") c = `<c r="${k}"${attrS}/>`;
+    } else if (v === null || (v === "" && input !== "'")) c = `<c r="${k}"${attrS}/>`;
     else if (typeof v === "number") c = `<c r="${k}"${attrS}><v>${num(v)}</v></c>`;
     else if (typeof v === "boolean") c = `<c r="${k}" t="b"${attrS}><v>${v ? 1 : 0}</v></c>`;
     else if (v instanceof CellError) c = `<c r="${k}" t="e"${attrS}><v>${escapeXml(v.code)}</v></c>`;

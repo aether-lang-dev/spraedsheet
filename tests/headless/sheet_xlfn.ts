@@ -39,8 +39,21 @@ const o = await cmds2.execute("file.import", { text: JSON.stringify(readXlsx(byt
 eq("read back as typed", [o.ok, back.sheet.input("B1"), back.sheet.input("B2"), back.sheet.input("C1"), back.sheet.input("D1"), back.sheet.input("D2"), back.sheet.value("B1"), back.sheet.value("D2")],
   [true, wb.sheet.input("B1"), "=SORT(A1:A3)", "=SUM(LEN(B2#))", "=STDEV.S(1,2,3)", wb.sheet.input("D2"), "Tea-Cake-Soup", "Cake"]);
 
+// A cell of empty text (typed ') is a shared string of nothing in a file, and stays text when
+// read: VALUE of it is #VALUE!, where a blank cell's is 0.
+{
+  const e = new Workbook(), ec = new Commands(e);
+  for (const l of ["formulas.use language=Excel", "cell.set cell=A1 input='", "cell.set cell=B1 input==VALUE(A1)", "cell.set cell=B2 input==VALUE(A2)", "cell.set cell=B3 input==ISTEXT(A1)"]) await ec.run(l);
+  const bytes2 = writeXlsx(e).bytes, xml = utf8Text(unzip(bytes2).get("xl/worksheets/sheet1.xml")!);
+  const again = new Workbook(), ac = new Commands(again);
+  await ac.execute("file.import", { text: JSON.stringify(readXlsx(bytes2).file) });
+  eq("empty text survives a file", [/<c r="A1" t="s"><v>\d+<\/v><\/c>/.test(xml), again.sheet.input("A1"), again.sheet.value("B1"), again.sheet.value("B2"), again.sheet.value("B3")].map((v) => (typeof v === "object" ? (v as { code: string }).code : v)),
+    [true, "'", "#VALUE!", 0, true]);
+}
+
 // expect: ok the prefixes come off a stored formula
 // expect: ok a LAMBDA's optional parameter, _xlop.b, is [b]
 // expect: ok written with the prefixes Excel needs
 // expect: ok text in a string is left alone
 // expect: ok read back as typed
+// expect: ok empty text survives a file
