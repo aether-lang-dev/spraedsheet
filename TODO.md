@@ -89,6 +89,8 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
 
 **Done 2026-11-10 (IronCalc ledger, group B: maths, statistics, finance, dates; 199 cells to 160; COMPATIBILITY.md has each):** QUOTIENT, MULTINOMIAL, SERIESSUM, POWER (odd roots), COUNT, FREQUENCY, POISSON, PROB, DDB, XNPV, XIRR, the importer's LAMBDA names, SINGLE and volatile array cells, and several known_x in TREND and GROWTH.
 
+**Done 2026-11-10 (IronCalc ledger, group A: text, lookup, information; COMPATIBILITY.md has each):** FIND, SEARCH, VALUE (and text read as dates, times and numbers: month names, dashes, a time after the date, 15-digit number text), ARRAYTOTEXT, DATEVALUE, TIMEVALUE, FORMULATEXT and ISFORMULA (no cycle through their cell), a file's LAMBDA parameters and names, the range operator over calls (`A1:OFFSET(...)`), ISREF and LET/LAMBDA names that stay references, INDEX, CHOOSE and IF of references, the postfix `%`, SINGLE, lookup tables typed into the call, COUNTIF/SUMIF wildcards and error criteria, SORT and XMATCH (regex mode), a call's value typed, names that are not cell addresses, doubled quotes in a sheet name, empty text cells in a file, and `#CALC!`/`#SPILL!` read from a file's rich values (which turned DROP, TAKE and SEQUENCE's empty results from #VALUE! to #CALC!). Kept with their reasons: VALUE of a day-first date (2 cells), `spill_operator.xlsx` G2 and I2.
+
 **Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger (199 cells: 38 `legacy`,
 161 others in 60 workbooks; the cells looked at and kept are in COMPATIBILITY.md): the remaining we-error and
 excel-error cells by function (`docs/function_status.md` counts them), the `legacy` cells (Paul's `@` decision),

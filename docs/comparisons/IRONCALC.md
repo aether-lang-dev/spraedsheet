@@ -48,7 +48,7 @@ the number-format cases, the series-detection cases.
    9 more of typed arguments (SMALL, MINA ...), and 17 of error values and logical
    text as cells hold them; 2026-11-06: 8 of error precedence (the first argument's failure
    answers before a later argument's error), 2 of ACCRINT's full periods, and 6 of TREND and
-   GROWTH's const and argument checks; 2026-11-10: 34 of maths, statistics and finance (COMPATIBILITY.md): 165 left in 49 workbooks; the cells looked at
+   GROWTH's const and argument checks; 2026-11-10: 34 of maths, statistics and finance (COMPATIBILITY.md), and 93 more of text, lookup and information functions, references, the postfix % and errors kept as rich values: 67 left in 23 workbooks (38 `legacy`); the cells looked at
    and kept, with why, are in COMPATIBILITY.md.
 3. **Small ports, only where a test shows a gap:** a routine from
    `base/src/formatter/` for `numfmt.ts` (the cases are in; no code ported yet).
