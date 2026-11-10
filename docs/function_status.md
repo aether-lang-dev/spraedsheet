@@ -7,7 +7,7 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 fails while this page is not what the script prints (`function_status`).
 
 486 functions and forms; 486 with an example and boundary cases (1504 cases, 1504 passing);
-43 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (153, a cell counted for each function its workbook names).
+42 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (151, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -259,7 +259,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ISNUMBER | function | 1 value | passes | 2 | `ISNUMBER(1)` = true |  |  |
 | ISO.CEILING | function | 1 or 2 values | passes | 3 | `ISO.CEILING(4.3, 2)` = 6 |  |  |
 | ISODD | function | 1 value | passes | 4 | `ISODD(3)` = true | 1 | TRUE/FALSE refused |
-| ISOMITTED | form | (its own) | passes | 4 | `LAMBDA(x, [y], ISOMITTED(y))(1)` = true | 2 |  |
+| ISOMITTED | form | (its own) | passes | 4 | `LAMBDA(x, [y], ISOMITTED(y))(1)` = true |  |  |
 | ISOWEEKNUM | function | 1 value | passes | 4 | `ISOWEEKNUM(DATE(2021, 1, 3))` = 53 |  | TRUE/FALSE refused |
 | ISPMT | function | 4 values | passes | 3 | `ISPMT(0.1, 1, 4, 1000)` = -75 |  |  |
 | ISREF | form | (its own) | passes | 4 | `ISREF(A1)` = true | 11 |  |

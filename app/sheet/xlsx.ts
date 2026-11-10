@@ -40,7 +40,7 @@ export interface XlsxRead {
 
 // A formula as the file stores it, as the sheet writes it: Excel keeps a
 // function newer than 2007 under a prefix (_xlfn.TEXTJOIN, _xlfn._xlws.SORT) and
-// a LAMBDA's parameters under another (_xlpm.x), and a spill's reference as
+// a LAMBDA's parameters under another (_xlpm.x, an optional one _xlop.x), and a spill's reference as
 // ANCHORARRAY(A1) where the sheet writes A1#. Text in quotes is left alone.
 export function plainFormula(text: string): string {
   let out = "", i = 0;
@@ -52,6 +52,9 @@ export function plainFormula(text: string): string {
       i = j + 1;
       continue;
     }
+    // A LAMBDA's optional parameter is _xlop.b where the sheet writes [b].
+    const opt = /^_xlop\.([A-Za-z_][A-Za-z0-9_.]*)/.exec(text.slice(i));
+    if (opt && !/[A-Za-z0-9_.]/.test(text[i - 1] ?? "")) { out += `[${opt[1]}]`; i += opt[0].length; continue; }
     const m = /^(?:_xlfn\._xlws\.|_xlfn\.|_xlpm\.|_xlws\.)/.exec(text.slice(i));
     if (m && !/[A-Za-z0-9_.]/.test(text[i - 1] ?? "")) { i += m[0].length; continue; }
     out += text[i++];

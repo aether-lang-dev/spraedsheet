@@ -38,10 +38,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!B8": "value",
     "Sheet1!B14": "value",
   },
-  "INFORMATION/ISOMITTED.xlsx": {
-    "Sheet1!A6": "we-error",
-    "Sheet1!A7": "we-error",
-  },
   "INFORMATION/ISREF.xlsx": {
     "Sheet1!D2": "excel-error",
     "Sheet1!A6": "value",

@@ -15,6 +15,9 @@ eq("the prefixes come off a stored formula", [
   plainFormula("SUM(_xlfn.ANCHORARRAY(A1))"), plainFormula('"_xlfn.X in a string"&_xlfn.UNICODE("a")'), plainFormula("A_xlfn.B1"),
 ], ['TEXTJOIN(",",TRUE,A1:A3)', "SORT(A1:A9)", "LET(x,2,x*3)", "SUM(A1#)", '"_xlfn.X in a string"&UNICODE("a")', "A_xlfn.B1"]);
 
+eq("a LAMBDA's optional parameter, _xlop.b, is [b]", plainFormula("_xlfn.LAMBDA(_xlpm.a,_xlop.b,IF(_xlfn.ISOMITTED(_xlpm.b),_xlpm.a/2,_xlpm.a*_xlpm.b))(A5)"),
+  "LAMBDA(a,[b],IF(ISOMITTED(b),a/2,a*b))(A5)");
+
 const wb = new Workbook(), cmds = new Commands(wb);
 for (const l of ["formulas.use language=Excel", "cell.set cell=A1 input=Tea", "cell.set cell=A2 input=Cake", "cell.set cell=A3 input=Soup",
   'cell.set cell=B1 input="=TEXTJOIN(""-"",TRUE,A1:A3)"', "cell.set cell=B2 input==SORT(A1:A3)", "cell.set cell=C1 input==SUM(LEN(B2#))",
@@ -37,6 +40,7 @@ eq("read back as typed", [o.ok, back.sheet.input("B1"), back.sheet.input("B2"), 
   [true, wb.sheet.input("B1"), "=SORT(A1:A3)", "=SUM(LEN(B2#))", "=STDEV.S(1,2,3)", wb.sheet.input("D2"), "Tea-Cake-Soup", "Cake"]);
 
 // expect: ok the prefixes come off a stored formula
+// expect: ok a LAMBDA's optional parameter, _xlop.b, is [b]
 // expect: ok written with the prefixes Excel needs
 // expect: ok text in a string is left alone
 // expect: ok read back as typed
