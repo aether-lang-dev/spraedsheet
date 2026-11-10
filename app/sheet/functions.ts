@@ -1886,9 +1886,10 @@ const turned = (x: ArrayValue): ArrayValue => {
 };
 
 def("SEQUENCE", 1, 4, (args) => {
-  // Rows left out are 1 (SEQUENCE(, 12) is a row); fewer than one is #VALUE!.
+  // Rows left out are 1 (SEQUENCE(, 12) is a row); none is #CALC! (an array of nothing), a negative number #VALUE!.
   const rows = Math.trunc(num(args, 0, 1)), cols = Math.trunc(num(args, 1, 1)), start = num(args, 2, 1), step = num(args, 3, 1);
-  if (rows < 1 || cols < 1) return fail("#VALUE!", `SEQUENCE of no ${rows < 1 ? "rows" : "columns"}`);
+  if (rows < 0 || cols < 0) return fail("#VALUE!", `SEQUENCE of ${rows < 0 ? rows : cols} ${rows < 0 ? "rows" : "columns"}`);
+  if (rows < 1 || cols < 1) return fail("#CALC!", `SEQUENCE of no ${rows < 1 ? "rows" : "columns"}`);
   if (rows * cols > 10_000) return fail("#NUM!", "SEQUENCE of more than 10000 values");
   return array(rows, cols, Array.from({ length: rows * cols }, (_, i) => start + step * i));
 });
@@ -1958,7 +1959,7 @@ const cut = (take: boolean): Fn => (args) => {
     take ? (n >= 0 ? [0, Math.min(n, len)] : [Math.max(0, len + n), len]) : n >= 0 ? [Math.min(n, len), len] : [0, Math.max(0, len + n)];
   const [r0, r1] = part(whole(args, 1, take ? rows : 0), rows), [c0, c1] = part(whole(args, 2, take ? a.cols : 0), a.cols);
   // Nothing left is #VALUE!, as Excel answers (not #CALC!).
-  if (r1 <= r0 || c1 <= c0) return fail("#VALUE!", `${take ? "TAKE" : "DROP"} leaves nothing`);
+  if (r1 <= r0 || c1 <= c0) return fail("#CALC!", `${take ? "TAKE" : "DROP"} leaves nothing`);
   return fromRows(rowsOf(a).slice(r0, r1).map((row) => row.slice(c0, c1)));
 };
 def("TAKE", 2, 3, cut(true));

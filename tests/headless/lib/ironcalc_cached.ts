@@ -4,6 +4,7 @@
 // an oracle for functions (third_party/ironcalc/PROVENANCE.md).
 import { unzip, utf8Text } from "../sheet/zip.ts";
 import { parseXml, all, kid, kids, attr, textOf } from "../sheet/xml.ts";
+import { richErrorsOf } from "../sheet/xlsxparts.ts";
 import { fromBase64 } from "../sheet/csv.ts";
 import { Commands } from "../sheet/commands.ts";
 import { Workbook } from "../sheet/workbook.ts";
@@ -17,6 +18,7 @@ export function cachedValues(bytes: Uint8Array): Map<string, [string, string][]>
   const relsXml = parseXml(utf8Text(parts.get("xl/_rels/workbook.xml.rels")!));
   const rel = new Map<string, string>();
   for (const r of all(relsXml, "Relationship")) rel.set(attr(r, "Id") ?? "", "xl/" + (attr(r, "Target") ?? "").replace(/^\/?(xl\/)?/, ""));
+  const richError = richErrorsOf(parts);
   const out = new Map<string, [string, string][]>();
   for (const s of kids(kid(wb, "sheets")!, "sheet")) {
     const xml = parts.get(rel.get(attr(s, "id") ?? "") ?? "");
@@ -24,7 +26,9 @@ export function cachedValues(bytes: Uint8Array): Map<string, [string, string][]>
     const cells: [string, string][] = [];
     for (const c of all(parseXml(utf8Text(xml)), "c")) {
       const f = kid(c, "f"), v = kid(c, "v");
-      if (f && v) cells.push([attr(c, "r") ?? "", `${attr(c, "t") ?? "n"}:${textOf(v)}`]);
+      // An error with a rich value (#CALC!, #SPILL!) is stored as #VALUE!: the rich value says which.
+      const rich = attr(c, "t") === "e" && attr(c, "vm") ? richError(Number(attr(c, "vm"))) : null;
+      if (f && v) cells.push([attr(c, "r") ?? "", `${attr(c, "t") ?? "n"}:${rich ?? textOf(v)}`]);
     }
     out.set(attr(s, "name") ?? "", cells);
   }

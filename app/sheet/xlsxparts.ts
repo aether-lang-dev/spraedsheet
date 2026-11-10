@@ -6,7 +6,8 @@
 // colour scale's, data bar's and icon set's own colours and icons. Tables:
 // a table part as the sheet's table (its name, range, header row, totals
 // row and each column's function, its style and stripes).
-import { attr, all, kid, kids, textOf, escapeXml } from "./xml.ts";
+import { attr, all, kid, kids, parseXml, textOf, escapeXml } from "./xml.ts";
+import { utf8Text } from "./zip.ts";
 import type { El } from "./xml.ts";
 import { parseRange } from "./address.ts";
 import { rangeName } from "./rules.ts";
@@ -230,4 +231,29 @@ export function readThreads(part: El, people: ReadonlyMap<string, string>): Map<
     }
   }
   return out;
+}
+
+// The errors a file keeps as rich values. A cell `t="e"` with a `vm` (value metadata, counted
+// from 1) whose rich value is an `_error` has the error's number there, Excel's ERROR.TYPE less
+// one (13 is #CALC!, 8 is #SPILL!), and the plain <v> says #VALUE!, as the file format has no
+// spelling for them. Gives the code for a vm, or null for a vm that is not one.
+const RICH_ERRORS: Readonly<Record<number, string>> = { 0: "#NULL!", 1: "#DIV/0!", 2: "#VALUE!", 3: "#REF!", 4: "#NAME?", 5: "#NUM!", 6: "#N/A", 7: "#GETTING_DATA", 8: "#SPILL!", 13: "#CALC!" };
+export function richErrorsOf(parts: ReadonlyMap<string, Uint8Array>): (vm: number) => string | null {
+  const read = (name: string): El | null => (parts.has(name) ? parseXml(utf8Text(parts.get(name)!)) : null);
+  const meta = read("xl/metadata.xml"), data = read("xl/richData/rdrichvalue.xml"), structs = read("xl/richData/rdrichvaluestructure.xml");
+  if (!meta || !data || !structs) return () => null;
+  // Which metadata type is the rich values (1-based), what each future metadata block points at,
+  // and each rich value's structure: an _error's errorType is its first value.
+  const types = kids(kid(meta, "metadataTypes") ?? EMPTY, "metadataType").map((t) => attr(t, "name"));
+  const type = types.indexOf("XLRICHVALUE") + 1;
+  const future = kids(kids(meta, "futureMetadata").find((f) => attr(f, "name") === "XLRICHVALUE") ?? EMPTY, "bk").map((b) => Number(attr(all(b, "rvb")[0] ?? EMPTY, "i") ?? -1));
+  const shapes = kids(structs, "s").map((s) => attr(s, "t"));
+  const rich = kids(data, "rv");
+  return (vm: number) => {
+    const rc = all(kids(kid(meta, "valueMetadata") ?? EMPTY, "bk")[vm - 1] ?? EMPTY, "rc")[0];
+    if (!rc || type === 0 || Number(attr(rc, "t")) !== type) return null;
+    const rv = rich[future[Number(attr(rc, "v"))] ?? -1];
+    if (!rv || shapes[Number(attr(rv, "s"))] !== "_error") return null;
+    return RICH_ERRORS[Number(textOf(kids(rv, "v")[0] ?? EMPTY))] ?? null;
+  };
 }

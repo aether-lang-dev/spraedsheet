@@ -34,19 +34,11 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!R2": "value",
     "Sheet1!R5": "value",
   },
-  "INFORMATION/ERROR.TYPE.xlsx": {
-    "Sheet1!B8": "value",
-    "Sheet1!B14": "value",
-  },
   "INFORMATION/ISREF.xlsx": {
-    "Sheet1!D7": "excel-error",
     "Sheet1!D9": "legacy",
   },
   "LOOKUP_AND_REFERENCE/CHOOSE.xlsx": {
     "CHOOSE!B23": "legacy",
-  },
-  "LOOKUP_AND_REFERENCE/FILTER_ERRORS.xlsx": {
-    "Sheet1!E1": "excel-error",
   },
   "MATH_AND_TRIGONOMETRY/ARABIC_ROMAN.xlsx": {
     "ROMAN!A36": "legacy",

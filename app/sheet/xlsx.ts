@@ -17,7 +17,7 @@ import { moved } from "./excel.ts";
 import type { Look } from "./formats.ts";
 import { ALLOWS } from "./protection.ts";
 import { TYPED_ERRORS } from "./values.ts";
-import { PASS_THROUGH, cfRulesOf, readThreads, tableOf, unmodelled } from "./xlsxparts.ts";
+import { PASS_THROUGH, cfRulesOf, readThreads, richErrorsOf, tableOf, unmodelled } from "./xlsxparts.ts";
 import { readDrawings } from "./xlsxdrawings.ts";
 import { readCharts } from "./xlsxcharts.ts";
 
@@ -233,6 +233,7 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
   if (!book) throw new RangeError("not an XLSX workbook: no xl/workbook.xml");
   const bookPath = parts.has("xl/workbook.xml") ? "xl/workbook.xml" : resolvePath("", rels(parts, "").get("rId1") ?? "");
   const wb = parseXml(utf8Text(book)), wbRels = rels(parts, bookPath);
+  const richError = richErrorsOf(parts);
   const strings: string[] = [];
   const sstPath = [...wbRels.values()].find((p) => /sharedStrings\.xml$/i.test(p)) ?? "xl/sharedStrings.xml";
   if (parts.has(sstPath)) for (const si of kids(parseXml(utf8Text(parts.get(sstPath)!)), "si")) strings.push(stringOf(si));
@@ -313,7 +314,8 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
           if (t === "s") input = strings[Number(raw)] ?? "";
           else if (t === "inlineStr") input = textOf(kid(c, "is") ?? { name: "", attrs: {}, children: [] });
           else if (t === "b") input = raw === "1" ? "TRUE" : "FALSE";
-          else if (t === "str" || t === "e") input = raw;
+          else if (t === "e") input = (attr(c, "vm") ? richError(Number(attr(c, "vm"))) : null) ?? raw;
+          else if (t === "str") input = raw;
           else input = raw;
           // Text that the sheet would read as a number, or a formula, kept text.
           if ((t === "s" || t === "inlineStr" || t === "str") && (NUMERIC.test(input) || input.startsWith("=") || input.startsWith("'") || /^\s*(?:true|false)\s*$/i.test(input) || TYPED_ERRORS.has(input.trim().toUpperCase()))) input = `'${input}`;

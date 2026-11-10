@@ -33,7 +33,7 @@ eq("a range is an array; one of one cell its value", ev("A1:A3", "A1:A1"), ["1;2
 eq("arithmetic cell by cell, broadcast, #N/A where one runs out", ev("A1:A3*2", "A1:A3+B1:C1", "A1:A2+A1:A3", "-A1:A2", 'A1:A2&"!"'),
   ["2;4;6", "11,21;12,22;13,23", "2;4;#N/A", "-1;-2", "1!;2!"]);
 eq("IF over an array; a function of an array", ev('IF(A1:A3>1,"big","small")', "SUM(A1:A3*2)", "LET(xs, SEQUENCE(3), SUM(xs))"), ["small;big;big", "12", "6"]);
-eq("SEQUENCE", ev("SEQUENCE(3)", "SEQUENCE(2,3,10,5)", "SEQUENCE(0)"), ["1;2;3", "10,15,20;25,30,35", "#VALUE! SEQUENCE of no rows"]);
+eq("SEQUENCE", ev("SEQUENCE(3)", "SEQUENCE(2,3,10,5)", "SEQUENCE(0)"), ["1;2;3", "10,15,20;25,30,35", "#CALC! SEQUENCE of no rows"]);
 eq("FILTER", ev("FILTER(D1:E4,E1:E4>2)", 'FILTER(D1:D4,E1:E4>9,"none")', "FILTER(D1:D4,E1:E4>9)", "FILTER(D1:E4,E1:E2>2)"),
   ["b,3;d,5", "none", "#CALC! FILTER found nothing", "#VALUE! FILTER's include is not the array's height or width"]);
 eq("SORT and SORTBY", ev("SORT(E1:E4)", "SORT(D1:E4,2,-1)", "SORTBY(D1:D4,E1:E4)", "SORTBY(D1:D4,E1:E4,-1)"), ["1;2;3;5", "d,5;b,3;c,2;a,1", "a;c;b;d", "d;b;c;a"]);

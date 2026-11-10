@@ -36,7 +36,7 @@ eq("functions that take a range are not lifted", [ev("SUM(A1:C3)"), ev("INDEX(A1
 
 eq("TAKE", [ev("TAKE(A1:C3, 2)"), ev("TAKE(A1:C3, -1)"), ev("TAKE(A1:C3, , -1)"), ev("TAKE(A1:C3, 1, 2)")],
   [[["1", "2", "3"], ["4", "5", "6"]], [["7", "8", "9"]], [["3"], ["6"], ["9"]], [["1", "2"]]]);
-eq("DROP", [ev("DROP(A1:C3, 2)"), ev("DROP(A1:C3, -2, 1)"), ev("DROP(A1:C3, 3)")], [[["7", "8", "9"]], [["2", "3"]], "#VALUE!"]);
+eq("DROP", [ev("DROP(A1:C3, 2)"), ev("DROP(A1:C3, -2, 1)"), ev("DROP(A1:C3, 3)")], [[["7", "8", "9"]], [["2", "3"]], "#CALC!"]);
 eq("CHOOSEROWS and CHOOSECOLS, from the end when negative", [ev("CHOOSEROWS(A1:C3, 3, 1)"), ev("CHOOSECOLS(A1:C3, -1, 1)"), ev("CHOOSECOLS(A1:C3, 4)")],
   [[["7", "8", "9"], ["1", "2", "3"]], [["3", "1"], ["6", "4"], ["9", "7"]], "#VALUE!"]);
 eq("VSTACK and HSTACK, #N/A where one runs short", [ev("VSTACK(A1:B1, C1:C2)"), ev("HSTACK(A1:A2, C1)")],

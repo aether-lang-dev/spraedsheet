@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1557 cases, 1557 passing);
-31 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (89, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1560 cases, 1560 passing);
+29 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (85, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -151,7 +151,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ERF.PRECISE | function | 1 value | passes | 3 | `ERF.PRECISE(1)` = 0.84270079295 |  | TRUE/FALSE refused |
 | ERFC | function | 1 value | passes | 3 | `ERFC(0)` = 1 |  | TRUE/FALSE refused |
 | ERFC.PRECISE | function | 1 value | passes | 2 | `ERFC.PRECISE(1)` = 0.15729920705 |  | TRUE/FALSE refused |
-| ERROR.TYPE | function | 1 value | passes | 4 | `ERROR.TYPE(1 / 0)` = 2 | 2 |  |
+| ERROR.TYPE | function | 1 value | passes | 4 | `ERROR.TYPE(1 / 0)` = 2 |  |  |
 | EVEN | function | 1 value | passes | 3 | `EVEN(3)` = 4 | 3 |  |
 | EXACT | function | 2 values | passes | 2 | `EXACT("a", "a")` = true |  |  |
 | EXP | function | 1 value | passes | 3 | `EXP(1)` = 2.71828182846 | 2 |  |
@@ -167,7 +167,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | FACTDOUBLE | function | 1 value | passes | 3 | `FACTDOUBLE(7)` = 105 |  |  |
 | FALSE | function | no values | passes | 2 | `FALSE()` = false |  |  |
 | FDIST | function | 3 values | passes | 2 | `FDIST(1, 2, 2)` = 0.5 |  |  |
-| FILTER | function | 2 or 3 values | passes | 3 | `INDEX(FILTER({1; 2; 3; 4}, {TRUE; FALSE; TRUE; FALSE}), 2)` = 3 | 1 |  |
+| FILTER | function | 2 or 3 values | passes | 3 | `INDEX(FILTER({1; 2; 3; 4}, {TRUE; FALSE; TRUE; FALSE}), 2)` = 3 |  |  |
 | FIND | function | 2 or 3 values | passes | 6 | `FIND("l", "hello")` = 3 |  |  |
 | FINV | function | 3 values | passes | 2 | `FINV(0.5, 2, 2)` = 1 |  |  |
 | FISHER | function | 1 value | passes | 4 | `FISHER(0.5)` = 0.549306144334 | 3 |  |
@@ -262,7 +262,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ISOMITTED | form | (its own) | passes | 4 | `LAMBDA(x, [y], ISOMITTED(y))(1)` = true |  |  |
 | ISOWEEKNUM | function | 1 value | passes | 4 | `ISOWEEKNUM(DATE(2021, 1, 3))` = 53 |  | TRUE/FALSE refused |
 | ISPMT | function | 4 values | passes | 3 | `ISPMT(0.1, 1, 4, 1000)` = -75 |  |  |
-| ISREF | form | (its own) | passes | 14 | `ISREF(A1)` = true | 2 |  |
+| ISREF | form | (its own) | passes | 14 | `ISREF(A1)` = true | 1 |  |
 | ISTEXT | function | 1 value | passes | 2 | `ISTEXT("a")` = true |  |  |
 | KURT | function | at least 1 value | passes | 2 | `KURT({1, 2, 3, 4, 10})` = 3.152 |  |  |
 | LAMBDA | special form | (its own) | passes | 4 | `LAMBDA(x, x + 1)(2)` = 3 |  |  |
@@ -395,7 +395,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SEC | function | 1 value | passes | 3 | `SEC(0)` = 1 |  |  |
 | SECH | function | 1 value | passes | 2 | `SECH(0)` = 1 |  |  |
 | SECOND | function | 1 value | passes | 4 | `SECOND(45 / 86400)` = 45 |  |  |
-| SEQUENCE | function | 1 to 4 values | passes | 5 | `INDEX(SEQUENCE(3), 3)` = 3 |  |  |
+| SEQUENCE | function | 1 to 4 values | passes | 8 | `INDEX(SEQUENCE(3), 3)` = 3 |  |  |
 | SERIESSUM | function | 4 values | passes | 5 | `SERIESSUM(2, 0, 1, {1, 1, 1})` = 7 |  |  |
 | SHEET | form | (its own) | passes | 4 | `SHEET()` = 1 |  |  |
 | SHEETS | form | (its own) | passes | 3 | `SHEETS()` = 2 |  |  |

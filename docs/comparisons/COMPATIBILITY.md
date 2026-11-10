@@ -36,10 +36,10 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 | Kind | Cells | Means |
 |---|---|---|
 | `we-error` | 7 | this app gives an error where Excel stored a value |
-| `excel-error` | 4 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 22 | both give a value, and they differ |
+| `excel-error` | 2 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 20 | both give a value, and they differ |
 
-Counted 2026-11-10 (71 cells with the 38 `legacy`, in 25 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (67 cells with the 38 `legacy`, in 23 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -207,6 +207,17 @@ function's own text counts where a cell's is passed over): `MAX(FILTER(L1:L2, M1
 `OFFSET`, `INDIRECT` of one: `SUM(IF(TRUE, A1))` passes over a text A1) nor `IFERROR`, `IFNA`, `IFS`, `SWITCH`
 and `XLOOKUP`, which may pass one through (`Arg.typed` by `#arg`, `evaluate.ts`). ISREF.xlsx D2.
 
+2026-11-10, 4 cells and a correction (errors a file keeps as rich values): the file format has no spelling for
+#CALC! or #SPILL!: such a cell is `t="e"` with `<v>#VALUE!</v>` and a `vm`, and its rich value (`xl/richData`,
+read by `richErrorsOf` in `xlsxparts.ts`) holds the real error, Excel's ERROR.TYPE less one (13, #CALC!; 8,
+#SPILL!). The importer now reads an error constant that way (ERROR.TYPE.xlsx A8 and A14 are #CALC! and #SPILL!, so
+B8 and B14 are 14 and 9), and the ledger's reader takes the stored error from it. That also showed the cells
+this ledger had read as #VALUE! to be #CALC!: FILTER that finds nothing (FILTER_ERRORS.xlsx E1, ISREF.xlsx D7),
+and, which the entries of 2026-11-05 above said were #VALUE!, DROP and TAKE that leave nothing and SEQUENCE of
+0 rows or columns (`SEQUENCE(0.3)` too): #CALC! now; SEQUENCE of a negative number stays #VALUE! (SEQUENCE.xlsx
+C18). (MAKEARRAY of no rows stays #VALUE!, as Microsoft's documentation of it says.) Written files still carry
+`#CALC!` and `#SPILL!` as plain error text, which the format does not have.
+
 ## Intended (found while looking)
 
 - `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`) and I5 (`VALUE("10-12-1999")`): the workbook
@@ -215,22 +226,6 @@ and `XLOOKUP`, which may pass one through (`Arg.typed` by `#arg`, `evaluate.ts`)
   the ledger.
 
 ## Examined, not changed (still on the ledger, with the reason)
-
-Group "text, lookup and information" (2026-11-10):
-
-- `FILTER_ERRORS.xlsx` E1 and `ISREF.xlsx` D7 (`FILTER` that finds nothing, with no `if_empty`): Excel
-  answers #CALC!, and its file stores #VALUE! for it (the file format has no #CALC!: the rich-value
-  metadata says which it is, which this ledger's reader does not see). This app answers #CALC!, which is
-  right; the cells stay as `excel-error`. (D9 is the same with a spill, and `legacy`.)
-- `ERROR.TYPE.xlsx` B8 and B14: the cells A8 and A14 are error constants Excel stored as #VALUE! (they are
-  #CALC! and #SPILL!, ERROR.TYPE 14 and 9); what this app reads from the file is #VALUE!, 3. Same cause.
-- `spill_operator.xlsx` G2 (`SUM(C2#)` where C2 holds a legacy array formula `{=123}` over C2:C5): this
-  app's array formula of a scalar fills one cell, so `C2#` is #REF!; Excel's fills the four. I2
-  (`ANCHORARRAY(OFFSET(A1, 1, 1))`): the spill reference of a call has no spelling in this app's formulas
-  (`A1#` takes a cell), and a function for it would be one more name to list everywhere; not added.
-- `defined_names.xlsx` B5 (`COUNT(DOESNOTEXIST)`, 0 in Excel): COUNT passes over an error argument, which
-  this app's COUNT does not (`COUNT(1/0)` and `COUNT(A1:A2)` over an error cell are #DIV/0!); COUNT is the
-  statistics group's.
 
 - `XNPV.xlsx` R2, R5 (`XIRR`): the two agree to 1e-8 of the rate; Excel stops its iteration
   sooner than this app does. Matching would mean copying Excel's stopping rule, which is not
@@ -252,3 +247,7 @@ Group "text, lookup and information" (2026-11-10):
 - `RATE.xlsx` F17, G17: Excel answers #NUM! where this app's iteration finds a root below -1
   (-1.87) or at -1; Excel's guess-driven Newton search does not reach it. Not changed until
   Excel's rule for refusing such roots is known.
+- `spill_operator.xlsx` G2 (`SUM(C2#)` where C2 holds a legacy array formula `{=123}` over C2:C5): this
+  app's array formula of a scalar fills one cell, so `C2#` is #REF!; Excel's fills the four. I2
+  (`ANCHORARRAY(OFFSET(A1, 1, 1))`): the spill reference of a call has no spelling in this app's formulas
+  (`A1#` takes a cell), and a function for it would be one more name to list everywhere; not added.
