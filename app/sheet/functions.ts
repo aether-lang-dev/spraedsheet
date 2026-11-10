@@ -3,7 +3,7 @@
 // range's width (VLOOKUP and INDEX need its shape), or one value. An
 // argument that is an error arrives as that error, so IFERROR and ISERROR
 // can look at it; everything else rethrows it as soon as it reads it.
-import { CellError, array, compare, fail, finite, isArray, power, scalar, textNumber, toNumber, toText, trimmed } from "./values.ts";
+import { CellError, ERROR_NUMBERS, array, compare, fail, finite, isArray, power, scalar, textNumber, toNumber, toText, trimmed } from "./values.ts";
 import { numberFormat } from "./numfmt.ts";
 import type { ArrayValue, Comparison, Result, Value } from "./values.ts";
 import { sortOrder } from "./sortfind.ts";
@@ -177,8 +177,11 @@ function rounder(how: (x: number) => number): Fn {
   };
 }
 
-// A COUNTIF criterion: 5, "apples", ">5", "<>apples", "" (blank).
+// A COUNTIF criterion: 5, "apples", ">5", "<>apples", "" (blank), "a*" (? and * stand for any
+// one character and any run, ~ before either for itself, in a text compared for = or <>), an
+// error (the cells that are that error).
 export function criterion(c: Value): (v: Value) => boolean {
+  if (c instanceof CellError) return (v) => v instanceof CellError && v.code === c.code;
   if (typeof c === "boolean") return (v) => v === c;
   if (typeof c !== "string") {
     const want = scalar(c);
@@ -187,9 +190,12 @@ export function criterion(c: Value): (v: Value) => boolean {
   const m = /^(<>|<=|>=|=|<|>)?([\s\S]*)$/.exec(c)!;
   const op = (m[1] ?? "=") as Comparison, text = m[2];
   const rhs: Value = text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : text;
+  // Text with a wildcard in it is matched whole, as a pattern (for = and <>).
+  const like = typeof rhs === "string" && (op === "=" || op === "<>") && /[*?~]/.test(rhs) ? wildcard(rhs) : null;
   return (v) => {
     if (v instanceof CellError) return false;
     if (rhs === "") return (op === "=") === blank(v);
+    if (like) return typeof v === "string" ? like(v) === (op === "=") : op === "<>";
     if (typeof rhs === "number" ? typeof v !== "number" : typeof v !== "string") return op === "<>";
     return compare(op, v, rhs);
   };
@@ -472,6 +478,8 @@ def("NOT", 1, 1, (args) => {
   const v = scalar(val(args, 0)), t = typeof v === "string" ? truthText(v) : null;
   return t !== null ? !t : num(args, 0) === 0;
 });
+// IFERROR and IFNA over an array work cell by cell (a function given a range where it takes one
+// value is lifted, as everything is), the fallback broadcast against it.
 def("IFERROR", 2, 2, (args) => {
   const x = val(args, 0);
   return x instanceof CellError ? val(args, 1) : x;
@@ -506,12 +514,9 @@ def("TYPE", 1, 1, (args) => {
 // ERROR.TYPE(x): Excel's number for the error, #N/A for a value that is
 // not one. #CYCLE! and #ERROR! (a formula that does not parse) are this
 // app's: numbered past Excel's.
-const ERROR_TYPES: Readonly<Record<string, number>> = {
-  "#NULL!": 1, "#DIV/0!": 2, "#VALUE!": 3, "#REF!": 4, "#NAME?": 5, "#NUM!": 6, "#N/A": 7, "#GETTING_DATA": 8, "#SPILL!": 9, "#CALC!": 14, "#CYCLE!": 101, "#ERROR!": 102,
-};
 def("ERROR.TYPE", 1, 1, (args) => {
   const v = val(args, 0);
-  return v instanceof CellError ? ERROR_TYPES[v.code] ?? fail("#N/A", `${v.code} has no number`) : fail("#N/A", "ERROR.TYPE of a value that is not an error");
+  return v instanceof CellError ? ERROR_NUMBERS[v.code] ?? fail("#N/A", `${v.code} has no number`) : fail("#N/A", "ERROR.TYPE of a value that is not an error");
 });
 def("CHOOSE", 2, Infinity, (args) => {
   const i = Math.trunc(num(args, 0));
@@ -2034,11 +2039,17 @@ function wildcard(pattern: string): (v: Value) => boolean {
 }
 
 // XLOOKUP's and XMATCH's search: the index in `list` of x by match mode
-// (0 exact, -1 exact or next smaller, 1 exact or next larger, 2 wildcard),
+// (0 exact, -1 exact or next smaller, 1 exact or next larger, 2 wildcard, 3 regular
+// expression: a text x is a pattern the text cells are tested by, any other x finds nothing),
 // searching first to last (1) or last to first (-1); -1 when not there.
 function xsearch(x: Value, list: readonly Value[], mode: number, from: number): number {
   const order = list.map((_, i) => i);
   if (from < 0) order.reverse();
+  if (mode === 3) {
+    if (typeof x !== "string") return -1;
+    const re = regex(x, "u");
+    return order.find((i) => typeof list[i] === "string" && re.test(list[i] as string)) ?? -1;
+  }
   if (mode === 2) {
     const ok = wildcard(toText(x));
     return order.find((i) => ok(list[i])) ?? -1;
@@ -2068,11 +2079,19 @@ def("XLOOKUP", 3, 6, (args) => {
   return backRows === 1 ? back.values[at] : array(backRows, 1, back.values.filter((_, k) => k % back.cols === at));
 });
 def("XMATCH", 2, 4, (args) => {
+  // The lookup array is a row or a column.
+  if (args[1].cols > 1 && args[1].values.length > args[1].cols) return fail("#VALUE!", "XMATCH looks in a row or a column");
   const x = lookedFor(args), at = xsearch(x, args[1].values, num(args, 2, 0), num(args, 3, 1));
   return at < 0 ? notFound(x) : at + 1;
 });
+// A lookup's table typed into the call is no range: text is #VALUE!, a number or TRUE #N/A.
+const tableOf = (args: readonly Arg[]): Arg => {
+  const t = args[1];
+  if (!t.typed) return t;
+  return typeof t.values[0] === "string" ? fail("#VALUE!", "a lookup's table is a range, not text") : fail("#N/A", "a lookup's table is a range");
+};
 def("HLOOKUP", 3, 4, (args) => {
-  const x = lookedFor(args), { values, cols } = args[1], r = Math.trunc(num(args, 2)), rows = values.length / cols;
+  const x = lookedFor(args), { values, cols } = tableOf(args), r = Math.trunc(num(args, 2)), rows = values.length / cols;
   if (r < 1) return fail("#VALUE!", "HLOOKUP's row starts at 1");
   if (r > rows) return fail("#REF!", `HLOOKUP row ${r} of a table ${rows} high`);
   const c = position(x, values.slice(0, cols), num(args, 3, 1) !== 0 ? 1 : 0);
@@ -2143,7 +2162,7 @@ def("MATCH", 2, 3, (args) => {
   return at < 0 ? notFound(x) : at + 1;
 });
 def("VLOOKUP", 3, 4, (args) => {
-  const x = lookedFor(args), { values, cols } = args[1], c = Math.trunc(num(args, 2));
+  const x = lookedFor(args), { values, cols } = tableOf(args), c = Math.trunc(num(args, 2));
   if (c < 1) return fail("#VALUE!", "VLOOKUP's column starts at 1");
   if (c > cols) return fail("#REF!", `VLOOKUP column ${c} of a table ${cols} wide`);
   const firsts = values.filter((_, i) => i % cols === 0);

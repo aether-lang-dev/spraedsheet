@@ -44,6 +44,12 @@ export const array = (rows: number, cols: number, values: readonly Value[]): Arr
 // An array of one value is that value.
 export const collapsed = (r: Result): Result => (isArray(r) && r.rows === 1 && r.cols === 1 ? r.values[0] : r);
 
+// Excel's number for each error (ERROR.TYPE gives it, a sort orders the errors by it).
+// #CYCLE! and #ERROR! (a formula that does not parse) are this app's: numbered past Excel's.
+export const ERROR_NUMBERS: Readonly<Record<string, number>> = {
+  "#NULL!": 1, "#DIV/0!": 2, "#VALUE!": 3, "#REF!": 4, "#NAME?": 5, "#NUM!": 6, "#N/A": 7, "#GETTING_DATA": 8, "#SPILL!": 9, "#CALC!": 14, "#CYCLE!": 101, "#ERROR!": 102,
+};
+
 export const fail = (code: ErrorCode, why: string): never => { throw new CellError(code, why); };
 
 // An operand that is an error is rethrown: what reads an error is one.

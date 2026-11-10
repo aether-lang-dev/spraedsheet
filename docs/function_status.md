@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1529 cases, 1529 passing);
-38 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (132, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1553 cases, 1553 passing);
+31 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (90, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -33,9 +33,9 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ATAN2 | function | 2 values | passes | 3 | `ATAN2(1, 1)` = 0.785398163397 |  |  |
 | ATANH | function | 1 value | passes | 4 | `ATANH(0.5)` = 0.549306144334 |  |  |
 | AVEDEV | function | at least 1 value | passes | 2 | `AVEDEV({1, 2, 3})` = 0.666666666667 |  |  |
-| AVERAGE | function | at least 1 value | passes | 3 | `AVERAGE({1, 2, 3, 4})` = 2.5 | 9 |  |
+| AVERAGE | function | at least 1 value | passes | 3 | `AVERAGE({1, 2, 3, 4})` = 2.5 |  |  |
 | AVERAGEA | function | at least 1 value | passes | 3 | `AVERAGEA({2, 4})` = 3 |  |  |
-| AVERAGEIF | function | 2 or 3 values | passes | 3 | `AVERAGEIF(A1:A3, ">1")` = 2.5 |  |  |
+| AVERAGEIF | function | 2 or 3 values | passes | 5 | `AVERAGEIF(A1:A3, ">1")` = 2.5 |  |  |
 | AVERAGEIFS | function | at least 3 values | passes | 2 | `AVERAGEIFS(B1:B3, A1:A3, ">1")` = 25 |  |  |
 | BASE | function | 2 or 3 values | passes | 3 | `BASE(255, 16)` = "FF" |  |  |
 | BESSELI | function | 2 values | passes | 4 | `BESSELI(1, 0)` = 1.266065878 |  |  |
@@ -96,7 +96,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | COUNT | function | at least 1 value | passes | 6 | `COUNT({1, "a", 2})` = 2 |  |  |
 | COUNTA | function | at least 1 value | passes | 3 | `COUNTA({1, "a", ""})` = 3 |  |  |
 | COUNTBLANK | function | 1 value | passes | 2 | `COUNTBLANK({1, "", 2})` = 1 |  |  |
-| COUNTIF | function | 2 values | passes | 4 | `COUNTIF(A1:A3, ">1")` = 2 |  |  |
+| COUNTIF | function | 2 values | passes | 11 | `COUNTIF(A1:A3, ">1")` = 2 |  |  |
 | COUNTIFS | function | at least 2 values | passes | 2 | `COUNTIFS(A1:A3, ">1", B1:B3, "<30")` = 1 |  |  |
 | COUPDAYBS | function | 3 or 4 values | passes | 2 | `COUPDAYBS(DATE(2024, 3, 15), DATE(2029, 1, 1), 2, 0)` = 74 |  |  |
 | COUPDAYS | function | 3 or 4 values | passes | 2 | `COUPDAYS(DATE(2024, 3, 15), DATE(2029, 1, 1), 2, 0)` = 180 |  |  |
@@ -210,9 +210,9 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | HYPERLINK | function | 1 or 2 values | passes | 2 | `HYPERLINK("http://x", "name")` = "name" |  |  |
 | HYPGEOM.DIST | function | 5 values | passes | 3 | `HYPGEOM.DIST(1, 2, 2, 4, FALSE)` = 0.666666666667 |  |  |
 | HYPGEOMDIST | function | 4 values | passes | 2 | `HYPGEOMDIST(1, 2, 2, 4)` = 0.666666666667 |  |  |
-| IF | form | (its own) | passes | 3 | `IF(TRUE, 1, 2)` = 1 | 9 |  |
-| IFERROR | function | 2 values | passes | 2 | `IFERROR(1 / 0, "x")` = "x" |  |  |
-| IFNA | function | 2 values | passes | 2 | `IFNA(NA(), 5)` = 5 |  |  |
+| IF | form | (its own) | passes | 3 | `IF(TRUE, 1, 2)` = 1 |  |  |
+| IFERROR | function | 2 values | passes | 5 | `IFERROR(1 / 0, "x")` = "x" |  |  |
+| IFNA | function | 2 values | passes | 4 | `IFNA(NA(), 5)` = 5 |  |  |
 | IFS | function | at least 2 values | passes | 3 | `IFS(FALSE, 1, TRUE, 2)` = 2 |  |  |
 | IMABS | function | 1 value | passes | 4 | `IMABS("3+4i")` = 5 |  |  |
 | IMAGE | function | 1 to 5 values | passes | 3 | `IMAGE("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "dot")` = "dot" |  |  |
@@ -285,14 +285,14 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | MAKEARRAY | special form | (its own) | passes | 3 | `INDEX(MAKEARRAY(2, 3, LAMBDA(r, c, r * c)), 2, 3)` = 6 |  |  |
 | MAP | special form | (its own) | passes | 2 | `INDEX(MAP({1, 2, 3}, LAMBDA(x, x * 2)), 1, 3)` = 6 |  |  |
 | MATCH | function | 2 or 3 values | passes | 8 | `MATCH(3, {1, 2, 3}, 0)` = 3 |  |  |
-| MAX | function | at least 1 value | passes | 4 | `MAX({1, 5, 3})` = 5 | 3 |  |
+| MAX | function | at least 1 value | passes | 4 | `MAX({1, 5, 3})` = 5 |  |  |
 | MAXA | function | at least 1 value | passes | 3 | `MAXA({1, TRUE, "a"})` = 1 |  |  |
 | MAXIFS | function | at least 3 values | passes | 2 | `MAXIFS(B1:B3, A1:A3, "<3")` = 20 |  |  |
 | MDETERM | function | 1 value | passes | 3 | `MDETERM({1, 2; 3, 4})` = -2 |  |  |
 | MDURATION | function | 5 or 6 values | passes | 2 | `MDURATION(DATE(2024, 1, 1), DATE(2029, 1, 1), 0.06, 0.06, 1)` = 4.21236378557 |  |  |
 | MEDIAN | function | at least 1 value | passes | 3 | `MEDIAN({1, 3, 2, 4})` = 2.5 |  |  |
 | MID | function | 3 values | passes | 3 | `MID("hello", 2, 3)` = "ell" |  |  |
-| MIN | function | at least 1 value | passes | 3 | `MIN({4, 1, 3})` = 1 | 3 |  |
+| MIN | function | at least 1 value | passes | 3 | `MIN({4, 1, 3})` = 1 |  |  |
 | MINA | function | at least 1 value | passes | 5 | `MINA({5, "a"})` = 0 |  |  |
 | MINIFS | function | at least 3 values | passes | 2 | `MINIFS(B1:B3, A1:A3, ">1")` = 20 |  |  |
 | MINUTE | function | 1 value | passes | 4 | `MINUTE(0.5 + 30 / 1440)` = 30 |  |  |
@@ -407,7 +407,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SLN | function | 3 values | passes | 2 | `SLN(1000, 100, 9)` = 100 |  |  |
 | SLOPE | function | 2 values | passes | 3 | `SLOPE({2, 4, 6}, {1, 2, 3})` = 2 |  |  |
 | SMALL | function | 2 values | passes | 4 | `SMALL({1, 5, 3}, 1)` = 1 |  |  |
-| SORT | function | 1 to 4 values | passes | 3 | `INDEX(SORT({3; 1; 2}), 1)` = 1 | 3 |  |
+| SORT | function | 1 to 4 values | passes | 3 | `INDEX(SORT({3; 1; 2}), 1)` = 1 |  |  |
 | SORTBY | function | at least 2 values | passes | 3 | `INDEX(SORTBY({1; 2; 3}, {3; 1; 2}), 1)` = 2 |  |  |
 | SPARKLINE | function | 1 to 3 values | passes | 3 | `SPARKLINE({1, 2, 3})` = "▁▅█" |  |  |
 | SQRT | function | 1 value | passes | 3 | `SQRT(16)` = 4 |  |  |
@@ -423,7 +423,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SUBSTITUTE | function | 3 or 4 values | passes | 4 | `SUBSTITUTE("aaa", "a", "b", 2)` = "aba" |  |  |
 | SUBTOTAL | form | (its own) | passes | 4 | `SUBTOTAL(9, A1:A3)` = 6 |  | volatile |
 | SUM | function | at least 1 value | passes | 6 | `SUM(1, 2, 3)` = 6 |  |  |
-| SUMIF | function | 2 or 3 values | passes | 4 | `SUMIF(A1:A3, ">1")` = 5 | 9 |  |
+| SUMIF | function | 2 or 3 values | passes | 7 | `SUMIF(A1:A3, ">1")` = 5 |  |  |
 | SUMIFS | function | at least 3 values | passes | 3 | `SUMIFS(B1:B3, A1:A3, ">1", A1:A3, "<3")` = 20 |  |  |
 | SUMPRODUCT | function | at least 1 value | passes | 2 | `SUMPRODUCT({1, 2}, {3, 4})` = 11 |  |  |
 | SUMSQ | function | at least 1 value | passes | 5 | `SUMSQ(3, 4)` = 25 |  |  |
@@ -479,7 +479,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | VARP | function | at least 1 value | passes | 2 | `VARP({1, 2, 3, 4})` = 1.25 |  |  |
 | VARPA | function | at least 1 value | passes | 2 | `VARPA({1, 3})` = 1 |  |  |
 | VDB | function | 5 to 7 values | passes | 3 | `VDB(10000, 1000, 5, 0, 1)` = 4000 |  |  |
-| VLOOKUP | function | 3 or 4 values | passes | 4 | `VLOOKUP(2, {1, "a"; 2, "b"}, 2, FALSE)` = "b" |  |  |
+| VLOOKUP | function | 3 or 4 values | passes | 7 | `VLOOKUP(2, {1, "a"; 2, "b"}, 2, FALSE)` = "b" |  |  |
 | VSTACK | function | at least 1 value | passes | 3 | `INDEX(VSTACK({1, 2}, {3, 4}), 2, 1)` = 3 |  |  |
 | WEEKDAY | function | 1 or 2 values | passes | 7 | `WEEKDAY(45292)` = 2 |  | TRUE/FALSE refused |
 | WEEKNUM | function | 1 or 2 values | passes | 5 | `WEEKNUM(DATE(2024, 1, 1))` = 1 |  | TRUE/FALSE refused |
@@ -491,7 +491,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | WRAPROWS | function | 2 or 3 values | passes | 3 | `INDEX(WRAPROWS({1, 2, 3, 4, 5}, 2), 3, 1)` = 5 |  |  |
 | XIRR | function | 2 or 3 values | passes | 5 | `XIRR({-1000, 1100}, {0, 365})` = 0.1 |  | TRUE/FALSE refused |
 | XLOOKUP | function | 3 to 6 values | passes | 3 | `XLOOKUP(2, {1, 2, 3}, {"a", "b", "c"})` = "b" |  |  |
-| XMATCH | function | 2 to 4 values | passes | 5 | `XMATCH(2, {1, 2, 3})` = 2 | 6 |  |
+| XMATCH | function | 2 to 4 values | passes | 9 | `XMATCH(2, {1, 2, 3})` = 2 |  |  |
 | XNPV | function | 3 values | passes | 6 | `XNPV(0.1, {-1000, 1100}, {0, 365})` = 0 | 2 |  |
 | XOR | function | at least 1 value | passes | 2 | `XOR(TRUE, FALSE)` = true |  |  |
 | YEAR | function | 1 value | passes | 4 | `YEAR(45351)` = 2024 |  |  |

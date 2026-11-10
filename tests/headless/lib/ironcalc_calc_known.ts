@@ -43,35 +43,11 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!D7": "excel-error",
     "Sheet1!D9": "legacy",
   },
-  "INFORMATION/error_broadcast.xlsx": {
-    "Sheet1!E68": "value",
-  },
   "LOOKUP_AND_REFERENCE/CHOOSE.xlsx": {
     "CHOOSE!B23": "legacy",
   },
   "LOOKUP_AND_REFERENCE/FILTER_ERRORS.xlsx": {
     "Sheet1!E1": "excel-error",
-  },
-  "LOOKUP_AND_REFERENCE/HVLOOKUP.xlsx": {
-    "HLOOKUP!N12": "excel-error",
-    "HLOOKUP!N13": "excel-error",
-    "VLOOKUP!N12": "excel-error",
-    "VLOOKUP!N13": "excel-error",
-  },
-  "LOOKUP_AND_REFERENCE/SORT.xlsx": {
-    "Sheet1!E1": "excel-error",
-    "Sheet1!J1": "value",
-    "Sheet1!P1": "value",
-  },
-  "LOOKUP_AND_REFERENCE/XMATCH.xlsx": {
-    "Sheet1!D6": "we-error",
-    "Sheet1!E6": "we-error",
-    "Sheet1!D7": "we-error",
-    "Sheet1!E7": "we-error",
-    "Sheet1!B14": "excel-error",
-  },
-  "LOOKUP_AND_REFERENCE/XMATCH_arrays.xlsx": {
-    "Sheet1!B14": "excel-error",
   },
   "MATH_AND_TRIGONOMETRY/ARABIC_ROMAN.xlsx": {
     "ROMAN!A36": "legacy",
@@ -101,26 +77,10 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "EXP_SIGN!B36": "legacy",
     "EXP_SIGN!C36": "legacy",
   },
-  "MATH_AND_TRIGONOMETRY/MIN_MAX_extras.xlsx": {
-    "Sheet1!A14": "value",
-    "Sheet1!A15": "value",
-    "Sheet1!A16": "value",
-  },
   "MATH_AND_TRIGONOMETRY/MOD_QUOTIENT.xlsx": {
     "DATEVALUE!A41": "legacy",
     "DATEVALUE!C41": "legacy",
     "DATEVALUE!D41": "legacy",
-  },
-  "MATH_AND_TRIGONOMETRY/SUMIF_AVERAGE_IF.xlsx": {
-    "Sheet1!J3": "we-error",
-    "Sheet1!K3": "value",
-    "Sheet1!J4": "we-error",
-    "Sheet1!K4": "value",
-    "Sheet1!J5": "we-error",
-    "Sheet1!K5": "value",
-    "Sheet1!G6": "we-error",
-    "Sheet1!J6": "we-error",
-    "Sheet1!K6": "value",
   },
   "STATISTICAL/EXPONDIST.xlsx": {
     "EXPON.DIST!D56": "we-error",

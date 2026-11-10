@@ -7,7 +7,7 @@ import type { Addr } from "./address.ts";
 import { show } from "./format.ts";
 import type { Language } from "./language.ts";
 import { movedBy } from "./shift.ts";
-import { CellError, ordered } from "./values.ts";
+import { CellError, ERROR_NUMBERS, ordered } from "./values.ts";
 import type { Value } from "./values.ts";
 
 export interface Cells {
@@ -18,14 +18,14 @@ export interface Cells {
 
 // A sort's order, ascending or not, as a spreadsheet sorts: numbers (by
 // size), then text (without case), then FALSE and TRUE (compare's order),
-// then errors (by code); empty cells last whichever way it sorts.
+// then errors (by Excel's error number: #DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #N/A); empty cells last whichever way it sorts.
 export function sortOrder(x: Value, y: Value, ascending = true): number {
   const blank = (v: Value) => v === null || v === "";
   if (blank(x) || blank(y)) return Number(blank(x)) - Number(blank(y));
   const err = (v: Value) => v instanceof CellError;
   let c: number;
   if (err(x) || err(y)) {
-    c = err(x) && err(y) ? (x as CellError).code.localeCompare((y as CellError).code) : Number(err(x)) - Number(err(y));
+    c = err(x) && err(y) ? (ERROR_NUMBERS[(x as CellError).code] ?? 0) - (ERROR_NUMBERS[(y as CellError).code] ?? 0) : Number(err(x)) - Number(err(y));
   } else c = ordered(x as Exclude<Value, CellError>, y as Exclude<Value, CellError>);
   return ascending ? c : -c;
 }

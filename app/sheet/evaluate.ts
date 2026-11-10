@@ -321,9 +321,11 @@ class Evaluator {
       case "error":
         return fail(e.code, e.why ?? (e.code === "#REF!" ? "a reference moved off the sheet" : "written in the formula"));
       case "neg":
-        return lift([this.result(e.arg)], ([x]) => -toNumber(x));
+        return lift([this.#operand(e.arg)], ([x]) => -toNumber(x));
+      // An operand that is an error is that error in every cell of the array the other is
+      // (A1:C1 / NA() is three #N/A, which IFERROR then answers one by one).
       case "binary":
-        return lift([this.result(e.left), this.result(e.right)], ([a, b]) => operate(e.op, a, b));
+        return lift([this.#operand(e.left), this.#operand(e.right)], ([a, b]) => operate(e.op, a, b));
       case "call":
         return this.#call(e);
       default:
@@ -341,6 +343,16 @@ class Evaluator {
       return TYPED.has(e.kind) && !(r instanceof CellError) ? { values: [r], cols: 1, typed: true } : single(r);
     } catch (err) {
       if (err instanceof CellError && e.kind !== "range" && e.kind !== "table") return single(err);
+      throw err;
+    }
+  }
+
+  // An operand's value, an error it raises as the value.
+  #operand(e: Expr): Result {
+    try {
+      return this.result(e);
+    } catch (err) {
+      if (err instanceof CellError) return err;
       throw err;
     }
   }

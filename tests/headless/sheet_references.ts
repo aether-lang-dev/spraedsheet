@@ -50,6 +50,28 @@ await sh.set("J7", "=10%+10%");
 await sh.set("K1", "=20%*SUM(B1:B3)");
 eq("the postfix %", [at("J1"), at("J2"), at("J3"), at("J4"), at("J5"), at("J6"), at("J7"), at("K1")], ["0.5", "0.5", "0.6", "-0.04", "1.414213562", "0.1", "0.2", "12"]);
 
+// SINGLE(x) is @x, as a file keeps it.
+await sh.set("Q2", "=SINGLE(B1:B3)");
+await sh.set("Q3", "=SINGLE(B:B) + 1");
+eq("SINGLE is the implicit intersection", [at("Q2"), at("Q3")], ["20", "31"]);
+
+// An error beside an array is that error in each cell, which IFERROR answers one by one.
+await sh.set("R1", "=SUM(IFERROR(A1:A3 / NA(), 2))");
+await sh.set("R2", "=SUM(IFNA(A1:A3 / NA(), 1))");
+await sh.set("R3", "=SUM(IFERROR(A1:A3 / {1; 0; 1}, 100))");
+eq("IFERROR and IFNA over an array", [at("R1"), at("R2"), at("R3")], ["6", "3", "104"]);
+
+// An array's empty cells are 0 where it lands, and its errors sort in Excel's order.
+await sh.set("S1", "5");
+await sh.set("S3", "=NA()");
+await sh.set("S4", "=1/0");
+await sh.set("U1", "=SORT(S1:S4)");
+await sh.set("V1", "=SORT(S1:S4, 1, -1)");
+await sh.set("W1", "=S1:S4");
+eq("SORT: errors in Excel's order, the empty cell last and 0", [at("U1"), at("U2"), at("U3"), at("U4")], ["5", "#DIV/0!", "#N/A", "0"]);
+eq("SORT descending", [at("V1"), at("V2"), at("V3"), at("V4")], ["#N/A", "#DIV/0!", "5", "0"]);
+eq("an empty cell in a spilled range is 0", [at("W1"), at("W2"), at("W3"), at("W4")], ["5", "0", "#N/A", "#DIV/0!"]);
+
 // expect: ok the range operator between references
 // expect: ok a cell between the corners changed
 // expect: ok a reference spills as its values
@@ -58,3 +80,8 @@ eq("the postfix %", [at("J1"), at("J2"), at("J3"), at("J4"), at("J5"), at("J6"),
 // expect: ok a cycle through the branch taken is one
 // expect: ok a name holding a reference, an error not raised until used
 // expect: ok the postfix %
+// expect: ok SINGLE is the implicit intersection
+// expect: ok IFERROR and IFNA over an array
+// expect: ok SORT: errors in Excel's order, the empty cell last and 0
+// expect: ok SORT descending
+// expect: ok an empty cell in a spilled range is 0

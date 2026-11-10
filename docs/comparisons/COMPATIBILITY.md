@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 16 | this app gives an error where Excel stored a value |
-| `excel-error` | 12 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 32 | both give a value, and they differ |
+| `we-error` | 7 | this app gives an error where Excel stored a value |
+| `excel-error` | 5 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 22 | both give a value, and they differ |
 
-Counted 2026-11-10 (98 cells with the 38 `legacy`, in 32 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (72 cells with the 38 `legacy`, in 25 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -185,6 +185,21 @@ OFFSET and the like of a LET (a name that comes to a reference by LET's body, `R
 cell's address (`named1`, `Named2`, as a file's defined names have them: the lexer made them cells off the
 sheet, #REF!, and `names.define` refused them); a quoted sheet name may hold a doubled quote
 (`'Third ''Sheet'' (3)'!B3`). defined_names_for_unit_test.xlsx (3), quotes.xlsx; headless `sheet_names`.
+
+2026-11-10, 31 cells (lookups, criteria, arrays): `SINGLE(x)`, which a file keeps for `@x`, is the implicit
+intersection (N.xlsx, YEARFRAC_DATEDIF.xlsx C30 and C31, POWER.xlsx `implicit_intersection!C2`); an error beside an
+array is that error in each of its cells (an operand that raised an error took the whole array with it), so IFERROR
+and IFNA, which work cell by cell over an array, answer `SUM(IFERROR(A1:C1 / NA(), 2))` with 6
+(error_broadcast.xlsx E68); a VLOOKUP or HLOOKUP table typed into
+the call is text, #VALUE!, or a number or TRUE, #N/A (HVLOOKUP.xlsx, 4); COUNTIF, SUMIF and AVERAGEIF read `*`,
+`?` and `~` in a text criterion for = and <> as wildcards, and an error as a criterion is the cells that are that
+error (`COUNTIF(B2:B10, NA())` counts the #N/A, SUMIF's sum of them is #N/A) (SUMIF_AVERAGE_IF.xlsx, 9); an
+array's empty cells are 0 where it lands (`=A1:A3` over a blank, SORT's blank rows), and SORT orders errors by
+Excel's number (#DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #N/A; descending, the reverse) (SORT.xlsx, 3); XMATCH's
+match_mode 3 is a regular expression (a text looked for is the pattern, any other value finds nothing) and its
+lookup array is one row or one column (XMATCH.xlsx, 5, and XMATCH_arrays.xlsx). MIN_MAX_extras.xlsx (3) and
+POWER.xlsx's `inside_a_lambda!A3` had come right with a LAMBDA's parameter keeping its reference, and come off here
+(POWER's A4 is now `legacy`). Cases in `examples.ts` and headless `sheet_references`.
 
 ## Intended (found while looking)
 

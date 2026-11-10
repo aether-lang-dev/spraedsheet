@@ -821,11 +821,14 @@ export class Sheet {
     const blocker = area.find((k) => this.#inputs.has(k) || (this.#spilledBy.has(k) && this.#spilledBy.get(k) !== key));
     if (blocker) return new CellError("#SPILL!", `${blocker} is in the way`);
     this.#spills.set(key, v);
+    // In an Excel formula, a cell an array has no value for (an empty cell it came from) is 0
+    // where it lands.
+    const empty = this.#language.name === "Excel" ? 0 : null;
     area.forEach((k, i) => {
       this.#spilledBy.set(k, key);
-      this.#values.set(k, v.values[i + 1]);
+      this.#values.set(k, v.values[i + 1] ?? empty);
     });
-    return v.values[0];
+    return v.values[0] ?? empty;
   }
 
   async #evaluate(key: string): Promise<void> {
