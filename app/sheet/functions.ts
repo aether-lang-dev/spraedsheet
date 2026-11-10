@@ -10,7 +10,7 @@ import { sortOrder } from "./sortfind.ts";
 import { SPARKLINE_TYPES, sparkline, sparklineOptions } from "./charts.ts";
 import { confidence, etsStat, fitEts, forecastAt, seasonality } from "./ets.ts";
 import type { SparklineType } from "./charts.ts";
-import { addMonths, dateDif, days360, endOfMonth, isoWeek, now, parseDate, parseTime, parts, serial, weekOfYear, weekendOf, workdayFrom, workdaysBetween, yearFraction } from "./dates.ts";
+import { addMonths, dateDif, days360, endOfMonth, isoWeek, now, parseDate, parseDateTime, parts, serial, timeValue, weekOfYear, weekendOf, workdayFrom, workdaysBetween, yearFraction } from "./dates.ts";
 import { db, depreciation, fv, ipmt, irr, mirr, nper, npv, pmt, ppmt, pv, rate, vdb, xirr, xnpv } from "./finance.ts";
 import * as D from "./distributions.ts";
 import * as B from "./bonds.ts";
@@ -186,7 +186,7 @@ export function criterion(c: Value): (v: Value) => boolean {
   }
   const m = /^(<>|<=|>=|=|<|>)?([\s\S]*)$/.exec(c)!;
   const op = (m[1] ?? "=") as Comparison, text = m[2];
-  const rhs: Value = text.trim() !== "" && !Number.isNaN(Number(text)) ? Number(text) : text;
+  const rhs: Value = text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : text;
   return (v) => {
     if (v instanceof CellError) return false;
     if (rhs === "") return (op === "=") === blank(v);
@@ -204,6 +204,9 @@ function ifs(args: readonly Arg[]): number[] {
     return typeof s === "number" ? [s] : [];
   });
 }
+
+// The value a lookup looks for: an empty cell is looked for as 0.
+const lookedFor = (args: readonly Arg[]): Value => scalar(val(args, 0)) ?? 0;
 
 const notFound = (x: Value): never => fail("#N/A", `${toText(x)} is not there`);
 
@@ -537,8 +540,8 @@ def("LOWER", 1, 1, (args) => str(args, 0).toLowerCase());
 def("PROPER", 1, 1, (args) => str(args, 0).toLowerCase().replace(/(^|[^a-z])([a-z])/g, (_, before: string, c: string) => before + c.toUpperCase()));
 def("TRIM", 1, 1, (args) => str(args, 0).trim().replace(/ +/g, " "));
 def("LEFT", 1, 2, (args) => {
-  const n = num(args, 1, 1);
-  return n < 0 ? fail("#VALUE!", "LEFT of fewer than no characters") : str(args, 0).slice(0, n);
+  const s = str(args, 0), n = num(args, 1, 1);
+  return n < 0 ? fail("#VALUE!", "LEFT of fewer than no characters") : s.slice(0, n);
 });
 def("RIGHT", 1, 2, (args) => {
   const n = num(args, 1, 1), s = str(args, 0);
@@ -549,7 +552,9 @@ def("MID", 3, 3, (args) => {
   return start < 1 || n < 0 ? fail("#VALUE!", "MID starts at 1 and takes no fewer than no characters") : str(args, 0).substr(start - 1, n);
 });
 def("FIND", 2, 3, (args) => {
-  const needle = str(args, 0), hay = str(args, 1), at = hay.indexOf(needle, num(args, 2, 1) - 1);
+  const needle = str(args, 0), hay = str(args, 1), start = Math.trunc(num(args, 2, 1));
+  if (start < 1 || start > hay.length + 1) return fail("#VALUE!", `FIND from ${start}: outside the text`);
+  const at = hay.indexOf(needle, start - 1);
   return at < 0 ? fail("#VALUE!", `'${needle}' is not in '${hay}'`) : at + 1;
 });
 // SUBSTITUTE(text, old, new, [instance]): every old becomes new, or only the
@@ -584,7 +589,9 @@ def("IMAGE", 1, 5, (args) => {
   return absent(args, 1) ? "" : str(args, 1);
 });
 def("EXACT", 2, 2, (args) => str(args, 0) === str(args, 1));
-def("VALUE", 1, 1, (args) => num(args, 0));
+// VALUE(text): a number, or text that reads as one (a date or a time too); TRUE and FALSE
+// are #VALUE!, an empty cell 0.
+def("VALUE", 1, 1, (args) => (typeof scalar(val(args, 0)) === "boolean" ? fail("#VALUE!", "VALUE of TRUE or FALSE") : num(args, 0)));
 
 // The picture a data: URL holds, its base64, or null.
 export function imageOf(src: string): string | null {
@@ -629,11 +636,13 @@ def("DOLLAR", 1, 2, (args) => {
 });
 // SEARCH(find, within, [start]): where the text is, counted from 1,
 // without regard to case; ? stands for one character, * for any run, ~
-// makes the next one plain. Not there is #VALUE!.
+// makes the next one plain (a ~ at the very end makes nothing, so a pattern of
+// only one finds the start). Not there is #VALUE!.
 const searchPattern = (pattern: string): RegExp => {
   let out = "";
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
+    if (c === "~" && i + 1 === pattern.length) break;
     if (c === "~" && i + 1 < pattern.length) out += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     else if (c === "?") out += ".";
     else if (c === "*") out += ".*?";
@@ -676,14 +685,14 @@ const strict = (v: Value): string => (typeof v === "string" ? `"${v.replace(/"/g
 const shown = (v: Value): string => (v instanceof CellError ? v.code : toText(v));
 // VALUETOTEXT(value, [format]): the value as text, concise (0) or strict
 // (1: text in quotes). ARRAYTOTEXT(array, [format]): its cells joined by
-// ", " and rows by "; " (concise), or in braces as an array constant.
+// ", " all of them (concise: rows run on), or in braces as an array constant.
 def("VALUETOTEXT", 1, 2, (args) => (num(args, 1, 0) === 1 ? strict : shown)(val(args, 0)));
 def("ARRAYTOTEXT", 1, 2, (args) => {
   const { values, cols } = args[0], form = Math.trunc(toNumber(val(args, 1)));
   if (form !== 0 && form !== 1) return fail("#VALUE!", `ARRAYTOTEXT's format is 0 or 1, not ${form}`);
   const rows: string[] = [];
   for (let i = 0; i < values.length; i += cols) rows.push(values.slice(i, i + cols).map(form === 1 ? strict : shown).join(form === 1 ? "," : ", "));
-  return form === 1 ? `{${rows.join(";")}}` : rows.join("; ");
+  return form === 1 ? `{${rows.join(";")}}` : rows.join(", ");
 });
 // The REGEX trio on the engine's own regular expressions (ECMAScript,
 // Unicode aware); a pattern that does not compile is #VALUE!. Case
@@ -1620,7 +1629,7 @@ function date(args: readonly Arg[], i: number): number {
     // A number written as text is that serial, as Excel coerces it.
     const t = v.trim();
     if (t !== "" && Number.isFinite(Number(t))) return Number(t);
-    return parseDate(v) ?? fail("#VALUE!", `'${v}' is not a date`);
+    return parseDateTime(v) ?? fail("#VALUE!", `'${v}' is not a date`);
   }
   return toNumber(v);
 }
@@ -1635,7 +1644,14 @@ def("DATE", 3, 3, (args) => {
   const y = Math.trunc(num(args, 0));
   return serial(y < 1900 ? y + 1900 : y, Math.trunc(num(args, 1)), Math.trunc(num(args, 2)));
 });
-def("DATEVALUE", 1, 1, (args) => date(args, 0));
+// DATEVALUE(text): the day a date written as text is (its time, if any, only carries whole days).
+// A number is #VALUE!, as Excel has it.
+def("DATEVALUE", 1, 1, (args) => {
+  const v = scalar(val(args, 0));
+  if (typeof v !== "string") return fail("#VALUE!", "DATEVALUE takes text");
+  const d = parseDateTime(v);
+  return d === null ? fail("#VALUE!", `'${v}' is not a date`) : Math.floor(d);
+});
 def("YEAR", 1, 1, (args) => parts(dateIn(args, 0)).y);
 def("MONTH", 1, 1, (args) => parts(dateIn(args, 0)).m);
 def("DAY", 1, 1, (args) => parts(dateIn(args, 0)).d);
@@ -1686,7 +1702,7 @@ def("DAYS360", 2, 3, (args) => days360(date(args, 0), date(args, 1), !absent(arg
 // TIMEVALUE(text): the time of day as the fraction of a day.
 def("TIMEVALUE", 1, 1, (args) => {
   const s = str(args, 0);
-  return parseTime(s) ?? fail("#VALUE!", `'${s}' is not a time`);
+  return timeValue(s) ?? fail("#VALUE!", `'${s}' is not a time`);
 });
 def("TIME", 3, 3, (args) => {
   const seconds = Math.trunc(num(args, 0)) * 3600 + Math.trunc(num(args, 1)) * 60 + Math.trunc(num(args, 2));
@@ -2042,7 +2058,7 @@ function xsearch(x: Value, list: readonly Value[], mode: number, from: number): 
 // XLOOKUP's return: the value at the match, or, when the return range is
 // wider (taller) than a column (row) of lookups, the whole row (column).
 def("XLOOKUP", 3, 6, (args) => {
-  const x = scalar(val(args, 0)), list = args[1].values, back = args[2];
+  const x = lookedFor(args), list = args[1].values, back = args[2];
   const lookRows = list.length / args[1].cols, backRows = back.values.length / back.cols;
   const down = args[1].cols === 1 && backRows === list.length, across = lookRows === 1 && back.cols === list.length;
   if (!down && !across) return fail("#VALUE!", "XLOOKUP's lookup and return ranges differ in size");
@@ -2052,11 +2068,11 @@ def("XLOOKUP", 3, 6, (args) => {
   return backRows === 1 ? back.values[at] : array(backRows, 1, back.values.filter((_, k) => k % back.cols === at));
 });
 def("XMATCH", 2, 4, (args) => {
-  const x = scalar(val(args, 0)), at = xsearch(x, args[1].values, num(args, 2, 0), num(args, 3, 1));
+  const x = lookedFor(args), at = xsearch(x, args[1].values, num(args, 2, 0), num(args, 3, 1));
   return at < 0 ? notFound(x) : at + 1;
 });
 def("HLOOKUP", 3, 4, (args) => {
-  const x = scalar(val(args, 0)), { values, cols } = args[1], r = Math.trunc(num(args, 2)), rows = values.length / cols;
+  const x = lookedFor(args), { values, cols } = args[1], r = Math.trunc(num(args, 2)), rows = values.length / cols;
   if (r < 1) return fail("#VALUE!", "HLOOKUP's row starts at 1");
   if (r > rows) return fail("#REF!", `HLOOKUP row ${r} of a table ${rows} high`);
   const c = position(x, values.slice(0, cols), num(args, 3, 1) !== 0 ? 1 : 0);
@@ -2087,7 +2103,7 @@ def("ADDRESS", 2, 5, (args) => {
 // side (its first row when it is wider than tall, else its first column)
 // and answers from the last row or column.
 def("LOOKUP", 2, 3, (args) => {
-  const x = scalar(val(args, 0));
+  const x = lookedFor(args);
   if (args.length === 3) {
     const at = position(x, args[1].values, 1);
     if (at < 0) return notFound(x);
@@ -2111,11 +2127,11 @@ def("INDEX", 2, 3, (args) => {
     : fail("#REF!", `INDEX ${r}, ${c} is outside ${rows} x ${cols}`);
 });
 def("MATCH", 2, 3, (args) => {
-  const x = scalar(val(args, 0)), at = position(x, args[1].values, Math.sign(num(args, 2, 1)));
+  const x = lookedFor(args), at = position(x, args[1].values, Math.sign(num(args, 2, 1)));
   return at < 0 ? notFound(x) : at + 1;
 });
 def("VLOOKUP", 3, 4, (args) => {
-  const x = scalar(val(args, 0)), { values, cols } = args[1], c = Math.trunc(num(args, 2));
+  const x = lookedFor(args), { values, cols } = args[1], c = Math.trunc(num(args, 2));
   if (c < 1) return fail("#VALUE!", "VLOOKUP's column starts at 1");
   if (c > cols) return fail("#REF!", `VLOOKUP column ${c} of a table ${cols} wide`);
   const firsts = values.filter((_, i) => i % cols === 0);

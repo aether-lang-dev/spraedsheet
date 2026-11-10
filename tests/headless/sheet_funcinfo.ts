@@ -50,8 +50,8 @@ eq("the declared deviations are what the ledger of differing cells comes to", JS
 
 // REXX.
 const said: string[] = [];
-await cmds.script('LET m = FUNCTIONINFO("AVERAGE")\nSAY m\nLET s = FUNCTIONINFO("SUM")\nSAY s', (l) => said.push(l));
-eq("FUNCTIONINFO from REXX", said, ["AVERAGE: at least 1 value; differs from Excel somewhere", "SUM: at least 1 value"]);
+await cmds.script('LET m = FUNCTIONINFO("ERROR.TYPE")\nSAY m\nLET s = FUNCTIONINFO("SUM")\nSAY s', (l) => said.push(l));
+eq("FUNCTIONINFO from REXX", said, ["ERROR.TYPE: 1 value; differs from Excel somewhere", "SUM: at least 1 value"]);
 
 // expect: ok SUM: a function of one or more values
 // expect: ok RAND: volatile, takes none, any case of name

@@ -21,16 +21,95 @@ export function parts(s: number): { y: number; m: number; d: number; weekday: nu
   return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate(), weekday: t.getUTCDay() };
 }
 
-// Text as a date: 2024-01-15, or month first, 1/15/2024; null if not one.
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const LONG_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+// A month's name, in full or its first three letters (and "Sept"), 1 to 12; 0 if not one.
+const monthNamed = (name: string): number => {
+  const n = name.toLowerCase(), i = LONG_MONTHS.indexOf(n);
+  return i >= 0 ? i + 1 : n === "sept" ? 9 : n.length === 3 ? MONTHS.indexOf(n) + 1 : 0;
+};
+// A year written with two digits is 2000 to 2029, or 1930 to 1999.
+const yearOf = (digits: string): number => (digits.length === 2 ? (Number(digits) < 30 ? 2000 : 1900) + Number(digits) : Number(digits));
+
+// Text as a date, as en-US Excel reads it: 2024-01-15, month first with / or -
+// (1/15/2024, 1-15-24), a month named (15-Jan-2024, 15 January 2024, Jan 15, 2024),
+// with spaces allowed round the separators ("2026 - 01 - 01"); null if not one.
 export function parseDate(text: string): number | null {
-  const t = text.trim();
+  const t = text.trim().replace(/\s*([/-])\s*/g, "$1");
   // A month of 1 to 12 and a day that month has: 30/2/2010 is no date.
   const real = (y: number, mo: number, d: number): number | null => mo >= 1 && mo <= 12 && d >= 1 && d <= parts(serial(y, mo + 1, 0)).d ? serial(y, mo, d) : null;
-  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  let m = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/.exec(t);
   if (m) return real(Number(m[1]), Number(m[2]), Number(m[3]));
-  m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(t);
-  if (m) return real(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[1]), Number(m[2]));
+  m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(t);
+  if (m) return real(yearOf(m[3]), Number(m[1]), Number(m[2]));
+  m = /^(\d{1,2})[- ]([A-Za-z]+)[- ,]+(\d{2}|\d{4})$/.exec(t);
+  if (m && monthNamed(m[2])) return real(yearOf(m[3]), monthNamed(m[2]), Number(m[1]));
+  m = /^([A-Za-z]+)[- ](\d{1,2}),?[- ](\d{2}|\d{4})$/.exec(t);
+  if (m && monthNamed(m[1])) return real(yearOf(m[3]), monthNamed(m[1]), Number(m[2]));
   return null;
+}
+
+// A time written in text, in seconds from midnight (24:00 and the like come to 86,400 or
+// more): "6:45 PM", "22:48:00", "4 pm", "4 : 35" (spaces round the colons are
+// allowed), "12:00 am". Minutes and seconds are under 60 (a seconds of 60 is
+// accepted where it makes exactly 24:00:00, as 23:60 does); an hour is 0 to 23 (24
+// with any minutes and seconds), or 1 to 12 with am or pm; `hours` says how far
+// an hour may go (a date's time, "2026-01-01 25:00:00", carries whole days).
+function secondsOf(text: string, hours: number): number | null {
+  const t = text.trim().replace(/\s*:\s*/g, ":");
+  let m = /^(\d{1,4}):(\d{1,2})(?::(\d{1,2})(?:\.\d+)?)?\s*(?:([AaPp])[Mm]?)?$/.exec(t);
+  if (!m) {
+    m = /^(\d{1,2})()()\s*([AaPp])[Mm]$/.exec(t);
+    if (!m) return null;
+  }
+  let h = Number(m[1]);
+  const min = Number(m[2] || 0), sec = Number(m[3] || 0), half = m[4]?.toUpperCase();
+  if (half) {
+    if (h < 1 || h > 12 || min > 59 || sec > 59) return null;
+    if (half === "P" && h < 12) h += 12;
+    if (half === "A" && h === 12) h = 0;
+  } else {
+    const total = h * 3600 + min * 60 + sec;
+    const rolls = (h === 24 && min <= 59 && sec <= 59) || (h === 23 && min === 60 && sec <= 59) || (h <= 23 && min <= 59 && sec === 60 && total === 86400);
+    if (!rolls && (h > hours || min > 59 || sec > 59)) return null;
+  }
+  return h * 3600 + min * 60 + sec;
+}
+
+// A date's text and the time after it ("2026-01-01 24:00:00", "7/7/2026 4:35 PM",
+// "2026-01-01T09:30"), or only one of them; null when it is neither. `hours`: how far
+// the time's hour may go (see secondsOf).
+function stamp(text: string, hours: number): { day: number | null; seconds: number | null } | null {
+  const t = text.trim();
+  const clock = /(?:^|[ T])(\d{1,4}\s*:\s*\d{1,2}(?:\s*:\s*\d{1,2}(?:\.\d+)?)?(?:\s*[AaPp][Mm]?)?|\d{1,2}\s*[AaPp][Mm])\s*$/.exec(t);
+  if (!clock) { const d = parseDate(t); return d === null ? null : { day: d, seconds: null }; }
+  const seconds = secondsOf(clock[1], hours), rest = t.slice(0, clock.index).trim();
+  if (seconds === null) return null;
+  if (rest === "") return { day: null, seconds };
+  const day = parseDate(rest);
+  return day === null ? null : { day, seconds };
+}
+
+// Text as a time of day, the fraction of a day: "6:45 PM", "22:48:00",
+// "12:00 am", a date in front ignored; null if not one (24:00 is none).
+export function parseTime(text: string): number | null {
+  const s = stamp(text, 23);
+  return s && s.seconds !== null && s.seconds < 86400 ? s.seconds / 86400 : null;
+}
+
+// TIMEVALUE's text: a time as parseTime reads it, where 24:00:00 and the like (23:60,
+// 23:59:60) come round to 0.
+export function timeValue(text: string): number | null {
+  const s = stamp(text, 23);
+  return s && s.seconds !== null ? (s.seconds % 86400) / 86400 : null;
+}
+
+// Text as a date with its time: the serial and the day's fraction (a time of 24 hours
+// or more carries into the date); a date alone; null if it is not one (a time alone
+// is parseTime's).
+export function parseDateTime(text: string): number | null {
+  const s = stamp(text, 9999);
+  return s && s.day !== null ? s.day + (s.seconds ?? 0) / 86400 : null;
 }
 
 // Months on, the day kept (or the month's last, when it has fewer).
@@ -167,19 +246,6 @@ export function yearFraction(start: number, end: number, basis: number): number 
     case 4: return days360(a, b, true) / 360;
     default: return null;
   }
-}
-
-// Text as a time of day, the fraction of a day: "6:45 PM", "22:48:00",
-// "12:00 am", a date in front ignored; null if not one.
-export function parseTime(text: string): number | null {
-  const m = /^\s*(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}\/\d{2,4})?\s*(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?\s*(?:([AaPp])[Mm]?)?\s*$/.exec(text);
-  if (!m) return null;
-  let h = Number(m[1]);
-  const min = Number(m[2]), sec = Number(m[3] ?? 0), half = m[4]?.toUpperCase();
-  if (min > 59 || sec > 59 || h > (half ? 12 : 23) || (half && h === 0)) return null;
-  if (half === "P" && h < 12) h += 12;
-  if (half === "A" && h === 12) h = 0;
-  return (h * 3600 + min * 60 + sec) / 86400;
 }
 
 // DATEDIF's units: whole years, months or days between, or the months

@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 59 | this app gives an error where Excel stored a value |
-| `excel-error` | 22 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 41 | both give a value, and they differ |
+| `we-error` | 46 | this app gives an error where Excel stored a value |
+| `excel-error` | 15 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 38 | both give a value, and they differ |
 
-Counted 2026-11-10 (160 cells with the 38 `legacy`, in 49 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (137 cells with the 38 `legacy`, in 41 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -133,11 +133,34 @@ text or TRUE is #NUM!, where XIRR's text is #VALUE!) and a date below 0 is #NUM!
 TREND and GROWTH take several known_x columns (a column of y) or rows (a row of y), by the least squares LINEST
 does, with new_x of as many predictors (#REF! if not); no cell of the ledger had one, the cases are in `examples.ts`.
 
+2026-11-10, 23 cells (text functions and text read as numbers or dates): FIND from a start under 1
+is #VALUE!; SEARCH reads a lone `~` at the end of its pattern as nothing, so it finds the start;
+ARRAYTOTEXT's concise form runs the rows on with ", " (the semicolon is the strict form's, in braces);
+VALUE of TRUE or FALSE is #VALUE!; a cell of empty text in a file (an empty shared string) is kept as
+text, not dropped as blank, so VALUE of it is #VALUE! (a blank cell's is 0) and MATCH finds the "" in
+it; a lookup for an empty cell looks for 0 (`MATCH(blank, ...)`); a number made text (`&`, CONCAT,
+VALUETOTEXT) has 15 significant digits and is plain decimal while that takes 20 characters or fewer
+(`0.000000007123456`; it had 12 digits and JavaScript's switch to an exponent from 1e-7), else
+`1E+20` or `1E-20`; text read as a date: a month named (`2-Feb-2026`, `15 January 2026`,
+`Jan 15, 2026`), month first with dashes (`10-12-1999`), spaces round `/` and `-`
+(`2026 - 01 - 01`), a two-digit year 00 to 29 in the 2000s and 30 to 99 in the 1900s; a time after a
+date is read with it (`VALUE("2026-01-01 12:00")` is 46023.5, it was the time alone) and a time of 24
+hours or more carries whole days (`DATEVALUE("2026-01-01 25:00:00")` is 2 January); DATEVALUE of a
+number is #VALUE!; TIMEVALUE reads `4 pm` and `4 : 35`, and 24:00, 23:60 and 23:59:60 come round to
+0; a number too big to hold (`1e400`) is text, not infinity (VALUE, a COUNTIF criterion, a sum's text);
+LEFT of an error with a negative count is that error. `dates.ts` (`stamp`, `secondsOf`) and
+`values.ts` (`numberText`) read the rules from IronCalc's `date_and_time.rs` and `number_format.rs`
+(third_party/ironcalc/PROVENANCE.md); cases in `examples.ts`. The cells: FIND_SEARCH.xlsx (3),
+ARRAYTOTEXT.xlsx, STRING_HANDLING.xlsx H7, T_VALUE_VALUETOTEXT.xlsx (5), DATEVALUE_issue_1379.xlsx (4),
+DATEVALUE_issue_1380.xlsx, TIMEVALUE.xlsx (3), TIMEVALUE_issue_1402.xlsx, MATCH.xlsx C18, and
+arithmetic.xlsx (3).
+
 ## Intended (found while looking)
 
-- `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`): the workbook was saved where dates are
-  written day first (44,987 is 2 March 2023); this app reads m/d/y, as en-US does, so it answers
-  3 February (it was #VALUE! before text dates were read). Kept, kind `value` in the ledger.
+- `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`) and I5 (`VALUE("10-12-1999")`): the workbook
+  was saved where dates are written day first (44,987 is 2 March 2023, 36,504 is 10 December 1999);
+  this app reads m/d/y, as en-US does, so it answers 3 February and 12 October. Kept, kind `value` in
+  the ledger.
 
 ## Examined, not changed (still on the ledger, with the reason)
 

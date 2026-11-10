@@ -457,7 +457,7 @@ eq("NUMBERVALUE: the separators given, spaces ignored, a % divides", ev(`NUMBERV
   ["2500.27", "0.035", "1234.5", "0", "-1234", "0.0012", "1000"]);
 eq("NUMBERVALUE's errors", why(`NUMBERVALUE("abc")`, `NUMBERVALUE("1,2.3,4")`, `NUMBERVALUE("1.5", ".", ".")`), ["#VALUE! 'abc' is not a number", "#VALUE! '1,2.3,4' is not a number", "#VALUE! NUMBERVALUE's separators are the same"]);
 eq("VALUETOTEXT and ARRAYTOTEXT, concise and strict", ev("VALUETOTEXT(A1)", "VALUETOTEXT(B1)", "VALUETOTEXT(B1, 1)", "VALUETOTEXT(D1, 1)", "VALUETOTEXT(D2)", "ARRAYTOTEXT(F1:H2)", "ARRAYTOTEXT(F1:H2, 1)", `ARRAYTOTEXT({1,"a";TRUE,#N/A}, 1)`, "ARRAYTOTEXT(A1:A3)"),
-  ["3", "apples", "\"apples\"", "TRUE", "#DIV/0!", "id, fruit, price; 1, apple, 0.5", "{\"id\",\"fruit\",\"price\";1,\"apple\",0.5}", "{1,\"a\";TRUE,#N/A}", "3; 1; 4"]);
+  ["3", "apples", "\"apples\"", "TRUE", "#DIV/0!", "id, fruit, price, 1, apple, 0.5", "{\"id\",\"fruit\",\"price\";1,\"apple\",0.5}", "{1,\"a\";TRUE,#N/A}", "3, 1, 4"]);
 eq("ARRAYTOTEXT's format", why("ARRAYTOTEXT(A1:A2, 2)"), ["#VALUE! ARRAYTOTEXT's format is 0 or 1, not 2"]);
 eq("REGEXTEST, case sensitive unless told", ev(`REGEXTEST("Apple 42", "\\d+")`, `REGEXTEST("Apple", "^a")`, `REGEXTEST("Apple", "^a", 1)`, `REGEXTEST(D4, "^hello\\s\\w+$")`, `REGEXTEST("café", "^\\p{L}+$")`), ["TRUE", "FALSE", "TRUE", "TRUE", "TRUE"]);
 eq("REGEXEXTRACT: the first match, every match, or the groups", grid(`REGEXEXTRACT("a1b22c333", "\\d+")`, `REGEXEXTRACT("a1b22c333", "\\d+", 1)`, `REGEXEXTRACT("John Smith", "(\\w+) (\\w+)", 2)`, `REGEXEXTRACT("x=12", "(\\w)=(\\d+)", 2)`, `REGEXEXTRACT("one", "o(n)e", 2)`, `REGEXEXTRACT("ABC", "b", 0, 1)`),

@@ -58,7 +58,7 @@ eq("a range where one value goes is worked out a cell at a time; ranges for two 
 eq("an overflow is not a number", why("10^400"), "#NUM! the result is too big or not a number");
 eq("AVERAGE of nothing", why("AVERAGE(C1:C2)"), "#DIV/0! AVERAGE of no numbers");
 
-eq("coercions", [toNumber(null), toNumber(" 5 "), toText(true), toText(1e21)], [0, 5, "TRUE", "1e+21"]);
+eq("coercions", [toNumber(null), toNumber(" 5 "), toText(true), toText(1e21)], [0, 5, "TRUE", "1E+21"]);
 eq("show", [show(null), show(12), show(1 / 3), show(false), show("x"), show(new CellError("#REF!", "gone"))], [
   "", "12", "0.3333333333", "FALSE", "x", "#REF!",
 ]);

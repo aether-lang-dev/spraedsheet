@@ -7,24 +7,9 @@
 //   value         both give a value, and they differ
 // A cell leaves this list when it comes out right (the test says so).
 export const KNOWN: Record<string, Record<string, string>> = {
-  "DATE_AND_TIME/DATEVALUE_issue_1379.xlsx": {
-    "DATEVALUE!B2": "we-error",
-    "DATEVALUE!B3": "we-error",
-    "DATEVALUE!B4": "we-error",
-    "DATEVALUE!B5": "we-error",
-  },
-  "DATE_AND_TIME/DATEVALUE_issue_1380.xlsx": {
-    "DATEVALUE!B2": "we-error",
-  },
   "DATE_AND_TIME/TIMEVALUE.xlsx": {
-    "TIMEVALUE!B9": "we-error",
     "TIMEVALUE!A22": "legacy",
     "TIMEVALUE!B22": "legacy",
-    "TIMEVALUE!B40": "we-error",
-    "TIMEVALUE!B42": "we-error",
-  },
-  "DATE_AND_TIME/TIMEVALUE_issue_1402.xlsx": {
-    "Sheet1!B2": "we-error",
   },
   "DATE_AND_TIME/YEARFRAC_DATEDIF.xlsx": {
     "YEARFRAC_DATEDIF!A30": "legacy",
@@ -105,9 +90,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "INDEX!C9": "excel-error",
     "INDEX!E18": "we-error",
     "INDEX!E20": "excel-error",
-  },
-  "LOOKUP_AND_REFERENCE/MATCH.xlsx": {
-    "Sheet1!C18": "we-error",
   },
   "LOOKUP_AND_REFERENCE/SORT.xlsx": {
     "Sheet1!E1": "excel-error",
@@ -209,37 +191,16 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "T.DIST T.INV T.DIST.RT!E19": "value",
     "T.DIST.2T T.INV.2T!D62": "value",
   },
-  "TEXT/ARRAYTOTEXT.xlsx": {
-    "Sheet1!A9": "value",
-  },
   "TEXT/CONCATENATE.xlsx": {
     "Sheet2!B2": "legacy",
-  },
-  "TEXT/FIND_SEARCH.xlsx": {
-    "Sheet1!D14": "excel-error",
-    "Sheet1!E29": "value",
-    "Sheet1!E30": "we-error",
   },
   "TEXT/MINUS_MINUS.xlsx": {
     "Sheet1!A44": "we-error",
     "Sheet1!C44": "we-error",
   },
-  "TEXT/STRING_HANDLING.xlsx": {
-    "Sheet1!H7": "excel-error",
-  },
   "TEXT/T_VALUE_VALUETOTEXT.xlsx": {
-    "Sheet1!I5": "we-error",
-    "Sheet1!C6": "excel-error",
-    "Sheet1!I7": "we-error",
-    "Sheet1!D11": "value",
-    "Sheet1!I14": "excel-error",
+    "Sheet1!I5": "value",
     "Sheet1!C15": "value",
-    "Sheet1!I15": "excel-error",
-  },
-  "arithmetic.xlsx": {
-    "Sheet2!C1": "excel-error",
-    "Sheet2!E1": "value",
-    "Sheet2!A3": "excel-error",
   },
   "defined_names_for_unit_test.xlsx": {
     "Sheet1!B9": "we-error",

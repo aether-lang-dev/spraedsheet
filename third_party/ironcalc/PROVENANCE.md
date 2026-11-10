@@ -122,6 +122,17 @@ SUMXMY2, VARA VARPA STDEVA STDEVPA, SKEW.P, MMULT, MDETERM, MINVERSE and MUNIT
 (`sheet_mathmore`); the binomial and Poisson distributions looped for a huge
 count.
 
+Rules read from IronCalc's code, written again here (nothing copied; the checkout read is
+`1567c3b7eca3be1d2795ebbebb58eca0fab45d09`, MIT OR Apache-2.0, taken under MIT; the cases they
+serve are the workbooks above, whose stored values are Excel's): `base/src/number_format.rs`
+`number_to_text` (15 significant digits, plain decimal up to 20 characters, else `1E+20`) as
+`numberText` in `app/sheet/values.ts`; `base/src/functions/date_and_time.rs` `parse_time_string`,
+`parse_time_with_normalization`, `squeeze_separator_spaces`, `parse_month_simple`,
+`whole_days_in_time` and `parse_datevalue_text` (spaces round `:`, `/` and `-`; 24:00, 23:60 and
+23:59:60 rolling over; a time's whole days carried into a date; a month named) as `secondsOf`,
+`stamp`, `parseDate`, `parseDateTime` and `timeValue` in `app/sheet/dates.ts`. Not taken: its
+day-first reading of a date whose first part is over 12 (Excel's en-US does not read one).
+
 ## Deliberate differences
 
 Merged cells under paste and cut (`sheet_ironcalc_editing.ts`): IronCalc removes

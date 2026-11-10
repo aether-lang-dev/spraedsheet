@@ -314,6 +314,8 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
           else input = raw;
           // Text that the sheet would read as a number, or a formula, kept text.
           if ((t === "s" || t === "inlineStr" || t === "str") && (NUMERIC.test(input) || input.startsWith("=") || input.startsWith("'") || /^\s*(?:true|false)\s*$/i.test(input) || TYPED_ERRORS.has(input.trim().toUpperCase()))) input = `'${input}`;
+          // A cell of empty text is text (VALUE("") is #VALUE!, a blank cell's 0), as typing ' makes one.
+          if ((t === "s" || t === "inlineStr") && input === "") input = "'";
         }
         const si = Number(attr(c, "s") ?? 0), format = formats[si] ?? "", look: Look = { ...(looks[si] ?? {}), ...(format && format !== "General" ? { number: format } : {}) };
         if (!key) { if (input !== "") off++; continue; }

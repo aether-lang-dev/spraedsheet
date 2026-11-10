@@ -1,7 +1,7 @@
 // What a cell holds once worked out, and the coercions every operator and
 // function goes through. An error is a value too (a CellError): it flows
 // through whatever reads it, so a cell that sums a #DIV/0! shows #DIV/0!.
-import { parseDate, parseTime } from "./dates.ts";
+import { parseDateTime, parseTime } from "./dates.ts";
 
 export type ErrorCode = "#DIV/0!" | "#VALUE!" | "#REF!" | "#NAME?" | "#NUM!" | "#N/A" | "#CYCLE!" | "#ERROR!" | "#CALC!" | "#SPILL!" | "#NULL!" | "#GETTING_DATA";
 
@@ -61,6 +61,9 @@ export function toNumber(v: Value): number {
   return n === null ? fail("#VALUE!", `'${s}' is not a number`) : n;
 }
 
+// A number too big to hold (1e400) is no number: text.
+const finiteOrNull = (n: number): number | null => (Number.isFinite(n) ? n : null);
+
 // Text where a number goes, read as Excel reads it: a number (with thousands
 // separators, an exponent), a percentage ("8%"), an amount of money ("$100",
 // "€100", "100€"), a negative in parentheses ("(5)"), a date ("2024-01-10")
@@ -70,7 +73,7 @@ const NUMERAL = /^[-+]?(?:\d{1,3}(?:,\d{3})+|\d*)(?:\.\d*)?(?:[eE][-+]?\d+)?$/;
 export function textNumber(text: string): number | null {
   let t = text.trim();
   if (t === "") return null;
-  if (NUMERAL.test(t) && /\d/.test(t)) return Number(t.replace(/,/g, ""));
+  if (NUMERAL.test(t) && /\d/.test(t)) return finiteOrNull(Number(t.replace(/,/g, "")));
   let sign = 1, scale = 1, money = false;
   if (t.length > 2 && t.startsWith("(") && t.endsWith(")")) { sign = -1; t = t.slice(1, -1).trim(); }
   if (t.endsWith("%")) { scale = 0.01; t = t.slice(0, -1).trim(); }
@@ -78,13 +81,13 @@ export function textNumber(text: string): number | null {
   if (m) { t = m[1] + m[2]; money = true; } else if ((m = /^(.+?)\s*[$€£¥]$/.exec(t))) { t = m[1]; money = true; }
   if (NUMERAL.test(t) && /\d/.test(t)) {
     const n = Number(t.replace(/,/g, ""));
-    if (sign < 0 && n < 0) return null;
+    if (!Number.isFinite(n) || (sign < 0 && n < 0)) return null;
     return sign * scale * n;
   }
   // A date or time only as it stands, with no spaces round it (Excel's
   // " 2024-01-10 " is not one, where " €100 " is an amount).
   if (sign < 0 || scale !== 1 || money || t !== text) return null;
-  const d = parseDate(t);
+  const d = parseDateTime(t);
   if (d !== null) return d;
   return parseTime(t);
 }
@@ -93,7 +96,25 @@ export function toText(v: Value): string {
   const s = scalar(v);
   if (s === null) return "";
   if (typeof s === "boolean") return s ? "TRUE" : "FALSE";
-  return typeof s === "number" ? String(Number(s.toPrecision(12))) : s;
+  return typeof s === "number" ? numberText(s) : s;
+}
+
+// A number as the text a formula makes of it (&, CONCAT, VALUETOTEXT ...): at most 15
+// significant digits, in plain decimal while that takes no more than 20 characters
+// (0.000000007123456, 10000000000000000000), else as 1.5E+21 or 1E-20. The rule is
+// IronCalc's `number_to_text` (third_party/ironcalc/PROVENANCE.md), written again here.
+export function numberText(x: number): string {
+  if (!Number.isFinite(x)) return String(x);
+  if (x === 0) return "0";
+  const [mantissa, exp] = Math.abs(x).toExponential(14).split("e");
+  const e = Number(exp), digits = mantissa.replace(".", "").replace(/0+$/, ""), sign = x < 0 ? "-" : "";
+  const plain = e >= 0 ? (digits.length <= e + 1 ? e + 1 : digits.length + 1) : digits.length - e + 1;
+  if (plain > 20) {
+    const scale = `E${e < 0 ? "-" : "+"}${String(Math.abs(e)).padStart(2, "0")}`;
+    return `${sign}${digits[0]}${digits.length > 1 ? `.${digits.slice(1)}` : ""}${scale}`;
+  }
+  if (e < 0) return `${sign}0.${"0".repeat(-e - 1)}${digits}`;
+  return `${sign}${digits.length <= e + 1 ? digits + "0".repeat(e + 1 - digits.length) : `${digits.slice(0, e + 1)}.${digits.slice(e + 1)}`}`;
 }
 
 // A result that overflowed is #NUM!, as in Excel.

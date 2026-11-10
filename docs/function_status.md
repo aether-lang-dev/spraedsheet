@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1465 cases, 1465 passing);
-49 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (191, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1504 cases, 1504 passing);
+44 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (159, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -26,7 +26,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | AGGREGATE | form | (its own) | passes | 4 | `AGGREGATE(9, 0, A1:A3)` = 6 |  | volatile |
 | AND | function | at least 1 value | passes | 5 | `AND(TRUE, TRUE)` = true |  |  |
 | ARABIC | function | 1 value | passes | 3 | `ARABIC("MCMXCIV")` = 1994 | 8 |  |
-| ARRAYTOTEXT | function | 1 or 2 values | passes | 3 | `ARRAYTOTEXT({1, 2; 3, 4})` = "1, 2; 3, 4" | 1 |  |
+| ARRAYTOTEXT | function | 1 or 2 values | passes | 3 | `ARRAYTOTEXT({1, 2; 3, 4})` = "1, 2, 3, 4" |  |  |
 | ASIN | function | 1 value | passes | 3 | `ASIN(0.5)` = 0.523598775598 |  |  |
 | ASINH | function | 1 value | passes | 3 | `ASINH(0)` = 0 |  |  |
 | ATAN | function | 1 value | passes | 2 | `ATAN(1)` = 0.785398163397 |  |  |
@@ -113,7 +113,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | CUMPRINC | function | 6 values | passes | 2 | `CUMPRINC(0.1, 3, 1000, 1, 3, 0)` = -1000 |  | TRUE/FALSE refused |
 | DATE | function | 3 values | passes | 3 | `DATE(2024, 2, 29)` = 45351 |  |  |
 | DATEDIF | function | 3 values | passes | 5 | `DATEDIF(DATE(2020, 1, 1), DATE(2024, 1, 1), "Y")` = 4 | 4 | TRUE/FALSE refused |
-| DATEVALUE | function | 1 value | passes | 3 | `DATEVALUE("2024-03-15")` = 45366 | 5 | TRUE/FALSE refused |
+| DATEVALUE | function | 1 value | passes | 9 | `DATEVALUE("2024-03-15")` = 45366 |  | TRUE/FALSE refused |
 | DAVERAGE | function | 3 values | passes | 3 | `DAVERAGE(H1:J5, "Profit", L1:L2)` = 110 |  |  |
 | DAY | function | 1 value | passes | 3 | `DAY(45351)` = 29 |  |  |
 | DAYS | function | 2 values | passes | 3 | `DAYS(45352, 45351)` = 1 |  | TRUE/FALSE refused |
@@ -168,7 +168,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | FALSE | function | no values | passes | 2 | `FALSE()` = false |  |  |
 | FDIST | function | 3 values | passes | 2 | `FDIST(1, 2, 2)` = 0.5 |  |  |
 | FILTER | function | 2 or 3 values | passes | 3 | `INDEX(FILTER({1; 2; 3; 4}, {TRUE; FALSE; TRUE; FALSE}), 2)` = 3 | 1 |  |
-| FIND | function | 2 or 3 values | passes | 3 | `FIND("l", "hello")` = 3 | 3 |  |
+| FIND | function | 2 or 3 values | passes | 6 | `FIND("l", "hello")` = 3 |  |  |
 | FINV | function | 3 values | passes | 2 | `FINV(0.5, 2, 2)` = 1 |  |  |
 | FISHER | function | 1 value | passes | 4 | `FISHER(0.5)` = 0.549306144334 | 3 |  |
 | FISHERINV | function | 1 value | passes | 3 | `FISHERINV(0)` = 0 | 3 |  |
@@ -268,7 +268,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | LAMBDA | special form | (its own) | passes | 4 | `LAMBDA(x, x + 1)(2)` = 3 |  |  |
 | LARGE | function | 2 values | passes | 3 | `LARGE({1, 5, 3}, 2)` = 3 |  |  |
 | LCM | function | at least 1 value | passes | 4 | `LCM(4, 6)` = 12 |  |  |
-| LEFT | function | 1 or 2 values | passes | 3 | `LEFT("hello", 2)` = "he" |  |  |
+| LEFT | function | 1 or 2 values | passes | 4 | `LEFT("hello", 2)` = "he" |  |  |
 | LEN | function | 1 value | passes | 2 | `LEN("hello")` = 5 |  |  |
 | LET | special form | (its own) | passes | 4 | `LET(x, 2, x * 3)` = 6 |  |  |
 | LINEST | function | 1 to 4 values | passes | 2 | `INDEX(LINEST({2, 4, 6}, {1, 2, 3}), 1, 1)` = 2 |  |  |
@@ -284,7 +284,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | LOWER | function | 1 value | passes | 2 | `LOWER("aBc")` = "abc" |  |  |
 | MAKEARRAY | special form | (its own) | passes | 3 | `INDEX(MAKEARRAY(2, 3, LAMBDA(r, c, r * c)), 2, 3)` = 6 |  |  |
 | MAP | special form | (its own) | passes | 2 | `INDEX(MAP({1, 2, 3}, LAMBDA(x, x * 2)), 1, 3)` = 6 |  |  |
-| MATCH | function | 2 or 3 values | passes | 6 | `MATCH(3, {1, 2, 3}, 0)` = 3 | 1 |  |
+| MATCH | function | 2 or 3 values | passes | 8 | `MATCH(3, {1, 2, 3}, 0)` = 3 |  |  |
 | MAX | function | at least 1 value | passes | 4 | `MAX({1, 5, 3})` = 5 | 3 |  |
 | MAXA | function | at least 1 value | passes | 3 | `MAXA({1, TRUE, "a"})` = 1 |  |  |
 | MAXIFS | function | at least 3 values | passes | 2 | `MAXIFS(B1:B3, A1:A3, "<3")` = 20 |  |  |
@@ -391,7 +391,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | RRI | function | 3 values | passes | 3 | `RRI(2, 100, 200)` = 0.414213562373 |  |  |
 | RSQ | function | 2 values | passes | 2 | `RSQ({1, 2, 3}, {2, 4, 7})` = 0.986842105263 |  |  |
 | SCAN | special form | (its own) | passes | 3 | `INDEX(SCAN(0, {1, 2, 3}, LAMBDA(a, b, a + b)), 1, 3)` = 6 |  |  |
-| SEARCH | function | 2 or 3 values | passes | 3 | `SEARCH("L", "hello")` = 3 | 3 |  |
+| SEARCH | function | 2 or 3 values | passes | 6 | `SEARCH("L", "hello")` = 3 |  |  |
 | SEC | function | 1 value | passes | 3 | `SEC(0)` = 1 |  |  |
 | SECH | function | 1 value | passes | 2 | `SECH(0)` = 1 |  |  |
 | SECOND | function | 1 value | passes | 4 | `SECOND(45 / 86400)` = 45 |  |  |
@@ -432,7 +432,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SUMXMY2 | function | 2 values | passes | 3 | `SUMXMY2({1, 2}, {3, 5})` = 13 |  |  |
 | SWITCH | function | at least 3 values | passes | 3 | `SWITCH(2, 1, "a", 2, "b")` = "b" |  |  |
 | SYD | function | 4 values | passes | 4 | `SYD(10000, 1000, 5, 1)` = 3000 |  |  |
-| T | function | 1 value | passes | 2 | `T("x")` = "x" | 9 |  |
+| T | function | 1 value | passes | 2 | `T("x")` = "x" | 4 |  |
 | T.DIST | function | 3 values | passes | 4 | `T.DIST(0, 5, TRUE)` = 0.5 |  |  |
 | T.DIST.2T | function | 2 values | passes | 3 | `T.DIST.2T(0, 5)` = 1 |  |  |
 | T.DIST.RT | function | 2 values | passes | 3 | `T.DIST.RT(0, 5)` = 0.5 |  |  |
@@ -452,7 +452,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | TEXTJOIN | function | at least 3 values | passes | 2 | `TEXTJOIN(",", TRUE, "a", "", "b")` = "a,b" |  |  |
 | TEXTSPLIT | function | 2 to 6 values | passes | 4 | `INDEX(TEXTSPLIT("a,b,c", ","), 1, 3)` = "c" |  |  |
 | TIME | function | 3 values | passes | 5 | `TIME(13, 30, 0)` = 0.5625 |  |  |
-| TIMEVALUE | function | 1 value | passes | 3 | `TIMEVALUE("12:00")` = 0.5 | 6 | TRUE/FALSE refused |
+| TIMEVALUE | function | 1 value | passes | 11 | `TIMEVALUE("12:00")` = 0.5 | 2 | TRUE/FALSE refused |
 | TINV | function | 2 values | passes | 2 | `TINV(0.05, 10)` = 2.22813885196 |  |  |
 | TOCOL | function | 1 to 3 values | passes | 2 | `INDEX(TOCOL({1, 2; 3, 4}), 3)` = 3 |  |  |
 | TODAY | function | no values | passes | 3 | `TODAY() = INT(TODAY())` = true |  |  |
@@ -470,8 +470,8 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | UNICODE | function | 1 value | passes | 3 | `UNICODE("A")` = 65 |  |  |
 | UNIQUE | function | 1 to 3 values | passes | 3 | `ROWS(UNIQUE({1; 1; 2}))` = 2 |  |  |
 | UPPER | function | 1 value | passes | 2 | `UPPER("aBc")` = "ABC" |  |  |
-| VALUE | function | 1 value | passes | 10 | `VALUE("1e3")` = 1000 | 7 |  |
-| VALUETOTEXT | function | 1 or 2 values | passes | 4 | `VALUETOTEXT("a")` = "a" | 7 |  |
+| VALUE | function | 1 value | passes | 20 | `VALUE("1e3")` = 1000 | 2 |  |
+| VALUETOTEXT | function | 1 or 2 values | passes | 10 | `VALUETOTEXT("a")` = "a" | 2 |  |
 | VAR | function | at least 1 value | passes | 2 | `VAR({1, 2, 3, 4})` = 1.66666666667 |  |  |
 | VAR.P | function | at least 1 value | passes | 2 | `VAR.P({2, 4, 4, 4, 5, 5, 7, 9})` = 4 |  |  |
 | VAR.S | function | at least 1 value | passes | 2 | `VAR.S({2, 4, 4, 4, 5, 5, 7, 9})` = 4.57142857143 |  |  |
