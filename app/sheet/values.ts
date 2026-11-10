@@ -99,11 +99,22 @@ export function toText(v: Value): string {
 // A result that overflowed is #NUM!, as in Excel.
 export const finite = (n: number): number => (Number.isFinite(n) ? n : fail("#NUM!", "the result is too big or not a number"));
 
-// a raised to b, as Excel has it: 0^0 is #NUM!, 0 to a negative power #DIV/0!, a negative to a fraction #NUM!.
+// Whether b is 1/3, 1/5, -1/7 and so on: a float cannot hold a third, so this asks whether
+// 1/b is an odd integer to within the error of the division (a few bits of 53).
+const oneOverOdd = (b: number): boolean => {
+  const inverse = 1 / b, whole = Math.round(inverse);
+  return Math.abs(inverse - whole) <= Math.abs(whole) * 2 ** -48 && whole % 2 !== 0;
+};
+
+// a raised to b, as Excel has it: 0^0 is #NUM!, 0 to a negative power #DIV/0!, a negative to a
+// fraction #NUM!, but for the odd roots (POWER(-8, 1/3) is -2, as Excel gives it).
 export function power(a: number, b: number): number {
   if (a === 0 && b === 0) return fail("#NUM!", "0 to the power 0");
   if (a === 0 && b < 0) return fail("#DIV/0!", "0 to a negative power");
-  if (a < 0 && !Number.isInteger(b)) return fail("#NUM!", `${a} to the power ${b}`);
+  if (a < 0 && !Number.isInteger(b)) {
+    if (oneOverOdd(b)) return finite(-((-a) ** b));
+    return fail("#NUM!", `${a} to the power ${b}`);
+  }
   return finite(a ** b);
 }
 

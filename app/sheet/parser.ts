@@ -379,7 +379,10 @@ class Parser {
         if (t.name === "LAMBDA") return this.#applied(this.#lambda());
         const named = this.#named(t.name);
         if (named) return this.#applied(named);
-        return { kind: "call", name: t.name, args: this.#args(TAKES_LAMBDA.has(t.name)) };
+        const args = this.#args(TAKES_LAMBDA.has(t.name));
+        // SINGLE(x) is Excel's own name, in a file, for the implicit intersection @x.
+        if (t.name === "SINGLE" && args.length === 1) return { kind: "at", arg: args[0] };
+        return { kind: "call", name: t.name, args };
       }
       case "{":
         return this.#array(t.at);

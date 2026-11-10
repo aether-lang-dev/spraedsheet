@@ -291,7 +291,8 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
           const [from, to] = (attr(f, "ref") ?? "").replace(/\$/g, "").split(":"), a = addrOf(from ?? ""), b = addrOf(to ?? from ?? "");
           if (a && b && keyOf(a) !== keyOf(b)) arrays.push([a, b]);
         }
-        const spilled = !f && arrays.length > 0 && arrays.some(([a, b]) => { const x = addrOf(ref.replace(/\$/g, "")); return !!x && x.col >= a.col && x.col <= b.col && x.row >= a.row && x.row <= b.row; });
+        // (A cell of the array may carry an empty <f ca="1"/> beside its value, for a volatile array formula.)
+        const spilled = (!f || (!attr(f, "t") && !textOf(f))) && arrays.length > 0 && arrays.some(([a, b]) => { const x = addrOf(ref.replace(/\$/g, "")); return !!x && x.col >= a.col && x.col <= b.col && x.row >= a.row && x.row <= b.row; });
         if (spilled && !attr(c, "s")) continue;
         if (f) {
           const kind = attr(f, "t"), si = attr(f, "si"), text = textOf(f);
@@ -478,7 +479,7 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
     if (local !== undefined && sheets[Number(local)]) {
       if (range) (sheets[Number(local)].names as Record<string, string>)[n] = range.slice(range.indexOf("!") + 1);
       else report.push(`${n}, a sheet's own formula name, left out`);
-    } else bookNames[n] = range ?? `=${text}`;
+    } else bookNames[n] = range ?? `=${plainFormula(text)}`;
   }
   report.push(...unmodelled([...parts.keys()].filter((n) => !usedMedia.has(n)), sheetXmls));
   const kept = [...parts].filter(([n]) => PASS_THROUGH.test(n));

@@ -28,10 +28,8 @@ export const KNOWN: Record<string, Record<string, string>> = {
   },
   "DATE_AND_TIME/YEARFRAC_DATEDIF.xlsx": {
     "YEARFRAC_DATEDIF!A30": "legacy",
-    "YEARFRAC_DATEDIF!C30": "we-error",
     "YEARFRAC_DATEDIF!D30": "legacy",
     "YEARFRAC_DATEDIF!B31": "legacy",
-    "YEARFRAC_DATEDIF!C31": "we-error",
     "YEARFRAC_DATEDIF!D31": "legacy",
   },
   "FINANCIAL/ACCRINT.xlsx": {
@@ -42,9 +40,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!B36": "value",
     "Sheet1!B38": "value",
     "Sheet1!B39": "value",
-  },
-  "FINANCIAL/DB_DDB.xlsx": {
-    "Sheet1!H13": "value",
   },
   "FINANCIAL/RATE.xlsx": {
     "Sheet1!F17": "excel-error",
@@ -90,19 +85,9 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "INFORMATION/ISREF_ISFORMULA_ISODD_ISEVEN.xlsx": {
     "ISREF_ISFORMULA!F8": "we-error",
   },
-  "INFORMATION/N.xlsx": {
-    "N!B20": "we-error",
-  },
   "INFORMATION/error_broadcast.xlsx": {
     "Sheet1!E68": "value",
     "Sheet1!E76": "we-error",
-  },
-  "LOGICAL/LAMBDA.xlsx": {
-    "Sheet1!F2": "we-error",
-    "Sheet1!B5": "we-error",
-    "Sheet1!B6": "we-error",
-    "Sheet1!B7": "we-error",
-    "Sheet1!B8": "we-error",
   },
   "LOOKUP_AND_REFERENCE/CHOOSE.xlsx": {
     "CHOOSE!B10": "we-error",
@@ -178,28 +163,9 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!A16": "value",
   },
   "MATH_AND_TRIGONOMETRY/MOD_QUOTIENT.xlsx": {
-    "DATEVALUE!D39": "excel-error",
-    "DATEVALUE!D40": "excel-error",
     "DATEVALUE!A41": "legacy",
     "DATEVALUE!C41": "legacy",
     "DATEVALUE!D41": "legacy",
-  },
-  "MATH_AND_TRIGONOMETRY/MULTINOMIAL.xlsx": {
-    "Sheet1!F20": "excel-error",
-    "Sheet1!H20": "excel-error",
-    "Sheet1!H22": "excel-error",
-    "Sheet1!B27": "excel-error",
-  },
-  "MATH_AND_TRIGONOMETRY/POWER.xlsx": {
-    "Sheet1!D3": "we-error",
-    "Sheet1!F9": "we-error",
-    "implicit_intersection!C2": "we-error",
-    "inside_a_lambda!A3": "we-error",
-    "inside_a_lambda!A4": "we-error",
-  },
-  "MATH_AND_TRIGONOMETRY/SERIESSUM.xlsx": {
-    "Sheet1!F7": "excel-error",
-    "Sheet1!G7": "excel-error",
   },
   "MATH_AND_TRIGONOMETRY/SUMIF_AVERAGE_IF.xlsx": {
     "Sheet1!J3": "we-error",
@@ -212,18 +178,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!J6": "we-error",
     "Sheet1!K6": "value",
   },
-  "STATISTICAL/AVERAGE.xlsx": {
-    "Sheet1!E23": "we-error",
-  },
-  "STATISTICAL/COUNT.xlsx": {
-    "Sheet1!B11": "we-error",
-    "Sheet1!E11": "we-error",
-    "Sheet1!F11": "we-error",
-    "Sheet1!B16": "we-error",
-    "Sheet1!E16": "we-error",
-    "Sheet1!E23": "we-error",
-    "Sheet1!G27": "we-error",
-  },
   "STATISTICAL/EXPONDIST.xlsx": {
     "EXPON.DIST!D56": "we-error",
   },
@@ -231,9 +185,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "FISHER FISHERINV!B51": "value",
     "FISHER FISHERINV!C51": "value",
     "FISHER FISHERINV!C52": "value",
-  },
-  "STATISTICAL/FREQUENCY.xlsx": {
-    "Sheet1!D17": "value",
   },
   "STATISTICAL/GAMMALN_GAMMALNPRECISE.xlsx": {
     "GAMMALN GAMMALN.PRECISE!B45": "we-error",
@@ -256,12 +207,8 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "NORM.S.DIST NORM.S.INV!C49": "value",
   },
   "STATISTICAL/POISSON.xlsx": {
-    "POISSON.DIST!D26": "excel-error",
     "POISSON.DIST!D60": "legacy",
     "POISSON.DIST!D61": "value",
-  },
-  "STATISTICAL/PROB.xlsx": {
-    "Sheet1!O2": "excel-error",
   },
   "STATISTICAL/T_DIST.xlsx": {
     "T.DIST T.INV T.DIST.RT!E19": "value",
@@ -298,9 +245,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet2!C1": "excel-error",
     "Sheet2!E1": "value",
     "Sheet2!A3": "excel-error",
-  },
-  "defined_names.xlsx": {
-    "Errors!B5": "we-error",
   },
   "defined_names_for_unit_test.xlsx": {
     "Sheet1!B9": "we-error",

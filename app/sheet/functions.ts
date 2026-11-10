@@ -65,7 +65,7 @@ export const arityOf = (name: string): { min: number; max: number } | null => li
 const NO_LOGICALS = new Set(["ERF", "ERFC", "ERF.PRECISE", "ERFC.PRECISE", "GESTEP", "DELTA", "NOMINAL", "EFFECT", "DOLLAR", "DOLLARDE", "DOLLARFR",
   "ISODD", "ISEVEN", "EOMONTH", "EDATE", "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "YEARFRAC", "DATEDIF", "DAYS", "NETWORKDAYS", "NETWORKDAYS.INTL",
   "WORKDAY", "WORKDAY.INTL", "DATEVALUE", "TIMEVALUE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX",
-  "XNPV", "XIRR", "CUMIPMT", "CUMPRINC"]);
+  "XNPV", "XIRR", "CUMIPMT", "CUMPRINC", "QUOTIENT", "MULTINOMIAL"]);
 
 // Whether a TRUE or FALSE comes before any error among the arguments, read left
 // to right as Excel reads them: the first failure answers. An error value met
@@ -253,7 +253,8 @@ def("STDEV", 1, Infinity, (args) => {
   const mean = sum(ns) / ns.length;
   return Math.sqrt(sum(ns.map((n) => (n - mean) ** 2)) / (ns.length - 1));
 });
-def("COUNT", 1, Infinity, (args) => numbers(args, true).length);
+// COUNT passes over an error, in a cell or typed (COUNT(#N/A) is 0), where SUM stops at it.
+def("COUNT", 1, Infinity, (args) => args.reduce((n, a) => n + (a.typed ? numbers([a], true).length : a.values.filter((v) => typeof v === "number").length), 0));
 // The A forms count every cell that holds something: TRUE 1, FALSE and
 // text 0, an error itself.
 // Typed into the call, text is read as a number (#VALUE! if it is not one).
@@ -1150,11 +1151,14 @@ def("LOGEST", 1, 4, (args) => linest("LOGEST", args, true));
 // FREQUENCY(data, bins): how many fall in each bin (up to and including
 // its bound, above the one before), and one more for what is past the last.
 def("FREQUENCY", 2, 2, (args) => {
-  const ns = numbersIn(args[0].values), bins = sorted(args, 1);
+  // The counts come in the order the bins are given, each bin's from the one next below it
+  // (a bin repeated counts nothing the second time), and one for what is above them all.
+  const ns = numbersIn(args[0].values), bins = numbersIn(args[1].values);
   const counts = bins.map(() => 0).concat([0]);
   for (const n of ns) {
-    const i = bins.findIndex((b) => n <= b);
-    counts[i < 0 ? bins.length : i]++;
+    let at = -1;
+    bins.forEach((b, i) => { if (n <= b && (at < 0 || b < bins[at])) at = i; });
+    counts[at < 0 ? bins.length : at]++;
   }
   return array(counts.length, 1, counts);
 });
@@ -1363,8 +1367,8 @@ defDist("BINOM.INV", 3, 3, (args) => {
   return lo;
 });
 defDist("POISSON.DIST", 3, 3, (args) => {
-  const k = Math.trunc(num(args, 0)), mean = num(args, 1);
-  need(k >= 0 && mean >= 0, `x ${k} and mean ${mean} are 0 or more`);
+  const x = num(args, 0), mean = num(args, 1), k = Math.trunc(x);
+  need(x >= 0 && mean >= 0, `x ${x} and mean ${mean} are 0 or more`);
   return flag(args, 2) ? D.poissonCdf(k, mean) : D.poissonMass(k, mean);
 });
 defDist("EXPON.DIST", 3, 3, (args) => {
@@ -1528,11 +1532,15 @@ defDist("CHISQ.TEST", 2, 2, (args) => {
 defDist("PROB", 3, 4, (args) => {
   const xs = args[0].values, ps = args[1].values;
   if (xs.length !== ps.length) return fail("#N/A", "PROB's ranges differ in size");
-  const probs = ps.map(toNumber);
+  // Only pairs of numbers count: text and blanks in the ranges are passed over (errors are not),
+  // and with none left there is nothing to divide by.
+  const pairs = xs.map((x, i) => [scalar(x), scalar(ps[i])] as const).filter(([x, p]) => typeof x === "number" && typeof p === "number");
+  if (pairs.length === 0) return fail("#DIV/0!", "PROB has no numbers in its ranges");
+  const probs = pairs.map(([, p]) => p as number);
   need(probs.every((p) => p >= 0 && p <= 1), "a probability lies outside 0 to 1");
   need(Math.abs(sum(probs) - 1) < 1e-9, `the probabilities sum to ${sum(probs)}, not 1`);
   const lo = num(args, 2), hi = absent(args, 3) ? lo : num(args, 3);
-  return sum(xs.map((x, i) => { const v = toNumber(x); return v >= lo && v <= hi ? probs[i] : 0; }));
+  return sum(pairs.map(([x], i) => ((x as number) >= lo && (x as number) <= hi ? probs[i] : 0)));
 });
 
 // The compatibility names, as Excel keeps them (the old argument orders
@@ -1758,7 +1766,12 @@ def("DB", 4, 5, (args) => {
 def("DDB", 4, 5, (args) => {
   const [cost, salvage, life] = assetArgs("DDB", args), per = num(args, 3), factor = num(args, 4, 2);
   if (per < 1 || per > life || factor <= 0) return fail("#NUM!", `DDB's period ${per} of a life of ${life}, factor ${factor}`);
-  return depreciation(cost, salvage, life, factor, false)[Math.ceil(per) - 1];
+  // From the definition, with the period and the life any real number: the book value
+  // before (cost x (1 - factor/life)^(per-1)) less the one after, the latter held at salvage.
+  const rate = factor / life;
+  if (rate >= 1) return per <= 1 ? cost - salvage : 0;
+  const before = cost * (1 - rate) ** (per - 1), after = cost * (1 - rate) ** per;
+  return Math.max(0, after < salvage ? before - salvage : before - after);
 });
 def("VDB", 5, 7, (args) => {
   const [cost, salvage, life] = assetArgs("VDB", args), start = num(args, 3), end = num(args, 4), factor = num(args, 5, 2);
@@ -2534,7 +2547,9 @@ def("MULTINOMIAL", 1, Infinity, (args) => {
   return real(Math.round(factorial(sum(ns)) / ns.reduce((p, n) => p * factorial(n), 1)), "MULTINOMIAL overflows");
 });
 // SERIESSUM(x, n, m, coefficients): the sum of a_i * x^(n + i*m).
+// x, n and m are numbers, not TRUE or FALSE (the coefficients are read as they are).
 def("SERIESSUM", 4, 4, (args) => {
+  if (refusesLogical(args.slice(0, 3))) return fail("#VALUE!", "SERIESSUM takes numbers: TRUE and FALSE are not");
   const x = num(args, 0), n = num(args, 1), m = num(args, 2);
   const cs = args[3].values.map((v) => { const s = scalar(v); return typeof s === "number" ? s : fail("#VALUE!", "SERIESSUM's coefficients are numbers"); });
   return real(cs.reduce((total, a, i) => total + a * power(x, n + i * m), 0), "SERIESSUM overflows");

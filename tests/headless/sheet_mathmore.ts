@@ -32,7 +32,7 @@ eq("matrices", [show(wb.sheet.value("E1")), show(wb.sheet.value("F2")), await f(
   ["2", "12", "0", "1", "1", "1", "#VALUE!"]);
 eq("a singular matrix has no inverse", show(wb.sheet.value("I1")), "#NUM!");
 
-eq("powers and overflow as Excel gives them", await row("=0^0", "=POWER(0,-1)", "=(-8)^(1/3)", "=2^10", "=1E308*10", "=1E308+1E308", "=SUM(1E308,1E308)"), ["#NUM!", "#DIV/0!", "#NUM!", "1024", "#NUM!", "#NUM!", "#NUM!"]);
+eq("powers and overflow as Excel gives them", await row("=0^0", "=POWER(0,-1)", "=(-8)^(1/3)", "=2^10", "=1E308*10", "=1E308+1E308", "=SUM(1E308,1E308)"), ["#NUM!", "#DIV/0!", "-2", "1024", "#NUM!", "#NUM!", "#NUM!"]);
 eq("a criterion that is a logical value matches logical cells", await row('=COUNTIF(A1:A3,TRUE)', '=COUNTIF(A1:A3,FALSE)', '=COUNTIF(A1:A3,"Truely")'), ["1", "1", "1"]);
 eq("the binomial and Poisson distributions for a huge count are quick", await row("=BINOM.DIST(500000,1000000,0.5,TRUE)", "=BINOM.INV(1000000,0.5,0.5)", "=ROUND(POISSON.DIST(100000,100000,TRUE),4)", "=BINOM.DIST.RANGE(1000000,0.5,499990,500010)"), ["0.500398943", "500000", "0.5008", "0.01675434433"]);
 

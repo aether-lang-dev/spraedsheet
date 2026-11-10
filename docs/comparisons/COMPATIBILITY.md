@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 81 | this app gives an error where Excel stored a value |
-| `excel-error` | 37 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 43 | both give a value, and they differ |
+| `we-error` | 59 | this app gives an error where Excel stored a value |
+| `excel-error` | 27 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 41 | both give a value, and they differ |
 
-Counted 2026-11-06 (199 cells with the 38 `legacy`, in 60 workbooks; 379 on 2026-10-24); the
+Counted 2026-11-10 (165 cells with the 38 `legacy`, in 49 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -117,6 +117,19 @@ GROWTH of a y that is not above 0 stays #NUM!. `line`, `functions.ts`; cases in 
 TREND_GROWTH.xlsx E2, J2 (const), D10, E10 (text, so a cell passed over made a value), G10, I10
 (sizes). Not done: more than one known_x column (multiple regression, which LINEST has) in TREND
 and GROWTH, which Excel takes and which this app answers #REF! when the counts differ.
+
+2026-11-10, 34 cells (maths, statistics, finance; each case failed first):
+QUOTIENT and MULTINOMIAL refuse TRUE and FALSE (typed or in a cell) as #VALUE!, and so does SERIESSUM's x, n and m;
+`POWER(-8, 1/3)` and `(-8)^(1/3)` are -2: a negative base to 1/3, 1/5, -1/7 ... (1/y an odd integer to within 2^-48)
+is the real odd root, where any other fraction stays #NUM! (the rule was checked against the stored values and
+IronCalc's `power`, which does the same, MIT); COUNT passes over an error value, in a range, a cell or typed
+(`COUNT(#N/A)` is 0), where SUM stops at it; FREQUENCY gives its counts in the order the bins are written, each
+from the bin next below it (it sorted them); POISSON of a negative x is #NUM! (-0.000001 was cut to 0); PROB passes
+over text and blanks in its ranges and is #DIV/0! with no numbers left; DDB takes a fractional period and life
+(book value before less after, from the definition); the XLSX importer reads a defined name's `_xlfn.LAMBDA(_xlpm.x, ...)`
+as a LAMBDA (`gelu(A1:C1)`, 5 cells of LAMBDA.xlsx and defined_names.xlsx B5, YEARFRAC_DATEDIF C30 and C31 and N.xlsx B20
+came right with it), reads `SINGLE(x)` as `@x`, and a cell of an array formula that carries an empty `<f ca="1"/>`
+as the array's, not a value of its own (POWER.xlsx, 3 cells). XNPV below.
 
 ## Intended (found while looking)
 
