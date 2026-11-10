@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 20 | this app gives an error where Excel stored a value |
+| `we-error` | 16 | this app gives an error where Excel stored a value |
 | `excel-error` | 12 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 32 | both give a value, and they differ |
 
-Counted 2026-11-10 (102 cells with the 38 `legacy`, in 34 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (98 cells with the 38 `legacy`, in 32 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -180,6 +180,11 @@ past the first #REF!; the formula's own cell in the branch of IF or CHOOSE not t
 ISREF.xlsx (7), ISREF_ISFORMULA_ISODD_ISEVEN.xlsx F8, error_broadcast.xlsx E76, MINUS_MINUS.xlsx (2),
 percentage.xlsx, range_operator.xlsx (7); examples.ts and headless `sheet_references`. Not done: ROW,
 OFFSET and the like of a LET (a name that comes to a reference by LET's body, `ROW(LET(...))`).
+
+2026-11-10, 4 cells (names): a name of more than three letters before its digits is a name, not a
+cell's address (`named1`, `Named2`, as a file's defined names have them: the lexer made them cells off the
+sheet, #REF!, and `names.define` refused them); a quoted sheet name may hold a doubled quote
+(`'Third ''Sheet'' (3)'!B3`). defined_names_for_unit_test.xlsx (3), quotes.xlsx; headless `sheet_names`.
 
 ## Intended (found while looking)
 

@@ -46,17 +46,17 @@ const NUMBER = /^(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/;
 const WORD = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*/;
 // Another sheet's own name: Costs!QTY, 'My Costs'!QTY (a cell there,
 // Costs!B2, is a reference; a call, Costs!F(, is not this).
-const SHEET_NAME = /^(?:([A-Za-z_]\w*)|'([^']+)')!([A-Za-z_][A-Za-z0-9_]*)(?![\w(])/;
+const SHEET_NAME = /^(?:([A-Za-z_]\w*)|'((?:[^']|'')+)')!([A-Za-z_][A-Za-z0-9_]*)(?![\w(])/;
 // A reference, perhaps on another sheet: Costs!B2, 'My Costs'!$B$2; A1#
 // is the whole of what A1 spills. A 3-D one spans sheets in tab order,
 // Jan:Mar!A1 or 'Jan 24:Mar 24'!A1 (its sheet "JAN:MAR" in the key).
-const REF = /^(?:(?:([A-Za-z_]\w*(?::[A-Za-z_]\w*)?)|'([^']+)')!)?(\$?)([A-Za-z]+)(\$?)([0-9]+)(?![A-Za-z0-9_])(#(?![A-Za-z/]))?/;
+const REF = /^(?:(?:([A-Za-z_]\w*(?::[A-Za-z_]\w*)?)|'((?:[^']|'')+)')!)?(\$?)([A-Za-z]+)(\$?)([0-9]+)(?![A-Za-z0-9_])(#(?![A-Za-z/]))?/;
 // The errors a formula can be written with (a copy writes #REF! for a
 // reference it moved off the sheet).
 // Whole columns and whole rows, perhaps on another sheet: Costs!A:C, $2:$5.
 // (Not a 3-D reference's sheets, JAN:MAR!A1, nor a call.)
-const WIDE_COLS = /^(?:(?:([A-Za-z_]\w*)|'([^']+)')!)?(\$?)([A-Za-z]{1,3}):(\$?)([A-Za-z]{1,3})(?![A-Za-z0-9_(!.\[])/;
-const WIDE_ROWS = /^(?:(?:([A-Za-z_]\w*)|'([^']+)')!)?(\$?)([0-9]+):(\$?)([0-9]+)(?![A-Za-z0-9_(!.\[])/;
+const WIDE_COLS = /^(?:(?:([A-Za-z_]\w*)|'((?:[^']|'')+)')!)?(\$?)([A-Za-z]{1,3}):(\$?)([A-Za-z]{1,3})(?![A-Za-z0-9_(!.\[])/;
+const WIDE_ROWS = /^(?:(?:([A-Za-z_]\w*)|'((?:[^']|'')+)')!)?(\$?)([0-9]+):(\$?)([0-9]+)(?![A-Za-z0-9_(!.\[])/;
 const ERRORS: readonly ErrorCode[] = ["#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#CALC!"];
 
 // Where the ']' that closes the '[' at `open` is (brackets nest, and ' makes
@@ -84,7 +84,7 @@ export function* tokens(formula: string, from = 2): Generator<Token, void, undef
       const cols = /[A-Za-z]/.test(lo), a = cols ? colOf(lo) : Number(lo) - 1, b = cols ? colOf(hi) : Number(hi) - 1;
       const limit = cols ? COLS : ROWS;
       if (a !== null && b !== null && a >= 0 && b >= 0 && a < limit && b < limit) {
-        const sheet = bare ?? quoted;
+        const sheet = bare ?? quoted?.replace(/''/g, "'");
         yield { kind: "wide", axis: cols ? "col" : "row", sheet: sheet ? sheet.toUpperCase() : null, lo: a, hi: b, fixLo: fixLo === "$", fixHi: fixHi === "$", at, text };
         i += text.length;
         continue;
@@ -98,9 +98,10 @@ export function* tokens(formula: string, from = 2): Generator<Token, void, undef
     }
     // A reference, unless a '(' follows: LOG10( is a call, not cell LOG10.
     const ref = REF.exec(rest);
-    if (ref && rest[ref[0].length] !== "(") {
+    // (More than three letters is no column, so no cell: named1 is a name.)
+    if (ref && ref[4].length <= 3 && rest[ref[0].length] !== "(") {
       const [text, bare, quoted, fixCol, col, fixRow, row, spill] = ref;
-      const sheet = bare ?? quoted;
+      const sheet = bare ?? quoted?.replace(/''/g, "'");
       const cell = col.toUpperCase() + row;
       yield { kind: "ref", name: sheet ? `${sheet.toUpperCase()}!${cell}` : cell, fixCol: fixCol === "$", fixRow: fixRow === "$", spill: !!spill, at, text };
       i += text.length;
@@ -109,7 +110,7 @@ export function* tokens(formula: string, from = 2): Generator<Token, void, undef
     const qualified = SHEET_NAME.exec(rest);
     if (qualified) {
       const [text, bare, quoted, name] = qualified;
-      yield { kind: "name", name: `${(bare ?? quoted).toUpperCase()}!${name.toUpperCase()}`, at, text };
+      yield { kind: "name", name: `${(bare ?? quoted!.replace(/''/g, "'")).toUpperCase()}!${name.toUpperCase()}`, at, text };
       i += text.length;
       continue;
     }

@@ -165,14 +165,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!I5": "value",
     "Sheet1!C15": "value",
   },
-  "defined_names_for_unit_test.xlsx": {
-    "Sheet1!B9": "we-error",
-    "Sheet1!B10": "we-error",
-    "Sheet1!B11": "we-error",
-  },
-  "quotes.xlsx": {
-    "Sheet1!C8": "we-error",
-  },
   "spill_operator.xlsx": {
     "Sheet1!G2": "we-error",
     "Sheet1!I2": "we-error",

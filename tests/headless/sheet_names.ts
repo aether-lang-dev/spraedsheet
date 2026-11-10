@@ -38,6 +38,9 @@ await cmds.run("cell.set cell=C3 input=5");
 eq("and follows it", value("F3"), "22");
 eq("names are journaled, and replay", cmds.journal().filter((l) => l.startsWith("names.")),
   ["names.define name=qty range=B2:B4", "names.define name=Rate range=C2", "names.define name=qty range=B2:B3", "names.delete name=rate", "names.define name=rate range=C3"]);
+// More than three letters before the digits is no column: named1 is a name, not a cell.
+eq("a name that is not a cell's address", [await message("names.define name=named1 range=B3"), await message("cell.set cell=G1 input==named1+1"), value("G1")], ["NAMED1 is Sheet1!B3", "G1 = 12", "12"]);
+
 // expect: ok names.define: a range, and a cell
 // expect: ok names are any case, kept upper; the workbook's, by their sheet
 // expect: ok an Excel formula reads a name as its range or cell
@@ -50,3 +53,4 @@ eq("names are journaled, and replay", cmds.journal().filter((l) => l.startsWith(
 // expect: ok RexxJS formulas: a range function takes a name, a name is its cell
 // expect: ok and follows it
 // expect: ok names are journaled, and replay
+// expect: ok a name that is not a cell's address
