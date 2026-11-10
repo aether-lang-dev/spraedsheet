@@ -56,6 +56,10 @@ T=$ROOT/target
 LOGS=$T/run-tests
 rm -rf "$LOGS" "$T/sheet-files-appdata" "$T/sheet-shell.log" "$T/sheet-storage" "$T/sheet-bus-appdata" "$T/sheet-rexx-appdata" "$T/sheet-mcp-appdata"; mkdir -p "$LOGS"
 # label | environment (space-separated NAME=value) | command
+# spec_sheet runs at the page's production limit (SAE_PAGE_TIME_MS=5000, sae's
+# default), not run_spec.sh's 1000 ms, which stops legitimate heavy recomputes
+# (ETS forecasts, the 20,000-cell column) and failed the run: 0 of 5 runs red
+# at 5 s against 4 of 11 at 1 s.
 # spec_sheet is one page for its whole run: some sixty sheets, their charts
 # and drawings, a hundred steps of undo and a column of 20,000 cells. Its
 # heap peaks near 45 MB (it peaked at 80 MB, past this page's 128 MB with the
@@ -64,7 +68,7 @@ rm -rf "$LOGS" "$T/sheet-files-appdata" "$T/sheet-shell.log" "$T/sheet-storage" 
 TABLE="
 headless||headless
 function_status||status
-spec_sheet|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-storage SAE_PAGE_MEM=67108864|spec spec_sheet
+spec_sheet|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-storage SAE_PAGE_MEM=67108864 SAE_PAGE_TIME_MS=5000|spec spec_sheet
 spec_app_sheet_bus|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-bus-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app|spec spec_app_sheet_bus
 spec_app_sheet_files|AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SAE_APPDATA_DIR=$T/sheet-files-appdata SAE_SHELL_LOG=$T/sheet-shell.log|spec spec_app_sheet_files
 spec_app_sheet_rexx|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-rexx-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SHEET_ROOT=$ROOT|spec spec_app_sheet_rexx
