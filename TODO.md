@@ -87,6 +87,8 @@ Run on the release 0.889.0 (see above): headless 172 passed before and after; sa
 Mini3 (`/Volumes/Mini3/claude-scratch/spr-w`, SAE_DIR) because `sae/target/toolchain` is a 0.841 toolchain
 whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 std.
 
+**Done 2026-11-10 (IronCalc ledger, group B: maths, statistics, finance, dates; 199 cells to 160; COMPATIBILITY.md has each):** QUOTIENT, MULTINOMIAL, SERIESSUM, POWER (odd roots), COUNT, FREQUENCY, POISSON, PROB, DDB, XNPV, XIRR, the importer's LAMBDA names, SINGLE and volatile array cells, and several known_x in TREND and GROWTH.
+
 **Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger (199 cells: 38 `legacy`,
 161 others in 60 workbooks; the cells looked at and kept are in COMPATIBILITY.md): the remaining we-error and
 excel-error cells by function (`docs/function_status.md` counts them), the `legacy` cells (Paul's `@` decision),

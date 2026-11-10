@@ -65,7 +65,7 @@ export const arityOf = (name: string): { min: number; max: number } | null => li
 const NO_LOGICALS = new Set(["ERF", "ERFC", "ERF.PRECISE", "ERFC.PRECISE", "GESTEP", "DELTA", "NOMINAL", "EFFECT", "DOLLAR", "DOLLARDE", "DOLLARFR",
   "ISODD", "ISEVEN", "EOMONTH", "EDATE", "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "YEARFRAC", "DATEDIF", "DAYS", "NETWORKDAYS", "NETWORKDAYS.INTL",
   "WORKDAY", "WORKDAY.INTL", "DATEVALUE", "TIMEVALUE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX",
-  "XNPV", "XIRR", "CUMIPMT", "CUMPRINC", "QUOTIENT", "MULTINOMIAL"]);
+  "XIRR", "CUMIPMT", "CUMPRINC", "QUOTIENT", "MULTINOMIAL"]);
 
 // Whether a TRUE or FALSE comes before any error among the arguments, read left
 // to right as Excel reads them: the first failure answers. An error value met
@@ -1070,6 +1070,24 @@ const line = (name: string, args: readonly Arg[], log: boolean): Result => {
   const numbersOnly = (a: Arg, what: string): number[] =>
     a.values.map((v) => { const t = scalar(v); return typeof t === "number" ? t : fail("#VALUE!", `${name}'s ${what} has a cell that is not a number`); });
   const y0 = numbersOnly(args[0], "known_y");
+  // More than one predictor: known_y a column and known_x several columns of as many rows, or
+  // known_y a row and known_x several rows of as many columns (the points are then the rows,
+  // or the columns, of new_x too); least squares as LINEST does it.
+  const yRow = args[0].cols > 1, many = !absent(args, 1) && (yRow ? args[1].values.length / args[1].cols > 1 : args[1].cols > 1);
+  if (many) {
+    const xa = args[1], xs = numbersOnly(xa, "known_x"), rowsX = xs.length / xa.cols;
+    const points = (a: Arg, vs: readonly number[]): number[][] => (yRow ? Array.from({ length: a.cols }, (_, i) => Array.from({ length: vs.length / a.cols }, (_, j) => vs[j * a.cols + i])) : Array.from({ length: vs.length / a.cols }, (_, i) => vs.slice(i * a.cols, (i + 1) * a.cols)));
+    if (yRow ? xa.cols !== y0.length : rowsX !== y0.length) return fail("#REF!", `${name}'s known_x does not match known_y in size`);
+    if (log && y0.some((v) => v <= 0)) return fail("#NUM!", `${name} of a y that is not positive`);
+    const X = points(xa, xs), k = X[0].length;
+    if (y0.length < k + (!absent(args, 3) && !flag(args, 3) ? 0 : 1)) return fail("#NUM!", `${name}: more predictors than values`);
+    const ls = leastSquares(X, log ? y0.map(Math.log) : y0, absent(args, 3) || flag(args, 3));
+    if (!ls) return fail("#NUM!", `${name}: the known_x columns are collinear`);
+    const at = absent(args, 2) ? { a: xa, vs: xs } : { a: args[2], vs: numbersOnly(args[2], "new_x") };
+    if ((yRow ? at.vs.length / at.a.cols : at.a.cols) !== k) return fail("#REF!", `${name}'s new_x has not as many predictors as known_x`);
+    const out = points(at.a, at.vs).map((r) => { const t = ls.intercept + sum(r.map((v, j) => v * ls.b[j])); return log ? Math.exp(t) : t; });
+    return out.length === 1 ? out[0] : yRow ? array(1, out.length, out) : array(out.length, 1, out);
+  }
   const x = absent(args, 1) ? y0.map((_, i) => i + 1) : numbersOnly(args[1], "known_x");
   if (x.length !== y0.length) return fail("#REF!", `${name}'s known_x has ${x.length} values, known_y ${y0.length}`);
   if (y0.length < 2) return fail("#DIV/0!", `${name} needs 2 values or more`);
@@ -1089,6 +1107,19 @@ const line = (name: string, args: readonly Arg[], log: boolean): Result => {
 };
 def("TREND", 1, 4, (args) => line("TREND", args, false));
 def("GROWTH", 1, 4, (args) => line("GROWTH", args, true));
+// Least squares of y on the columns of X (one row a point), fitted on centred data (through the
+// origin, nothing centred, when withConst is false); null when the columns are collinear.
+const leastSquares = (X: number[][], y: number[], withConst: boolean) => {
+  const k = X[0].length;
+  const xm = withConst ? X[0].map((_, j) => mean(X.map((r) => r[j]))) : X[0].map(() => 0), ym = withConst ? mean(y) : 0;
+  const Xc = X.map((r) => r.map((v, j) => v - xm[j])), yc = y.map((v) => v - ym);
+  const xtx = Array.from({ length: k }, (_, a) => Array.from({ length: k }, (_, b) => sum(Xc.map((r) => r[a] * r[b]))));
+  const inv = eliminate(xtx).inverse;
+  if (!inv) return null;
+  const xty = Array.from({ length: k }, (_, a) => sum(Xc.map((r, i) => r[a] * yc[i])));
+  const b = inv.map((row) => sum(row.map((v, j) => v * xty[j])));
+  return { b, intercept: withConst ? ym - sum(b.map((v, j) => v * xm[j])) : 0, inv, xm, yc };
+};
 // LINEST(known_y, [known_x], [const], [stats]): least squares on one or more
 // predictors (one column of known_x each when known_y is a column, one row each
 // when it is a row), coefficients last predictor first and the intercept
@@ -1120,14 +1151,9 @@ const linest = (name: string, args: readonly Arg[], log: boolean) => {
   }
   const k = X[0].length, df = n - k - (withConst ? 1 : 0);
   if (df < 0) return fail("#NUM!", `${name}: more predictors than values`);
-  const xm = withConst ? X[0].map((_, j) => mean(X.map((r) => r[j]))) : X[0].map(() => 0), ym = withConst ? mean(y) : 0;
-  const Xc = X.map((r) => r.map((v, j) => v - xm[j])), yc = y.map((v) => v - ym);
-  const xtx = Array.from({ length: k }, (_, a) => Array.from({ length: k }, (_, b) => sum(Xc.map((r) => r[a] * r[b]))));
-  const inv = eliminate(xtx).inverse;
-  if (!inv) return fail("#NUM!", `${name}: the x columns are collinear`);
-  const xty = Array.from({ length: k }, (_, a) => sum(Xc.map((r, i) => r[a] * yc[i])));
-  const b = inv.map((row) => sum(row.map((v, j) => v * xty[j])));
-  const intercept = withConst ? ym - sum(b.map((v, j) => v * xm[j])) : 0;
+  const ls = leastSquares(X, y, withConst);
+  if (!ls) return fail("#NUM!", `${name}: the x columns are collinear`);
+  const { b, intercept, inv, xm, yc } = ls;
   const rev = <T,>(a: readonly T[]): T[] => [...a].reverse();
   const coefficients: Value[] = [...rev(b), intercept], shown = (v: Value): Value => (log && typeof v === "number" ? Math.exp(v) : v);
   if (!stats) return array(1, k + 1, coefficients.map(shown));
@@ -1726,13 +1752,19 @@ def("CUMIPMT", 6, 6, cumulative("CUMIPMT", ipmt));
 def("CUMPRINC", 6, 6, cumulative("CUMPRINC", ppmt));
 // XNPV(rate, values, dates) and XIRR(values, dates, [guess]): dates as
 // serials or text; none before the first.
-const dated = (name: string, values: Arg, when: Arg): [number[], number[]] => {
+// A date before 1900 (below 0) is #NUM!. XNPV takes only numbers for its values, a blank, text or
+// TRUE among them is #NUM! (an error value is itself); XIRR reads them as numbers (text is #VALUE!).
+const dated = (name: string, values: Arg, when: Arg, strict = false): [number[], number[]] => {
   if (values.values.length !== when.values.length) return fail("#NUM!", `${name}'s values and dates differ in number`);
-  const flows = values.values.map(toNumber), dates = when.values.map((v) => Math.floor(typeof v === "string" ? parseDate(v) ?? fail("#VALUE!", `'${v}' is not a date`) : toNumber(v)));
-  if (dates.some((d) => d < dates[0])) return fail("#NUM!", `${name}: a date before the first`);
+  const flows = values.values.map((v) => (strict && typeof scalar(v) !== "number" ? fail("#NUM!", `${name}'s values hold something that is not a number`) : toNumber(v))), dates = when.values.map((v) => Math.floor(typeof v === "string" ? parseDate(v) ?? fail("#VALUE!", `'${v}' is not a date`) : toNumber(v)));
+  if (dates.some((d) => d < 0 || d < dates[0])) return fail("#NUM!", `${name}: a date before the first, or before 1900`);
   return [flows, dates];
 };
-def("XNPV", 3, 3, (args) => { const [flows, dates] = dated("XNPV", args[1], args[2]); return finite(xnpv(num(args, 0), flows, dates)); });
+def("XNPV", 3, 3, (args) => {
+  if (refusesLogical(args.slice(0, 1))) return fail("#VALUE!", "XNPV's rate is a number: TRUE and FALSE are not");
+  const [flows, dates] = dated("XNPV", args[1], args[2], true);
+  return finite(xnpv(num(args, 0), flows, dates));
+});
 def("XIRR", 2, 3, (args) => {
   const [flows, dates] = dated("XIRR", args[0], args[1]);
   if (!flows.some((c) => c < 0) || !flows.some((c) => c > 0)) return fail("#NUM!", "XIRR needs a negative and a positive cash flow");

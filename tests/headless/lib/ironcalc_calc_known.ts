@@ -48,11 +48,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "FINANCIAL/XNPV.xlsx": {
     "Sheet1!R2": "value",
     "Sheet1!R5": "value",
-    "Sheet1!Q7": "excel-error",
-    "Sheet1!Q8": "excel-error",
-    "Sheet1!Q9": "excel-error",
-    "Sheet1!Q11": "excel-error",
-    "Sheet1!R11": "excel-error",
   },
   "INFORMATION/ERROR.TYPE.xlsx": {
     "Sheet1!B8": "value",

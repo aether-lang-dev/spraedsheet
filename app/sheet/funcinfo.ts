@@ -27,7 +27,7 @@ export interface FunctionInfo {
 // app still works out differently from the value Excel stored, by function,
 // each workbook counted for the functions its name gives (tests/headless/
 // lib/ironcalc_calc_known.ts is the ledger; sheet_funcinfo recounts it).
-export const DIFFERS: Readonly<Record<string, number>> = { ACCRINT: 7, ARABIC: 8, ARRAYTOTEXT: 1, AVERAGE: 9, CHOOSE: 3, COMBIN: 1, COMBINA: 1, CONCATENATE: 1, DATEDIF: 4, DATEVALUE: 5, DEGREES: 4, "ERROR.TYPE": 2, EVEN: 3, EXP: 2, EXPONDIST: 1, FILTER: 1, FIND: 3, FISHER: 3, FISHERINV: 3, FORMULATEXT: 6, GAMMALN: 2, IF: 9, INDEX: 6, ISEVEN: 1, ISFORMULA: 1, ISODD: 1, ISOMITTED: 2, ISREF: 11, MATCH: 1, MAX: 3, MIN: 3, MOD: 3, ODD: 3, POISSON: 2, QUOTIENT: 3, RADIANS: 4, RATE: 2, ROMAN: 8, SEARCH: 3, SIGN: 2, SORT: 3, SUMIF: 9, T: 9, TIMEVALUE: 6, VALUE: 7, VALUETOTEXT: 7, XMATCH: 6, XNPV: 7, YEARFRAC: 4 };
+export const DIFFERS: Readonly<Record<string, number>> = { ACCRINT: 7, ARABIC: 8, ARRAYTOTEXT: 1, AVERAGE: 9, CHOOSE: 3, COMBIN: 1, COMBINA: 1, CONCATENATE: 1, DATEDIF: 4, DATEVALUE: 5, DEGREES: 4, "ERROR.TYPE": 2, EVEN: 3, EXP: 2, EXPONDIST: 1, FILTER: 1, FIND: 3, FISHER: 3, FISHERINV: 3, FORMULATEXT: 6, GAMMALN: 2, IF: 9, INDEX: 6, ISEVEN: 1, ISFORMULA: 1, ISODD: 1, ISOMITTED: 2, ISREF: 11, MATCH: 1, MAX: 3, MIN: 3, MOD: 3, ODD: 3, POISSON: 2, QUOTIENT: 3, RADIANS: 4, RATE: 2, ROMAN: 8, SEARCH: 3, SIGN: 2, SORT: 3, SUMIF: 9, T: 9, TIMEVALUE: 6, VALUE: 7, VALUETOTEXT: 7, XMATCH: 6, XNPV: 2, YEARFRAC: 4 };
 
 const plural = (n: number) => `${n} value${n === 1 ? "" : "s"}`;
 const takes = (min: number, max: number | null): string =>

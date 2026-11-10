@@ -36,10 +36,10 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 | Kind | Cells | Means |
 |---|---|---|
 | `we-error` | 59 | this app gives an error where Excel stored a value |
-| `excel-error` | 27 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `excel-error` | 22 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 41 | both give a value, and they differ |
 
-Counted 2026-11-10 (165 cells with the 38 `legacy`, in 49 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (160 cells with the 38 `legacy`, in 49 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -115,10 +115,9 @@ and check their arguments as Excel does where they paired the cells off and pass
 TRUE) is #VALUE!, known_y read first; known_x of another size than known_y is #REF! (it was #N/A); a
 GROWTH of a y that is not above 0 stays #NUM!. `line`, `functions.ts`; cases in `examples.ts`.
 TREND_GROWTH.xlsx E2, J2 (const), D10, E10 (text, so a cell passed over made a value), G10, I10
-(sizes). Not done: more than one known_x column (multiple regression, which LINEST has) in TREND
-and GROWTH, which Excel takes and which this app answers #REF! when the counts differ.
+(sizes). (Several known_x columns: 2026-11-10, above.)
 
-2026-11-10, 34 cells (maths, statistics, finance; each case failed first):
+2026-11-10, 39 cells (maths, statistics, finance; each case failed first):
 QUOTIENT and MULTINOMIAL refuse TRUE and FALSE (typed or in a cell) as #VALUE!, and so does SERIESSUM's x, n and m;
 `POWER(-8, 1/3)` and `(-8)^(1/3)` are -2: a negative base to 1/3, 1/5, -1/7 ... (1/y an odd integer to within 2^-48)
 is the real odd root, where any other fraction stays #NUM! (the rule was checked against the stored values and
@@ -129,7 +128,10 @@ over text and blanks in its ranges and is #DIV/0! with no numbers left; DDB take
 (book value before less after, from the definition); the XLSX importer reads a defined name's `_xlfn.LAMBDA(_xlpm.x, ...)`
 as a LAMBDA (`gelu(A1:C1)`, 5 cells of LAMBDA.xlsx and defined_names.xlsx B5, YEARFRAC_DATEDIF C30 and C31 and N.xlsx B20
 came right with it), reads `SINGLE(x)` as `@x`, and a cell of an array formula that carries an empty `<f ca="1"/>`
-as the array's, not a value of its own (POWER.xlsx, 3 cells). XNPV below.
+as the array's, not a value of its own (POWER.xlsx, 3 cells). XNPV takes only numbers among its values (a blank,
+text or TRUE is #NUM!, where XIRR's text is #VALUE!) and a date below 0 is #NUM! in both (XNPV.xlsx Q7, Q8, Q9, Q11, R11).
+TREND and GROWTH take several known_x columns (a column of y) or rows (a row of y), by the least squares LINEST
+does, with new_x of as many predictors (#REF! if not); no cell of the ledger had one, the cases are in `examples.ts`.
 
 ## Intended (found while looking)
 
@@ -138,6 +140,13 @@ as the array's, not a value of its own (POWER.xlsx, 3 cells). XNPV below.
   3 February (it was #VALUE! before text dates were read). Kept, kind `value` in the ledger.
 
 ## Examined, not changed (still on the ledger, with the reason)
+
+- Implicit intersection of a whole column, where the formula has no array flag (`=FISHER(G:G)` in row 51 is G51):
+  `FISHER FISHERINV.xlsx` B51, C51, C52, `EXPONDIST.xlsx` D56, `GAMMALN_GAMMALNPRECISE.xlsx` B45, C45,
+  `POISSON.xlsx` D61 (D60 is the same, listed `legacy`). The same cause as the 38 `legacy` cells, which wait on the
+  `@` decision; they differ only in what this app answers (a first element, not #SPILL!).
+- `MIN_MAX_extras.xlsx` A14 to A16 are ISREF through a LAMBDA or LET, not MIN or MAX (the lookup and information
+  functions are another group's).
 
 - `XNPV.xlsx` R2, R5 (`XIRR`): the two agree to 1e-8 of the rate; Excel stops its iteration
   sooner than this app does. Matching would mean copying Excel's stopping rule, which is not
