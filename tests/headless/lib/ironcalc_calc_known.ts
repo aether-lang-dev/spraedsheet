@@ -118,6 +118,5 @@ export const KNOWN: Record<string, Record<string, string>> = {
   },
   "spill_operator.xlsx": {
     "Sheet1!G2": "we-error",
-    "Sheet1!I2": "we-error",
   },
 };

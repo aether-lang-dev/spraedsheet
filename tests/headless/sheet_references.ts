@@ -72,6 +72,15 @@ eq("SORT: errors in Excel's order, the empty cell last and 0", [at("U1"), at("U2
 eq("SORT descending", [at("V1"), at("V2"), at("V3"), at("V4")], ["#N/A", "#DIV/0!", "5", "0"]);
 eq("an empty cell in a spilled range is 0", [at("W1"), at("W2"), at("W3"), at("W4")], ["5", "0", "#N/A", "#DIV/0!"]);
 
+// ANCHORARRAY of a call: what the cell it comes to spills (a file's A1#).
+await sh.set("X1", "=SEQUENCE(3)");
+await sh.set("Z1", "=SUM(ANCHORARRAY(OFFSET(X1, 0, 0)))");
+await sh.set("Z2", "=SUM(ANCHORARRAY(INDEX(X1:X3, 1)))");
+await sh.set("Z3", "=ANCHORARRAY(B1)");
+await sh.set("Z4", "=SUM(ANCHORARRAY(OFFSET(X1, 0, 0)))");
+await sh.set("X1", "=SEQUENCE(4)");
+eq("ANCHORARRAY of a reference a call makes", [at("Z1"), at("Z2"), at("Z3"), at("Z4")], ["10", "10", "#REF!", "10"]);
+
 // expect: ok the range operator between references
 // expect: ok a cell between the corners changed
 // expect: ok a reference spills as its values
@@ -85,3 +94,4 @@ eq("an empty cell in a spilled range is 0", [at("W1"), at("W2"), at("W3"), at("W
 // expect: ok SORT: errors in Excel's order, the empty cell last and 0
 // expect: ok SORT descending
 // expect: ok an empty cell in a spilled range is 0
+// expect: ok ANCHORARRAY of a reference a call makes

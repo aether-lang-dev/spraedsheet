@@ -35,11 +35,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 7 | this app gives an error where Excel stored a value |
+| `we-error` | 6 | this app gives an error where Excel stored a value |
 | `excel-error` | 2 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 20 | both give a value, and they differ |
 
-Counted 2026-11-10 (67 cells with the 38 `legacy`, in 23 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (66 cells with the 38 `legacy`, in 23 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -218,6 +218,11 @@ and, which the entries of 2026-11-05 above said were #VALUE!, DROP and TAKE that
 C18). (MAKEARRAY of no rows stays #VALUE!, as Microsoft's documentation of it says.) Written files still carry
 `#CALC!` and `#SPILL!` as plain error text, which the format does not have.
 
+2026-11-10, 1 cell: `ANCHORARRAY(ref)`, the file's spelling of `A1#` where the reference is a call's
+(`SUM(ANCHORARRAY(OFFSET(A1, 1, 1)))`), is what the cell the reference comes to spills (its value when it
+spills nothing, #REF! when that is no array). It is read where it comes up, so it is no name in the function
+lists. spill_operator.xlsx I2; headless `sheet_references`.
+
 ## Intended (found while looking)
 
 - `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`) and I5 (`VALUE("10-12-1999")`): the workbook
@@ -248,6 +253,5 @@ C18). (MAKEARRAY of no rows stays #VALUE!, as Microsoft's documentation of it sa
   (-1.87) or at -1; Excel's guess-driven Newton search does not reach it. Not changed until
   Excel's rule for refusing such roots is known.
 - `spill_operator.xlsx` G2 (`SUM(C2#)` where C2 holds a legacy array formula `{=123}` over C2:C5): this
-  app's array formula of a scalar fills one cell, so `C2#` is #REF!; Excel's fills the four. I2
-  (`ANCHORARRAY(OFFSET(A1, 1, 1))`): the spill reference of a call has no spelling in this app's formulas
-  (`A1#` takes a cell), and a function for it would be one more name to list everywhere; not added.
+  app's array formula of a scalar fills one cell, so `C2#` is #REF!; Excel's fills the four. The
+  importer would have to know the formula's result is one value to fill the range with it.

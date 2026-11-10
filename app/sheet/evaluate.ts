@@ -531,6 +531,19 @@ class Evaluator {
         if (type === "recalc") return this.#env.calc?.().manual ? "Manual" : "Automatic";
         return fail("#VALUE!", `INFO of '${type}': only numfile and recalc apply here`);
       }
+      // ANCHORARRAY(ref): what the cell the reference comes to spills, A1# as a file spells it
+      // when the reference is a call's (ANCHORARRAY(OFFSET(A1, 1, 1))); its value when it spills nothing.
+      case "ANCHORARRAY": {
+        takes(1);
+        const r = this.#reference(args[0]);
+        if (!r) return fail("#VALUE!", "ANCHORARRAY takes a reference");
+        const key = qualify(r.sheet, keyOf(r.a));
+        this.#env.read?.(key);
+        const spilt = this.#env.spill?.(key);
+        if (spilt) return spilt;
+        const v = this.#env.get(key);
+        return v instanceof CellError ? v : fail("#REF!", `${key} spills nothing`);
+      }
       // ISOMITTED(x): whether a LAMBDA's parameter x was left out.
       case "ISOMITTED": {
         takes(1);
