@@ -19,7 +19,6 @@ import uidriver
 import std.os
 import std.fs
 
-const TRIES = 60
 const POLL_MS = 50
 
 
@@ -1218,7 +1217,7 @@ main() {
             // layout to land first.
             w0 = 0
             k = 0
-            while k < TRIES && w0 < 130 {
+            while k < b.tries() && w0 < 130 {
                 w0 = uidriver.widget_int_field_by_id(g.header_id("C"), "w")
                 if w0 < 130 { sleep(POLL_MS) }
                 k = k + 1
@@ -1228,7 +1227,7 @@ main() {
             spec.assert_true(b.wait_for_console("sheet: column C is "), "the fit is a resize the page hears")
             w1 = w0
             i = 0
-            while i < TRIES && w1 == w0 {
+            while i < b.tries() && w1 == w0 {
                 w1 = uidriver.widget_int_field_by_id(g.header_id("C"), "w")
                 if w1 == w0 { sleep(POLL_MS) }
                 i = i + 1
@@ -2473,7 +2472,7 @@ main() {
             spec.assert_true(b.wait_for_console("sheet: say H is 160"), "GETCOLWIDTH")
             wh = 0
             kh = 0
-            while kh < TRIES && wh < 140 {
+            while kh < b.tries() && wh < 140 {
                 wh = uidriver.widget_int_field_by_id(g.header_id("H"), "w")
                 if wh < 140 { sleep(POLL_MS) }
                 kh = kh + 1

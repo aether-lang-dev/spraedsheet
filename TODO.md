@@ -41,6 +41,15 @@ which breaks aeb's own build: use the versioned bin directory.) cachyos (ae 0.86
 `./ci.sh` green but for `font_picker` (two cases: a second category widening the list, each row in its own face),
 which reads the host's fonts and came with main's font work (bf0bb8d4), not this.
 
+Toolchain 2026-11-09/10: Aether 0.905.0 + aeb v0.344 + aether-ui 50cbc007 (sae's `pins`), the bare release
+(`SAE_AETHER_HOME=none`, `AETHER_HOME=~/.aether/versions/v0.905.0` and its `bin` first on PATH). No code change
+was needed in sae's src/ or spraedsheet's app; only tests moved. macOS: sae `lower/run-tests.sh` 70, `tests/run_all.sh`
+61/61, spraedsheet `./run-tests.sh` 9 passed (172 headless cases; spec_sheet passed 3 of 5 runs: the two reds were the
+known flake, the same few tests from Protect Sheet on). ae-x64 (Ubuntu 22.04, no node, QuickJS about 12x slower than
+the Mac): sae 61/61; spraedsheet headless 171/172 (only `sheet_large`'s timing budgets, 9 to 13 s against 4 to 8 s),
+spec_sheet 146 passing, spec_app_sheet_bus, spec_app_sheet_files and real_keys_x11 pass; spec_app_sheet_rexx, mcp and
+cli not run there (need node). On ae-x64 run with `SAE_TEST_WAIT_SCALE=6 SAE_PAGE_TIME_MS=60000` (see sae's AGENTS.md).
+
 **Done 2026-11-05 (each test first):**
 - Univer 5 follow-ups: the cells and notes recorded at the mutation (`overlay.ts`: a snapshot is the keys changed,
   layered on the one before; a hundred one-cell edits on 2,000 cells copied the cells 100 times, now 3), and the lists

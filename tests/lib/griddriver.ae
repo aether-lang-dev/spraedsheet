@@ -16,7 +16,6 @@ import std.json
 import saedriver as b
 import uidriver
 
-const TRIES = 60
 const POLL_MS = 50
 
 has_class_(w: ptr, c: string) -> int { return string.contains(uidriver.field_str(w, "classes"), c) }
@@ -58,7 +57,7 @@ cell_text(col: string, row: int) -> string { return uidriver.widget_text_by_id(c
 // 1 once the cell reads `want`.
 wait_cell(col: string, row: int, want: string) -> int {
     i = 0
-    while i < TRIES {
+    while i < b.tries() {
         if string.equals(cell_text(col, row), want) == 1 { return 1 }
         sleep(POLL_MS)
         i = i + 1

@@ -47,6 +47,9 @@ main() {
     _d2 = fs.delete("${dir}/out.csv")
     spec.describe(fw, "demo 18 as an app: files the person picks") {
         spec.it("Open file reads a workbook in the Tauri app's format") callback {
+            // The driver answers before the app has drawn (a slow engine takes
+            // seconds over the page): wait for the status line, as spec_sheet does.
+            spec.assert_true(b.wait_for_text_secs("A1: (empty)", 60), "the app is up")
             uidriver.answer_prompt("open", "${dir}/book.json")
             b.click("Open file")
             spec.assert_true(b.wait_for_console("sheet: opened Spec book: 2 cells, Excel formulas"), "opened")
