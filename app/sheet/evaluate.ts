@@ -29,6 +29,11 @@ import type { Op } from "./lexer.ts";
 // The forms worked out here rather than by the library (IF is listed there).
 // The arguments typed into a call (functions.ts Arg.typed), by what they are.
 const TYPED = new Set(["num", "str", "bool", "neg", "binary"]);
+// A call's value is typed too (MAX(LEFT("x", 0)) is #VALUE!: its "" is a value, not an empty
+// cell), but not when it is a reference (SUM(IF(TRUE, A1)) passes over a text A1), which IF,
+// CHOOSE, INDEX, OFFSET and INDIRECT may give; nor what may pass a reference through.
+const MAY_GIVE_REFERENCES = new Set(["IF", "CHOOSE", "INDEX", "OFFSET", "INDIRECT"]);
+const PASS_REFERENCES = new Set(["IFERROR", "IFNA", "IFS", "SWITCH", "XLOOKUP"]);
 
 export const SPECIAL_FORMS: readonly string[] = ["LET", "LAMBDA", "MAP", "REDUCE", "SCAN", "BYROW", "BYCOL", "MAKEARRAY"];
 
@@ -340,7 +345,8 @@ class Evaluator {
     try {
       const r = this.result(e);
       if (isArray(r)) return { values: r.values, cols: r.cols };
-      return TYPED.has(e.kind) && !(r instanceof CellError) ? { values: [r], cols: 1, typed: true } : single(r);
+      const typed = TYPED.has(e.kind) || (e.kind === "call" && !PASS_REFERENCES.has(e.name) && !(MAY_GIVE_REFERENCES.has(e.name) && this.#reference(e) !== null));
+      return typed && !(r instanceof CellError) ? { values: [r], cols: 1, typed: true } : single(r);
     } catch (err) {
       if (err instanceof CellError && e.kind !== "range" && e.kind !== "table") return single(err);
       throw err;

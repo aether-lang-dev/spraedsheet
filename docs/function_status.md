@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1553 cases, 1553 passing);
-31 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (90, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1557 cases, 1557 passing);
+31 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (89, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -210,7 +210,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | HYPERLINK | function | 1 or 2 values | passes | 2 | `HYPERLINK("http://x", "name")` = "name" |  |  |
 | HYPGEOM.DIST | function | 5 values | passes | 3 | `HYPGEOM.DIST(1, 2, 2, 4, FALSE)` = 0.666666666667 |  |  |
 | HYPGEOMDIST | function | 4 values | passes | 2 | `HYPGEOMDIST(1, 2, 2, 4)` = 0.666666666667 |  |  |
-| IF | form | (its own) | passes | 3 | `IF(TRUE, 1, 2)` = 1 |  |  |
+| IF | form | (its own) | passes | 5 | `IF(TRUE, 1, 2)` = 1 |  |  |
 | IFERROR | function | 2 values | passes | 5 | `IFERROR(1 / 0, "x")` = "x" |  |  |
 | IFNA | function | 2 values | passes | 4 | `IFNA(NA(), 5)` = 5 |  |  |
 | IFS | function | at least 2 values | passes | 3 | `IFS(FALSE, 1, TRUE, 2)` = 2 |  |  |
@@ -262,13 +262,13 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ISOMITTED | form | (its own) | passes | 4 | `LAMBDA(x, [y], ISOMITTED(y))(1)` = true |  |  |
 | ISOWEEKNUM | function | 1 value | passes | 4 | `ISOWEEKNUM(DATE(2021, 1, 3))` = 53 |  | TRUE/FALSE refused |
 | ISPMT | function | 4 values | passes | 3 | `ISPMT(0.1, 1, 4, 1000)` = -75 |  |  |
-| ISREF | form | (its own) | passes | 14 | `ISREF(A1)` = true | 3 |  |
+| ISREF | form | (its own) | passes | 14 | `ISREF(A1)` = true | 2 |  |
 | ISTEXT | function | 1 value | passes | 2 | `ISTEXT("a")` = true |  |  |
 | KURT | function | at least 1 value | passes | 2 | `KURT({1, 2, 3, 4, 10})` = 3.152 |  |  |
 | LAMBDA | special form | (its own) | passes | 4 | `LAMBDA(x, x + 1)(2)` = 3 |  |  |
 | LARGE | function | 2 values | passes | 3 | `LARGE({1, 5, 3}, 2)` = 3 |  |  |
 | LCM | function | at least 1 value | passes | 4 | `LCM(4, 6)` = 12 |  |  |
-| LEFT | function | 1 or 2 values | passes | 4 | `LEFT("hello", 2)` = "he" |  |  |
+| LEFT | function | 1 or 2 values | passes | 6 | `LEFT("hello", 2)` = "he" |  |  |
 | LEN | function | 1 value | passes | 2 | `LEN("hello")` = 5 |  |  |
 | LET | special form | (its own) | passes | 6 | `LET(x, 2, x * 3)` = 6 |  |  |
 | LINEST | function | 1 to 4 values | passes | 2 | `INDEX(LINEST({2, 4, 6}, {1, 2, 3}), 1, 1)` = 2 |  |  |

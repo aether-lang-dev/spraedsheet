@@ -39,7 +39,6 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "Sheet1!B14": "value",
   },
   "INFORMATION/ISREF.xlsx": {
-    "Sheet1!D2": "excel-error",
     "Sheet1!D7": "excel-error",
     "Sheet1!D9": "legacy",
   },

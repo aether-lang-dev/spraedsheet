@@ -36,10 +36,10 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 | Kind | Cells | Means |
 |---|---|---|
 | `we-error` | 7 | this app gives an error where Excel stored a value |
-| `excel-error` | 5 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `excel-error` | 4 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
 | `value` | 22 | both give a value, and they differ |
 
-Counted 2026-11-10 (72 cells with the 38 `legacy`, in 25 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-10 (71 cells with the 38 `legacy`, in 25 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -201,6 +201,12 @@ lookup array is one row or one column (XMATCH.xlsx, 5, and XMATCH_arrays.xlsx). 
 POWER.xlsx's `inside_a_lambda!A3` had come right with a LAMBDA's parameter keeping its reference, and come off here
 (POWER's A4 is now `legacy`). Cases in `examples.ts` and headless `sheet_references`.
 
+2026-11-10, 1 cell: the value of a call is typed as a number, text or TRUE typed into the call is (a
+function's own text counts where a cell's is passed over): `MAX(FILTER(L1:L2, M1:M2, ""))` is #VALUE!, as
+`MAX("")` is, and `SUM(LEFT("7", 1))` is 7; but not when the call gives a reference (`IF`, `CHOOSE`, `INDEX`,
+`OFFSET`, `INDIRECT` of one: `SUM(IF(TRUE, A1))` passes over a text A1) nor `IFERROR`, `IFNA`, `IFS`, `SWITCH`
+and `XLOOKUP`, which may pass one through (`Arg.typed` by `#arg`, `evaluate.ts`). ISREF.xlsx D2.
+
 ## Intended (found while looking)
 
 - `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`) and I5 (`VALUE("10-12-1999")`): the workbook
@@ -210,12 +216,21 @@ POWER.xlsx's `inside_a_lambda!A3` had come right with a LAMBDA's parameter keepi
 
 ## Examined, not changed (still on the ledger, with the reason)
 
-- Implicit intersection of a whole column, where the formula has no array flag (`=FISHER(G:G)` in row 51 is G51):
-  `FISHER FISHERINV.xlsx` B51, C51, C52, `EXPONDIST.xlsx` D56, `GAMMALN_GAMMALNPRECISE.xlsx` B45, C45,
-  `POISSON.xlsx` D61 (D60 is the same, listed `legacy`). The same cause as the 38 `legacy` cells, which wait on the
-  `@` decision; they differ only in what this app answers (a first element, not #SPILL!).
-- `MIN_MAX_extras.xlsx` A14 to A16 are ISREF through a LAMBDA or LET, not MIN or MAX (the lookup and information
-  functions are another group's).
+Group "text, lookup and information" (2026-11-10):
+
+- `FILTER_ERRORS.xlsx` E1 and `ISREF.xlsx` D7 (`FILTER` that finds nothing, with no `if_empty`): Excel
+  answers #CALC!, and its file stores #VALUE! for it (the file format has no #CALC!: the rich-value
+  metadata says which it is, which this ledger's reader does not see). This app answers #CALC!, which is
+  right; the cells stay as `excel-error`. (D9 is the same with a spill, and `legacy`.)
+- `ERROR.TYPE.xlsx` B8 and B14: the cells A8 and A14 are error constants Excel stored as #VALUE! (they are
+  #CALC! and #SPILL!, ERROR.TYPE 14 and 9); what this app reads from the file is #VALUE!, 3. Same cause.
+- `spill_operator.xlsx` G2 (`SUM(C2#)` where C2 holds a legacy array formula `{=123}` over C2:C5): this
+  app's array formula of a scalar fills one cell, so `C2#` is #REF!; Excel's fills the four. I2
+  (`ANCHORARRAY(OFFSET(A1, 1, 1))`): the spill reference of a call has no spelling in this app's formulas
+  (`A1#` takes a cell), and a function for it would be one more name to list everywhere; not added.
+- `defined_names.xlsx` B5 (`COUNT(DOESNOTEXIST)`, 0 in Excel): COUNT passes over an error argument, which
+  this app's COUNT does not (`COUNT(1/0)` and `COUNT(A1:A2)` over an error cell are #DIV/0!); COUNT is the
+  statistics group's.
 
 - `XNPV.xlsx` R2, R5 (`XIRR`): the two agree to 1e-8 of the rate; Excel stops its iteration
   sooner than this app does. Matching would mean copying Excel's stopping rule, which is not
