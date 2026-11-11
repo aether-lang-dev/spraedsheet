@@ -46,79 +46,88 @@ const rexxString = (s) => '"' + String(s).replace(/"/g, '""') + '"';
 // Text the app reads back whole, whatever is in it: ASCII JSON in base64.
 const carried = (value) => "BASE64_DECODE('" + Buffer.from(JSON.stringify(value).replace(/[\u007f-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'ascii').toString('base64') + "')";
 
-let appdata = process.env.SAE_APPDATA_DIR || '';
-// The app this run started, on its control channel; null with SHEET_ATTACH=1.
-let app = null;
-async function bus(command) {
-  if (app) {
-    const a = await app.request(command, 20000);
-    if (a.ok) return a.result;
-    // No app to ask (it went, or did not answer): not a refusal.
-    if (!app.running() || /^no answer within /.test(a.error)) throw new Error(a.error);
-    throw new Refused(a.error || 'refused');
-  }
-  return new Promise((resolve, reject) => {
-    execFile(SAE_BUS, [APP, command], { encoding: 'utf8', timeout: 20000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ...(appdata ? { SAE_APPDATA_DIR: appdata } : {}) } }, (error, stdout, stderr) => {
-      if (error) return reject(new Error((stderr || '').trim() || error.message));
-      let a;
-      try { a = JSON.parse(stdout); } catch (e) { return reject(new Error('sae-bus answered with something other than JSON')); }
-      if (a.success) resolve(a.result === undefined ? null : a.result);
-      else reject(new Refused(a.error || 'refused'));
-    });
-  });
-}
 const unstem = (v) => (v && typeof v === 'object' && '0' in v ? Array.from({ length: Number(v['0']) }, (_, i) => v[String(i + 1)]) : v);
 
-// The app, started headless on its control channel, until stop().
-async function start() {
-  if (process.env.SHEET_ATTACH === '1') return;
-  // SHEET_APPDATA names the app's data folder (kept after the run: the version repository, versions.git, is in it); else one of its own.
-  appdata = process.env.SHEET_APPDATA ? (fs.mkdirSync(process.env.SHEET_APPDATA, { recursive: true }), process.env.SHEET_APPDATA) : fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-cli-'));
-  app = new SaeChannel({ bin: SAE_BIN, app: path.join(ROOT, 'app'), headless: true, env: { SAE_APPDATA_DIR: appdata }, stderr: 'ignore' });
-  await app.start().catch((e) => { throw new Error('the app did not start (' + SAE_BIN + '): ' + e.message); });
-}
-async function stop() {
-  if (app) await app.close();
-  app = null;
-  if (appdata && process.env.SHEET_ATTACH !== '1' && !process.env.SHEET_APPDATA) fs.rmSync(appdata, { recursive: true, force: true });
-}
-
-// A file into the workbook, by its kind.
-async function open(file) {
-  const ext = path.extname(file).toLowerCase(), bytes = fs.readFileSync(file), b64 = bytes.toString('base64'), name = path.basename(file, ext);
-  if (ext === '.xlsx' || ext === '.xlsm') return bus(`OPENXLSX('${b64}', ${rexxString(name)})`);
-  if (ext === '.xls') return bus(`OPENXLS('${b64}', ${rexxString(name)})`);
-  if (ext === '.ods') return bus(`OPENODS('${b64}', ${rexxString(name)})`);
-  if (ext === '.csv' || ext === '.tsv' || ext === '.txt') return bus(`IMPORTCSV("A1", '${b64}', "", "utf-8")`);
-  if (ext === '.json') {
-    // The file's own JSON (carried re-serialises it, ASCII), not a string of it.
-    let data;
-    try { data = JSON.parse(bytes.toString('utf8')); } catch (e) { throw new Refused(file + ': not JSON (' + e.message + ')'); }
-    await bus(`IMPORT(${carried(data)})`);
-    return `opened ${typeof data.name === 'string' && data.name ? data.name : name}`;
+// One run's way to the app: the app it started headless on its control
+// channel (null with SHEET_ATTACH=1, which asks one already running through
+// sae-bus) and that app's data folder. main makes one; nothing here is
+// module state.
+class Session {
+  constructor() {
+    this.appdata = process.env.SAE_APPDATA_DIR || '';
+    this.app = null;
   }
-  throw new Refused(file + ': not a file this opens (.xlsx, .xls, .ods, .csv, .json)');
-}
-// The workbook out, by the file's kind.
-async function save(file) {
-  const ext = path.extname(file).toLowerCase();
-  if (ext === '.xlsx') return fs.writeFileSync(file, Buffer.from(String(await bus('SAVEXLSX()')), 'base64'));
-  if (ext === '.pdf') return fs.writeFileSync(file, Buffer.from(String(await bus('EXPORTPDF()')), 'base64'));
-  if (ext === '.csv') return fs.writeFileSync(file, String(await bus('EXPORTCSV()')));
-  if (ext === '.html' || ext === '.htm') return fs.writeFileSync(file, String(await bus('EXPORTHTML("", 1)')));
-  if (ext === '.json') { const j = await bus('EXPORT()'); return fs.writeFileSync(file, typeof j === 'string' ? j : JSON.stringify(j, null, 2)); }
-  throw new Refused(file + ': not a file this writes (.xlsx, .csv, .json, .html, .pdf)');
+
+  async bus(command) {
+    if (this.app) {
+      const a = await this.app.request(command, 20000);
+      if (a.ok) return a.result;
+      // No app to ask (it went, or did not answer): not a refusal.
+      if (!this.app.running() || /^no answer within /.test(a.error)) throw new Error(a.error);
+      throw new Refused(a.error || 'refused');
+    }
+    return new Promise((resolve, reject) => {
+      execFile(SAE_BUS, [APP, command], { encoding: 'utf8', timeout: 20000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ...(this.appdata ? { SAE_APPDATA_DIR: this.appdata } : {}) } }, (error, stdout, stderr) => {
+        if (error) return reject(new Error((stderr || '').trim() || error.message));
+        let a;
+        try { a = JSON.parse(stdout); } catch (e) { return reject(new Error('sae-bus answered with something other than JSON')); }
+        if (a.success) resolve(a.result === undefined ? null : a.result);
+        else reject(new Refused(a.error || 'refused'));
+      });
+    });
+  }
+
+  // The app, started headless on its control channel, until stop().
+  async start() {
+    if (process.env.SHEET_ATTACH === '1') return;
+    // SHEET_APPDATA names the app's data folder (kept after the run: the version repository, versions.git, is in it); else one of its own.
+    this.appdata = process.env.SHEET_APPDATA ? (fs.mkdirSync(process.env.SHEET_APPDATA, { recursive: true }), process.env.SHEET_APPDATA) : fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-cli-'));
+    this.app = new SaeChannel({ bin: SAE_BIN, app: path.join(ROOT, 'app'), headless: true, env: { SAE_APPDATA_DIR: this.appdata }, stderr: 'ignore' });
+    await this.app.start().catch((e) => { throw new Error('the app did not start (' + SAE_BIN + '): ' + e.message); });
+  }
+  async stop() {
+    if (this.app) await this.app.close();
+    this.app = null;
+    if (this.appdata && process.env.SHEET_ATTACH !== '1' && !process.env.SHEET_APPDATA) fs.rmSync(this.appdata, { recursive: true, force: true });
+  }
+
+  // A file into the workbook, by its kind.
+  async open(file) {
+    const ext = path.extname(file).toLowerCase(), bytes = fs.readFileSync(file), b64 = bytes.toString('base64'), name = path.basename(file, ext);
+    if (ext === '.xlsx' || ext === '.xlsm') return this.bus(`OPENXLSX('${b64}', ${rexxString(name)})`);
+    if (ext === '.xls') return this.bus(`OPENXLS('${b64}', ${rexxString(name)})`);
+    if (ext === '.ods') return this.bus(`OPENODS('${b64}', ${rexxString(name)})`);
+    if (ext === '.csv' || ext === '.tsv' || ext === '.txt') return this.bus(`IMPORTCSV("A1", '${b64}', "", "utf-8")`);
+    if (ext === '.json') {
+      // The file's own JSON (carried re-serialises it, ASCII), not a string of it.
+      let data;
+      try { data = JSON.parse(bytes.toString('utf8')); } catch (e) { throw new Refused(file + ': not JSON (' + e.message + ')'); }
+      await this.bus(`IMPORT(${carried(data)})`);
+      return `opened ${typeof data.name === 'string' && data.name ? data.name : name}`;
+    }
+    throw new Refused(file + ': not a file this opens (.xlsx, .xls, .ods, .csv, .json)');
+  }
+  // The workbook out, by the file's kind.
+  async save(file) {
+    const ext = path.extname(file).toLowerCase();
+    if (ext === '.xlsx') return fs.writeFileSync(file, Buffer.from(String(await this.bus('SAVEXLSX()')), 'base64'));
+    if (ext === '.pdf') return fs.writeFileSync(file, Buffer.from(String(await this.bus('EXPORTPDF()')), 'base64'));
+    if (ext === '.csv') return fs.writeFileSync(file, String(await this.bus('EXPORTCSV()')));
+    if (ext === '.html' || ext === '.htm') return fs.writeFileSync(file, String(await this.bus('EXPORTHTML("", 1)')));
+    if (ext === '.json') { const j = await this.bus('EXPORT()'); return fs.writeFileSync(file, typeof j === 'string' ? j : JSON.stringify(j, null, 2)); }
+    throw new Refused(file + ': not a file this writes (.xlsx, .csv, .json, .html, .pdf)');
+  }
+
+  // What the last file read or written left out (FILEREPORT), as a list.
+  async report() {
+    const r = unstem(await this.bus('FILEREPORT()'));
+    return Array.isArray(r) ? r.map(String) : [];
+  }
 }
 
 const flag = (args, name) => { const i = args.indexOf(name); if (i < 0) return null; const v = args[i + 1]; args.splice(i, 2); return v; };
 
-// What the last file read or written left out (FILEREPORT), as a list.
-async function report() {
-  const r = unstem(await bus('FILEREPORT()'));
-  return Array.isArray(r) ? r.map(String) : [];
-}
-
-async function main(argv) {
+async function main(argv, sheet) {
   const [sub, ...args] = argv;
   const jsonAt = args.indexOf('--json'), json = jsonAt >= 0;
   if (json) args.splice(jsonAt, 1);
@@ -130,32 +139,32 @@ async function main(argv) {
   const usage = 'sheet eval|inspect|convert|run|commands|functions|mcp ... (cli/sheet.js says how)';
   if (!['eval', 'inspect', 'convert', 'run', 'commands', 'functions'].includes(sub)) { process.stderr.write(usage + '\n'); return 2; }
   const file = flag(args, '--file'), out = flag(args, '--save');
-  await start();
+  await sheet.start();
   try {
-    if (file) await open(file);
+    if (file) await sheet.open(file);
     if (sub === 'eval') {
       if (!args.length) throw new Refused('sheet eval <formula>');
-      const v = await bus(`EVALUATE(${rexxString(args.join(' '))})`);
+      const v = await sheet.bus(`EVALUATE(${rexxString(args.join(' '))})`);
       console.log(typeof v === 'string' ? v : JSON.stringify(v));
     } else if (sub === 'inspect') {
       if (!args.length) throw new Refused('sheet inspect <file>');
-      console.log(await open(args[0]));
-      const sheets = unstem(await bus('GETSHEETNAMES()'));
+      console.log(await sheet.open(args[0]));
+      const sheets = unstem(await sheet.bus('GETSHEETNAMES()'));
       for (const s of sheets) {
-        await bus(`SETACTIVESHEET(${rexxString(s)})`);
-        const last = await bus('GETLASTCELL()');
+        await sheet.bus(`SETACTIVESHEET(${rexxString(s)})`);
+        const last = await sheet.bus('GETLASTCELL()');
         console.log(`sheet ${s}: used to ${last}`);
       }
-      const names = (await bus('GETALLNAMEDRANGES()')) || {};
+      const names = (await sheet.bus('GETALLNAMEDRANGES()')) || {};
       for (let i = 1; i <= Number(names['0'] || 0); i++) console.log(`name ${names[i + '.NAME']}: ${names[i + '.RANGE']}`);
-      for (const t of unstem(await bus('LISTTABLES()')) || []) console.log(`table ${t}`);
-      for (const c of unstem(await bus('LISTCHARTS()')) || []) console.log(`chart ${c}`);
+      for (const t of unstem(await sheet.bus('LISTTABLES()')) || []) console.log(`table ${t}`);
+      for (const c of unstem(await sheet.bus('LISTCHARTS()')) || []) console.log(`chart ${c}`);
     } else if (sub === 'convert') {
       if (args.length !== 2) throw new Refused('sheet convert <in> <out>');
-      await open(args[0]);
-      const read = await report();
-      await save(args[1]);
-      const wrote = path.extname(args[1]).toLowerCase() === '.xlsx' ? await report() : [];
+      await sheet.open(args[0]);
+      const read = await sheet.report();
+      await sheet.save(args[1]);
+      const wrote = path.extname(args[1]).toLowerCase() === '.xlsx' ? await sheet.report() : [];
       if (json) console.log(JSON.stringify({ ok: true, command: 'convert', in: args[0], out: args[1], read, write: wrote, report: [...read, ...wrote] }));
       else console.log(`${args[0]} -> ${args[1]}`);
     } else if (sub === 'run') {
@@ -164,7 +173,7 @@ async function main(argv) {
         // RUNCOMMAND, the line carried as JSON: nothing in it read as REXX on
         // the way in, and one bus request per line, its answer what it gave.
         let said;
-        try { said = await bus(`RUNCOMMAND(${carried(line)}, "json")`); } catch (e) {
+        try { said = await sheet.bus(`RUNCOMMAND(${carried(line)}, "json")`); } catch (e) {
           if (e instanceof Refused) throw new Refused(`${line}: ${e.message}`);
           throw e;
         }
@@ -173,22 +182,23 @@ async function main(argv) {
       line = null;
       if (json) console.log(JSON.stringify({ ok: true, command: 'run', results }));
     } else if (sub === 'commands') {
-      const list = unstem(await bus('LISTCOMMANDS(1)')).filter((c) => c && typeof c === 'object');
+      const list = unstem(await sheet.bus('LISTCOMMANDS(1)')).filter((c) => c && typeof c === 'object');
       const one = args[0] ? list.find((c) => String(c.name).toUpperCase() === args[0].toUpperCase()) : null;
       if (args[0] && !one) throw new Refused(`no function ${args[0]}`);
       for (const c of one ? [one] : list.sort((a, b) => String(a.name).localeCompare(String(b.name)))) console.log(`${c.signature}${c.does ? ': ' + c.does : ''}`);
     } else if (sub === 'functions') {
-      for (const f of unstem(await bus('LISTFUNCTIONS()'))) console.log(f);
+      for (const f of unstem(await sheet.bus('LISTFUNCTIONS()'))) console.log(f);
     }
-    if (out) { await save(out); console.log(`saved ${out}`); }
+    if (out) { await sheet.save(out); console.log(`saved ${out}`); }
     return 0;
   } catch (e) {
     if (json) process.stderr.write(JSON.stringify({ ok: false, command: current, ...(line ? { line } : {}), error: e.message, refused: e instanceof Refused }) + '\n');
     else process.stderr.write(`sheet: ${e.message}\n`);
     return e instanceof Refused ? 1 : 2;
   } finally {
-    await stop();
+    await sheet.stop();
   }
 }
 
-main(process.argv.slice(2)).then((code) => process.exit(code), (e) => { process.stderr.write(`sheet: ${e.message}\n`); stop().then(() => process.exit(2)); });
+const sheet = new Session();
+main(process.argv.slice(2), sheet).then((code) => process.exit(code), (e) => { process.stderr.write(`sheet: ${e.message}\n`); sheet.stop().then(() => process.exit(2)); });
