@@ -8,7 +8,7 @@ parts:
 |---|---|---|
 | [`app/`](app/) | **The spreadsheet, current.** A [sae](https://github.com/aether-lang-dev/sae-it-aint-so) app in sae's TypeScript dialect: it runs as a page in the sae browser or as an installed app, natively on aether-ui (GTK4, AppKit, Win32). | MIT |
 | [`rexx/`](rexx/) | REXX scripts that drive the running sae app from outside, over its control bus (`ADDRESS SPREADSHEET`, through sae's `sae-bus`). | MIT |
-| [`mcp/`](mcp/) | An MCP server, so an AI client (Claude, or any MCP client) drives the running app over its control bus. | MIT |
+| [`mcp/`](mcp/) | An MCP server, so an AI client (Claude, or any MCP client) drives the app: one it starts itself and talks to over sae's stdin and stdout (no file, nothing listening), or with `--attach` one already running with its control bus on. | MIT |
 
 The original React + Tauri app the sae one grew from was here as `tauri/`
 until 2026-10-15; it is in this repository's history (last at commit
@@ -45,12 +45,15 @@ tests/
   specs/            the app driven in sae-driver: grid, keys, clipboard, files,
                     the control bus, rexx/'s scripts and mcp/'s server run against it
   lib/griddriver.ae reads and clicks the datagrid for the specs
-  mcp/              the MCP server's protocol tests (node --test, a stand-in sae-bus)
+  mcp/              the MCP server's tests (node --test): its protocol, with
+                    stand-ins for sae-bus and sae; and the real app driven
+                    over its control channel (channel.test.js)
 vendor/rexxjs/      RexxJS's interpreter and parser, vendored (MIT, its LICENSE)
 tools/              bundle-rexxjs.mjs: re-vendors RexxJS and writes app/sheet/rexxjs.js
 docs/               the plan, and notes for the Tauri app
 rexx/               REXX scripts that drive the app, and their ADDRESS library
-mcp/                an MCP server, so an AI client drives the app over its control bus
+mcp/                an MCP server, so an AI client drives the app (sae-channel.js:
+                    the app started on sae's stdin and stdout)
 sae -> ../sae       the sae checkout it builds and tests against
 RexxJS -> ../RexxJS the RexxJS checkout the REXX scripts run on
 ```
@@ -65,7 +68,11 @@ at `../sae`) and built, as sae's AGENTS.md "Build and test" says. Then:
 ```
 
 `--control-bus` after it switches on the control bus, so other programs on
-this machine can drive the sheet (sae's `docs/control-bus.md`).
+this machine can drive the sheet (sae's `docs/control-bus.md`): a loopback
+port, and its key in a file only you can read. A program that starts the
+app itself needs neither: the MCP server and `cli/sheet.js` start it with
+`--control-stdio` and drive it over its own stdin and stdout, which only
+they hold (sae's `docs/app-backend.md`, "The control channel").
 
 ### Testing it
 
@@ -74,8 +81,9 @@ this machine can drive the sheet (sae's `docs/control-bus.md`).
 ```
 
 It needs `node`, and RexxJS checked out beside this repository, for the
-REXX scripts' spec and the MCP server's tests. That runs the headless tests, the MCP
-server's protocol tests and the five specs, one line of PASS or FAIL
+REXX scripts' spec and the MCP server's tests (and `lsof`, for what
+listens). That runs the headless tests, the MCP server's tests and the
+specs, one line of PASS or FAIL
 each, with logs under `target/run-tests/`. `./run-tests.sh headless` runs
 only the headless tests; `./run-tests.sh spec_sheet` only that spec.
 `SAE_DIR=...` picks another sae checkout. On Linux with no display it runs

@@ -2,10 +2,12 @@
 // sheet: the spreadsheet from a shell, as GridCraft's CLI covers it:
 // evaluate a formula, inspect a workbook, convert a file, run commands,
 // list the commands and the functions, start the MCP server. Each run
-// starts the app itself, headless (sae with AETHER_UI_HEADLESS=1, its
-// control bus on, its data in a folder of its own), sends its requests over
-// the bus with sae's sae-bus, and stops it; SHEET_ATTACH=1 uses an app
-// already running instead. Needs node and sae beside this checkout.
+// starts the app itself, headless (sae with AETHER_UI_HEADLESS=1, its data
+// in a folder of its own), sends its requests over sae's stdin and stdout
+// (`--control-stdio`, sae's control channel: no courier file, nothing
+// listening), and stops it; SHEET_ATTACH=1 uses an app already running with
+// its control bus on instead, through sae's sae-bus. Needs node and sae
+// beside this checkout.
 //
 //   sheet eval <formula> [--file F]       what the formula comes to (F opened first)
 //   sheet inspect <file>                  its sheets, cells, names, tables and charts
@@ -21,12 +23,13 @@
 // keep; run with "results", each {"line","said"}), and a failure is one JSON
 // object on stderr, {"ok":false,"command","error","refused"[,"line"]}.
 //
-// A file goes to the app inside one bus request (an argument to sae-bus),
-// so the system's limit on a command line bounds it: about a megabyte on
-// macOS. Exit status: 0, 1 when a request was refused (said on stderr), 2
+// A file goes to the app inside one request, so app.json's
+// controlBus.maxRequestBytes bounds it (and, with SHEET_ATTACH=1, the
+// system's limit on a command line, sae-bus's argument). Exit status: 0, 1 when a request was refused (said on stderr), 2
 // when there was no app to ask.
 'use strict';
 const { execFile, spawn } = require('child_process');
+const { SaeChannel } = require('../mcp/sae-channel');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -44,7 +47,16 @@ const rexxString = (s) => '"' + String(s).replace(/"/g, '""') + '"';
 const carried = (value) => "BASE64_DECODE('" + Buffer.from(JSON.stringify(value).replace(/[\u007f-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')), 'ascii').toString('base64') + "')";
 
 let appdata = process.env.SAE_APPDATA_DIR || '';
-function bus(command) {
+// The app this run started, on its control channel; null with SHEET_ATTACH=1.
+let app = null;
+async function bus(command) {
+  if (app) {
+    const a = await app.request(command, 20000);
+    if (a.ok) return a.result;
+    // No app to ask (it went, or did not answer): not a refusal.
+    if (!app.running() || /^no answer within /.test(a.error)) throw new Error(a.error);
+    throw new Refused(a.error || 'refused');
+  }
   return new Promise((resolve, reject) => {
     execFile(SAE_BUS, [APP, command], { encoding: 'utf8', timeout: 20000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, ...(appdata ? { SAE_APPDATA_DIR: appdata } : {}) } }, (error, stdout, stderr) => {
       if (error) return reject(new Error((stderr || '').trim() || error.message));
@@ -57,25 +69,17 @@ function bus(command) {
 }
 const unstem = (v) => (v && typeof v === 'object' && '0' in v ? Array.from({ length: Number(v['0']) }, (_, i) => v[String(i + 1)]) : v);
 
-// The app, started headless with its control bus, until stop().
-let child = null;
+// The app, started headless on its control channel, until stop().
 async function start() {
   if (process.env.SHEET_ATTACH === '1') return;
   // SHEET_APPDATA names the app's data folder (kept after the run: the version repository, versions.git, is in it); else one of its own.
   appdata = process.env.SHEET_APPDATA ? (fs.mkdirSync(process.env.SHEET_APPDATA, { recursive: true }), process.env.SHEET_APPDATA) : fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-cli-'));
-  child = spawn(SAE_BIN, ['--app', path.join(ROOT, 'app'), '--control-bus'], { env: { ...process.env, AETHER_UI_HEADLESS: '1', SAE_APPDATA_DIR: appdata }, stdio: 'ignore' });
-  child.on('error', () => {});
-  const courier = path.join(appdata, '.control-bus');
-  for (let i = 0; i < 150; i++) {
-    if (fs.existsSync(courier)) {
-      try { await bus('SPREADSHEET_VERSION()'); return; } catch (e) { /* not answering yet */ }
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  throw new Error('the app did not start (' + SAE_BIN + ')');
+  app = new SaeChannel({ bin: SAE_BIN, app: path.join(ROOT, 'app'), headless: true, env: { SAE_APPDATA_DIR: appdata }, stderr: 'ignore' });
+  await app.start().catch((e) => { throw new Error('the app did not start (' + SAE_BIN + '): ' + e.message); });
 }
-function stop() {
-  if (child) child.kill();
+async function stop() {
+  if (app) await app.close();
+  app = null;
   if (appdata && process.env.SHEET_ATTACH !== '1' && !process.env.SHEET_APPDATA) fs.rmSync(appdata, { recursive: true, force: true });
 }
 
@@ -183,8 +187,8 @@ async function main(argv) {
     else process.stderr.write(`sheet: ${e.message}\n`);
     return e instanceof Refused ? 1 : 2;
   } finally {
-    stop();
+    await stop();
   }
 }
 
-main(process.argv.slice(2)).then((code) => process.exit(code), (e) => { process.stderr.write(`sheet: ${e.message}\n`); stop(); process.exit(2); });
+main(process.argv.slice(2)).then((code) => process.exit(code), (e) => { process.stderr.write(`sheet: ${e.message}\n`); stop().then(() => process.exit(2)); });

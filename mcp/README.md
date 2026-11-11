@@ -1,20 +1,12 @@
 # An MCP server for the spreadsheet
 
-`spreadsheet-mcp.js` lets an AI client (Claude, or any MCP client) drive a
-running spreadsheet. It speaks MCP over stdio and sends each tool call to
-the app over its control bus, through sae's `sae-bus`, as
-`rexx/spreadsheet-address.js` does for REXX scripts. It needs only node,
-with no packages.
+`spreadsheet-mcp.js` lets an AI client (Claude, or any MCP client) drive
+the spreadsheet. It speaks MCP over stdio and needs only node, with no
+packages.
 
 ## Using it
 
-Start the app with its control bus on:
-
-```bash
-../sae/target/build/bin/sae --app app --control-bus
-```
-
-Then add the server to the client. For Claude Code:
+Add the server to the client. For Claude Code:
 
 ```bash
 claude mcp add spreadsheet -- node /path/to/spraedsheet/mcp/spreadsheet-mcp.js
@@ -26,9 +18,26 @@ Or in a client's JSON configuration:
 { "mcpServers": { "spreadsheet": { "command": "node", "args": ["/path/to/spraedsheet/mcp/spreadsheet-mcp.js"] } } }
 ```
 
-`SAE_BUS` names another `sae-bus` (the default is `../sae/target/sae-bus`),
-`SPREADSHEET_APP` another app name (default `Spreadsheet`), and
-`SAE_APPDATA_DIR` the app's data folder when it was started with one.
+At the first tool call that needs the app, the server starts it
+(`sae --app app --control-stdio`, its window open) and keeps it: each call
+goes to the app over sae's own stdin and stdout (`sae-channel.js`), which
+only this server and that sae hold. Nothing is written for anyone else to
+find (no courier file, no key) and nothing listens (no port), so another
+account, a web page or another program cannot reach the app this way
+(sae's `docs/app-backend.md`, "The control channel"). When the client goes,
+the window stays open for you; close it and the next call opens it again.
+
+| How | The app | Reached over |
+|---|---|---|
+| (the default) | started by the server, with a window, at the first call | sae's stdin and stdout |
+| `--headless` (or `SPREADSHEET_MCP_HEADLESS=1`) | started by the server with no window, its data in a folder of its own (or `SAE_APPDATA_DIR`); gone when the server goes | sae's stdin and stdout |
+| `--attach` (or `SPREADSHEET_MCP_ATTACH=1`) | one you started yourself: `../sae/target/build/bin/sae --app app --control-bus` | its control bus, through sae's `sae-bus` (a loopback port and a key in a file only you can read) |
+
+`SAE_BIN` names another sae to start (the default is
+`../sae/target/build/bin/sae`). With `--attach`, `SAE_BUS` names another
+`sae-bus` (the default is `../sae/target/sae-bus`), `SPREADSHEET_APP`
+another app name (default `Spreadsheet`), and `SAE_APPDATA_DIR` the app's
+data folder when it was started with one.
 
 ## Which tools: `--tools=json`, `rexx` or `all`
 
@@ -60,8 +69,9 @@ claude mcp add spreadsheet -- node /path/to/mcp/spreadsheet-mcp.js --tools=all
 
 The ui channel: the app's `app.json` grants `capabilities.controlBus.ui`, and the
 app runs from a sae-driver build (aether-ui's driver on, started with
-`AETHER_UI_TEST_PORT`) with `--control-bus`; a release sae answers that it has no
-driver (sae's `docs/control-bus.md`, "The ui channel"). The three tools are listed in
+`AETHER_UI_TEST_PORT`; `SAE_BIN` names it); a release sae answers that it has no
+driver (sae's `docs/control-bus.md`, "The ui channel"). It works the same
+on the control channel as on the bus. The three tools are listed in
 every setting; without the channel they answer with why.
 | `spreadsheet_run` | Runs one command of REXX, e.g. `SETCELL("A1", "100"); SETCELL("A2", "=A1*2")`; queries too (`RESULT(RANGE("A1:C9") \|> WHERE("amount > 100"))`), which `spreadsheet_call` does not take. |
 
@@ -126,17 +136,25 @@ The tools' descriptions say it too:
   running at 10 s; either way the app takes the request back whole and
   the next request is one Undo as before.
 - **One call at a time**, each answered within 10 seconds, on this machine
-  only (the bus is loopback, off unless asked for, and its key is fresh
-  each launch and readable only by this user: sae's `docs/control-bus.md`).
+  only: over the channel only this server reaches the app; with
+  `--attach` the bus is loopback, off unless asked for, and its key is
+  fresh each launch and readable only by this user (sae's
+  `docs/control-bus.md`).
 
 ## Tests
 
 ```bash
-./run-tests.sh mcp                  # the protocol, with a stand-in for sae-bus
-./run-tests.sh spec_app_sheet_mcp   # the app driven through the server
+./run-tests.sh mcp                  # the protocol, with stand-ins for sae-bus and sae
+./run-tests.sh mcp_channel          # the real app, started by the server on its control channel
+./run-tests.sh spec_app_sheet_mcp   # an app already running, driven through the server (--attach)
 ```
 
 `tests/mcp/server.test.js` runs on `node --test` against
-`tests/mcp/fake-sae-bus.js`; `tests/specs/spec_app_sheet_mcp.ae` starts the
-app with `--control-bus`, makes each call through `tests/mcp/drive.js`
-(its larger arguments in `tests/mcp/args/`), and checks the grid.
+`tests/mcp/fake-sae-bus.js` (attached) and `tests/mcp/fake-sae.js` (a sae
+that answers frames on its stdin). `tests/mcp/channel.test.js` runs the
+server `--headless` on the real sae: a session of tool calls, their results
+read back, no courier file in the app's data folder, `lsof` finding nothing
+listening in sae or the server, and sae gone when the client goes.
+`tests/specs/spec_app_sheet_mcp.ae` starts the app with `--control-bus`,
+makes each call through `tests/mcp/drive.js` (`--attach`; its larger
+arguments in `tests/mcp/args/`), and checks the grid.

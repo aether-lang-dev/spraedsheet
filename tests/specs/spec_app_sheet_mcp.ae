@@ -1,5 +1,7 @@
 // spec_app_sheet_mcp.ae — an AI client drives the app through the MCP
-// server (mcp/spreadsheet-mcp.js) over its control bus, as Claude would:
+// server (mcp/spreadsheet-mcp.js --attach) over its control bus, as Claude
+// would with an app the person started (the server starting the app itself,
+// on its control channel, is tests/mcp/channel.test.js):
 // tests/mcp/drive.js makes one MCP tool call apiece, through the server and
 // sae's sae-bus, and what it did must be on the grid. First the tools a
 // client is offered by default (JSON in, nothing to escape), then

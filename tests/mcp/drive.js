@@ -12,7 +12,8 @@ const readline = require('readline');
 
 const [tool, given = '{}'] = process.argv.slice(2);
 const args = given.startsWith('@') ? require('fs').readFileSync(given.slice(1), 'utf8') : given;
-const server = spawn(process.execPath, [path.join(__dirname, '..', '..', 'mcp', 'spreadsheet-mcp.js')], { stdio: ['pipe', 'pipe', 'inherit'] });
+// --attach: the app spec_app_sheet_mcp's sae-driver runs, with its control bus on.
+const server = spawn(process.execPath, [path.join(__dirname, '..', '..', 'mcp', 'spreadsheet-mcp.js'), '--attach'], { stdio: ['pipe', 'pipe', 'inherit'] });
 const send = (m) => server.stdin.write(JSON.stringify(m) + '\n');
 
 readline.createInterface({ input: server.stdout }).on('line', (line) => {

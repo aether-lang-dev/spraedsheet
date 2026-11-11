@@ -1,5 +1,6 @@
 // mcp/spreadsheet-mcp.js spoken to as an MCP client does, over stdio, with
-// tests/mcp/fake-sae-bus.js in place of sae's sae-bus: the handshake, the
+// tests/mcp/fake-sae-bus.js in place of sae's sae-bus (--attach), or
+// tests/mcp/fake-sae.js in place of the sae it starts: the handshake, the
 // tools each --tools setting offers, each tool's request on the bus and its
 // answer, the arguments checked before anything is sent, and what a client
 // is told when a call fails or there is no app to ask.
@@ -16,12 +17,13 @@ const path = require('path');
 const SERVER = path.join(__dirname, '..', '..', 'mcp', 'spreadsheet-mcp.js');
 const FAKE = path.join(__dirname, 'fake-sae-bus.js');
 
-// A server with the fake bus; `talk(messages)` sends them one a line and
-// gives back the replies to those with ids, in order, and the bus's calls.
+// A server with the fake bus (attached, unless env says otherwise);
+// `talk(messages)` sends them one a line and gives back the replies to those
+// with ids, in order, and the bus's calls.
 async function talk(messages, env = {}, argv = []) {
   const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-')), 'bus.log');
   const child = spawn(process.execPath, [SERVER, ...argv], {
-    env: { ...process.env, SAE_BUS: FAKE, FAKE_BUS_LOG: log, SPREADSHEET_MCP_TOOLS: '', ...env },
+    env: { ...process.env, SAE_BUS: FAKE, FAKE_BUS_LOG: log, SPREADSHEET_MCP_TOOLS: '', SPREADSHEET_MCP_ATTACH: '1', SPREADSHEET_MCP_HEADLESS: '', ...env },
     stdio: ['pipe', 'pipe', 'inherit'],
   });
   let out = '';
@@ -364,15 +366,57 @@ test('spreadsheet_inspect: the workbook at a glance, from INSPECTWORKBOOK(), as 
   assert.match(r.content[0].text, /"tables"/);
 });
 
-test('--headless: the server starts the app itself (no window, its control bus on, a data folder of its own), asks it there, and stops it', async () => {
+// ---- starting the app: the control channel (the default) --------------
+
+const FAKE_SAE = path.join(__dirname, 'fake-sae.js');
+
+test('by default the server starts the app itself at the first call, on its stdin and stdout (--control-stdio), with a window, and leaves it open when the client goes', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-launch-'));
+  const appLog = path.join(dir, 'app.log');
+  const { replies, calls } = await talk([INIT, LIST, call(3, 'spreadsheet_inspect', {})], { SPREADSHEET_MCP_ATTACH: '', SAE_BIN: FAKE_SAE, FAKE_SAE_LOG: appLog });
+  assert.equal(replies[2].result.isError, false);
+  const lines = fs.readFileSync(appLog, 'utf8').split('\n').filter((l) => l);
+  const started = JSON.parse(lines[0]);
+  assert.deepEqual(started.args.slice(-1), ['--control-stdio']);
+  assert.equal(started.args[1], path.join(__dirname, '..', '..', 'app'), 'the app beside the server');
+  assert.equal(started.headless, '', 'with a window');
+  assert.equal(lines.length, 2, 'started once; told its channel closed (it stays: a window is the person\'s)');
+  assert.equal(calls.length, 1, 'the request over the channel');
+  assert.equal(calls[0][1], 'INSPECTWORKBOOK()');
+});
+
+test('tools/list alone starts no app', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-launch-'));
+  const appLog = path.join(dir, 'app.log');
+  const { replies } = await talk([INIT, LIST], { SPREADSHEET_MCP_ATTACH: '', SAE_BIN: FAKE_SAE, FAKE_SAE_LOG: appLog });
+  assert.ok(replies[1].result.tools.length > 0);
+  assert.equal(fs.existsSync(appLog), false, 'no app started');
+});
+
+test('--headless: the app with no window and a data folder of its own, every request to it, and stopped when the client goes', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-headless-'));
   const appLog = path.join(dir, 'app.log');
-  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_inspect', {})], { SAE_BIN: path.join(__dirname, 'fake-sae.js'), FAKE_SAE_LOG: appLog, FAKE_BUS_LOG_ENV: '1' }, ['--headless']);
+  const { replies, calls } = await talk([INIT, call(2, 'spreadsheet_inspect', {}), call(3, 'spreadsheet_read_range', { range: 'A1:B2' })], { SPREADSHEET_MCP_ATTACH: '', SAE_BIN: FAKE_SAE, FAKE_SAE_LOG: appLog, FAKE_BUS_LOG_ENV: '1' }, ['--headless']);
   assert.equal(replies[1].result.isError, false);
   const started = JSON.parse(fs.readFileSync(appLog, 'utf8').split('\n')[0]);
-  assert.deepEqual([started.args.slice(-1), started.headless, started.appdata !== ''], [['--control-bus'], '1', true]);
-  assert.ok(calls.every((c) => c[2] === started.appdata), 'every request to that app');
+  assert.deepEqual([started.args.slice(-1), started.headless, started.appdata !== ''], [['--control-stdio'], '1', true]);
+  assert.equal(calls.length, 2, 'both requests to the one app');
+  assert.ok(calls.every((c) => c[2] === started.appdata), 'in its data folder');
   assert.ok(fs.readFileSync(appLog, 'utf8').includes('"stopped"'), 'stopped when the client went');
+  assert.equal(fs.existsSync(started.appdata), false, 'its data folder removed');
+});
+
+test('an app that does not start is a tool error saying why, not a crash', async () => {
+  const { code, replies } = await talk([INIT, call(2, 'spreadsheet_inspect', {})], { SPREADSHEET_MCP_ATTACH: '', SAE_BIN: '/nonexistent/sae' }, ['--headless']);
+  assert.equal(code, 0);
+  assert.equal(replies[1].result.isError, true);
+  assert.match(replies[1].result.content[0].text, /^no spreadsheet to ask: the app did not start \(\/nonexistent\/sae\)/);
+});
+
+test('--attach and --headless together are refused at the start', () => {
+  const r = spawnSync(process.execPath, [SERVER, '--attach', '--headless'], { encoding: 'utf8', input: '' });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /not both/);
 });
 
 // ---- the window: spreadsheet_screenshot, spreadsheet_key, spreadsheet_ui (7.5)

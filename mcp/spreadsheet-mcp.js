@@ -4,7 +4,9 @@
  */
 /**
  * An MCP server for the sae spreadsheet (../app/): an AI client (Claude, or
- * any MCP client) drives a running spreadsheet through its control bus.
+ * any MCP client) drives the spreadsheet, which this server starts itself
+ * and talks to over sae's stdin and stdout (sae's control channel), or one
+ * already running, through its control bus (--attach).
  *
  *   claude mcp add spreadsheet -- node /path/to/mcp/spreadsheet-mcp.js
  *
@@ -27,23 +29,35 @@
  *     spreadsheet_read_range, spreadsheet_inspect, spreadsheet_list_commands
  *   all                 all of them
  *
- * --headless (or SPREADSHEET_MCP_HEADLESS=1): the server starts the app
- * itself, with no window (sae with AETHER_UI_HEADLESS=1 and its control
- * bus on, its data in a folder of its own), and stops it when the client
- * goes; SAE_BIN names another sae (default ../sae/target/build/bin/sae).
+ * How it reaches the app, set when it starts:
  *
- * The bus is sae's: the app started with `--control-bus`, a port chosen at
- * random and a key fresh for every launch, in a courier file only this user
- * can read, and every message sealed (sae's docs/control-bus.md). This
- * server does none of that itself: it runs sae's `sae-bus` for each call,
- * as rexx/spreadsheet-address.js does.
+ *   (the default)      it starts the app itself at the first call that needs
+ *                      it, `sae --app app --control-stdio`, and holds sae's
+ *                      stdin and stdout as the channel (./sae-channel.js):
+ *                      nothing on the file system, nothing listening, no
+ *                      key; only this server and that sae hold the channel.
+ *                      The window stays open for the person when the server
+ *                      goes; closed by the person, the next call opens it
+ *                      again.
+ *   --headless         the same with no window (AETHER_UI_HEADLESS=1), its
+ *   (SPREADSHEET_MCP_HEADLESS=1)   data in a folder of its own (or
+ *                      SAE_APPDATA_DIR); the app goes when the server does.
+ *   --attach           an app the person started with its control bus on
+ *   (SPREADSHEET_MCP_ATTACH=1)   (sae --app app --control-bus): a loopback
+ *                      port and a key fresh for every launch, in a courier
+ *                      file only this user can read, every message sealed
+ *                      (sae's docs/control-bus.md). This server runs sae's
+ *                      `sae-bus` for each call, as rexx/spreadsheet-address.js
+ *                      does.
  *
- *   SAE_BUS            the sae-bus to run (default: ../sae/target/sae-bus,
- *                      beside this repository's sae link)
- *   SPREADSHEET_APP    the app's name, which finds its courier file
+ *   SAE_BIN            the sae to start (default ../sae/target/build/bin/sae)
+ *   SAE_BUS            --attach: the sae-bus to run (default:
+ *                      ../sae/target/sae-bus, beside this repository's sae link)
+ *   SPREADSHEET_APP    --attach: the app's name, which finds its courier file
  *                      (default "Spreadsheet", app/app.json's name)
- *   SAE_APPDATA_DIR    the app's data folder, when the app was started
- *                      with one (sae-bus reads it)
+ *   SAE_APPDATA_DIR    the app's data folder: with --attach, where it was
+ *                      started with one (sae-bus reads it); otherwise the
+ *                      one the app is started with
  */
 'use strict';
 
@@ -65,7 +79,7 @@ const LIMITS =
   'Each call is one request to the running app and one step of its undo (the person takes it back with one Undo); ' +
   'one that fails is taken back whole. ' +
   'Request and reply only: you are not told when the person edits the sheet, so read again before relying on what you read earlier. ' +
-  'One call at a time, each answered within 10 seconds. The app must be running with its control bus on (sae --app app --control-bus).';
+  'One call at a time, each answered within 10 seconds.';
 
 // ---- the tools -------------------------------------------------------------
 
@@ -298,49 +312,102 @@ function rexxString(s) {
   return '"' + String(s).replace(/"/g, '""') + '"';
 }
 
-// --headless: the app this server started, and its data folder.
-let headlessApp = null, headlessData = '';
-async function startHeadless() {
-  const fs = require('fs'), os = require('os'), { spawn } = require('child_process');
-  headlessData = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-app-'));
-  const sae = process.env.SAE_BIN || path.join(__dirname, '..', 'sae', 'target', 'build', 'bin', 'sae');
-  headlessApp = spawn(sae, ['--app', path.join(__dirname, '..', 'app'), '--control-bus'], { env: { ...process.env, AETHER_UI_HEADLESS: '1', SAE_APPDATA_DIR: headlessData }, stdio: 'ignore' });
-  headlessApp.on('error', () => {});
-  const courier = path.join(headlessData, '.control-bus');
-  for (let i = 0; i < 150; i++) {
-    if (fs.existsSync(courier) && (await bus('SPREADSHEET_VERSION()')).ok) return true;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  return false;
-}
-function stopHeadless() {
-  if (headlessApp) headlessApp.kill();
-  if (headlessData) require('fs').rmSync(headlessData, { recursive: true, force: true });
-  headlessApp = null;
+// How this server reaches the app: one of these, made once in main.
+//
+//   launch (the default)   it starts the app itself (sae --app app
+//                          --control-stdio) at the first call that needs it,
+//                          and holds sae's stdin and stdout as the channel
+//                          (./sae-channel.js): no courier file, no port, no
+//                          key. --headless: with no window, its data in a
+//                          folder of its own; the app goes when the server
+//                          does. With a window the app stays open for the
+//                          person when the server goes, and if the person
+//                          closes it, the next call starts it again.
+//   attach (--attach)      the app the person started with its control bus
+//                          on (sae --app app --control-bus), through sae's
+//                          sae-bus, a request a process.
+const { SaeChannel } = require('./sae-channel');
+
+function launcher({ headless }) {
+  const fs = require('fs'), os = require('os');
+  let app = null, data = '', ownData = false;
+  return {
+    async request(command) {
+      if (!app || !app.running()) {
+        if (headless && !data) {
+          data = process.env.SAE_APPDATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-app-'));
+          ownData = !process.env.SAE_APPDATA_DIR;
+        }
+        app = new SaeChannel({
+          bin: process.env.SAE_BIN || path.join(__dirname, '..', 'sae', 'target', 'build', 'bin', 'sae'),
+          app: path.join(__dirname, '..', 'app'),
+          headless,
+          env: data ? { SAE_APPDATA_DIR: data } : {},
+        });
+        try {
+          await app.start();
+        } catch (e) {
+          return { ok: false, error: 'no spreadsheet to ask: ' + e.message };
+        }
+      }
+      return app.request(command, BUS_DEADLINE_MS);
+    },
+    async close() {
+      if (app) await app.close();
+      if (ownData) fs.rmSync(data, { recursive: true, force: true });
+      app = null;
+    },
+  };
 }
 
-// One request over the bus: { ok, result } or { ok: false, error }.
+// One request over the bus, through sae-bus.
+function attacher() {
+  return {
+    request(command) {
+      const saeBus = process.env.SAE_BUS || path.join(__dirname, '..', 'sae', 'target', 'sae-bus');
+      const app = process.env.SPREADSHEET_APP || 'Spreadsheet';
+      return new Promise((resolve) => {
+        execFile(saeBus, [app, command], { encoding: 'utf8', timeout: BUS_DEADLINE_MS, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+          if (error) {
+            const why = (stderr || '').trim() || (error.killed ? 'no answer within ' + BUS_DEADLINE_MS / 1000 + ' s' : error.message);
+            resolve({ ok: false, error: 'no spreadsheet to ask: ' + why });
+            return;
+          }
+          let answer;
+          try {
+            answer = JSON.parse(stdout);
+          } catch (e) {
+            resolve({ ok: false, error: 'sae-bus answered with something other than JSON: ' + stdout.slice(0, 200) });
+            return;
+          }
+          if (answer.success) resolve({ ok: true, result: answer.result === undefined ? null : answer.result });
+          else resolve({ ok: false, error: answer.error || 'the command failed (error ' + (answer.errorCode || 1) + ')' });
+        });
+      });
+    },
+    async close() {},
+  };
+}
+
+// --attach, or SPREADSHEET_MCP_ATTACH=1; --headless, or SPREADSHEET_MCP_HEADLESS=1.
+const attachOf = (argv, env) => argv.includes('--attach') || env.SPREADSHEET_MCP_ATTACH === '1';
+const headlessOf = (argv, env) => argv.includes('--headless') || env.SPREADSHEET_MCP_HEADLESS === '1';
+
+function transportOf(argv, env) {
+  if (attachOf(argv, env)) {
+    if (headlessOf(argv, env)) throw new Error('--attach drives an app already running; --headless starts one: not both');
+    return attacher();
+  }
+  return launcher({ headless: headlessOf(argv, env) });
+}
+
+// The server's way to the app (main sets it; a test may set its own).
+let transport = attacher();
+const useTransport = (t) => { transport = t; };
+
+// One request to the app: { ok, result } or { ok: false, error }.
 function bus(command) {
-  const saeBus = process.env.SAE_BUS || path.join(__dirname, '..', 'sae', 'target', 'sae-bus');
-  const app = process.env.SPREADSHEET_APP || 'Spreadsheet';
-  return new Promise((resolve) => {
-    execFile(saeBus, [app, command], { encoding: 'utf8', timeout: BUS_DEADLINE_MS, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, ...(headlessData ? { SAE_APPDATA_DIR: headlessData } : {}) } }, (error, stdout, stderr) => {
-      if (error) {
-        const why = (stderr || '').trim() || (error.killed ? 'no answer within ' + BUS_DEADLINE_MS / 1000 + ' s' : error.message);
-        resolve({ ok: false, error: 'no spreadsheet to ask: ' + why });
-        return;
-      }
-      let answer;
-      try {
-        answer = JSON.parse(stdout);
-      } catch (e) {
-        resolve({ ok: false, error: 'sae-bus answered with something other than JSON: ' + stdout.slice(0, 200) });
-        return;
-      }
-      if (answer.success) resolve({ ok: true, result: answer.result === undefined ? null : answer.result });
-      else resolve({ ok: false, error: answer.error || 'the command failed (error ' + (answer.errorCode || 1) + ')' });
-    });
-  });
+  return transport.request(command);
 }
 
 // A REXX stem ({0: count, 1: ..., n: ...}) as an array; anything else as is.
@@ -726,7 +793,8 @@ async function handle(msg, surface, reviewing = false) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER,
         instructions:
-          'Drives a running sae spreadsheet over its control bus. Read before you write, keep each call small, ' +
+          'Drives a sae spreadsheet: one this server starts at the first call (over its own stdin and stdout), or with --attach one already running with its control bus on. ' +
+          'Read before you write, keep each call small, ' +
           'and tell the person what you changed: each call is one Undo for them.',
       });
       return;
@@ -760,11 +828,15 @@ if (require.main === module) {
     process.stderr.write('spreadsheet-mcp: ' + e.message + '\n');
     process.exit(2);
   }
-  // Requests are answered in order: the bus takes one command at a time.
-  // --headless: the app started first, and stopped at the end.
-  const headless = process.argv.includes('--headless') || process.env.SPREADSHEET_MCP_HEADLESS === '1';
-  let queue = headless ? startHeadless().then((up) => { if (!up) process.stderr.write('spreadsheet-mcp: the app did not start headless\n'); }) : Promise.resolve();
-  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { stopHeadless(); process.exit(0); });
+  try {
+    useTransport(transportOf(process.argv.slice(2), process.env));
+  } catch (e) {
+    process.stderr.write('spreadsheet-mcp: ' + e.message + '\n');
+    process.exit(2);
+  }
+  // Requests are answered in order: the app takes one command at a time.
+  let queue = Promise.resolve();
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => transport.close().then(() => process.exit(0)));
   const lines = readline.createInterface({ input: process.stdin });
   lines.on('line', (line) => {
     if (line.trim() === '') return;
@@ -780,7 +852,7 @@ if (require.main === module) {
       if (msg.id !== undefined && msg.id !== null) error(msg.id, -32603, String(e && e.message || e));
     });
   });
-  lines.on('close', () => queue.then(() => { stopHeadless(); process.exit(0); }));
+  lines.on('close', () => queue.then(() => transport.close()).then(() => process.exit(0)));
 }
 
-module.exports = { reviewOf, toolsFor, surfaceOf, rexxString, batchCommand, programCommand, unstem, plain, parseRange, asRows, checked, callTool, handle };
+module.exports = { reviewOf, toolsFor, surfaceOf, attachOf, headlessOf, transportOf, useTransport, rexxString, batchCommand, programCommand, unstem, plain, parseRange, asRows, checked, callTool, handle };

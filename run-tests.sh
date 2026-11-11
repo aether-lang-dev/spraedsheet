@@ -17,10 +17,15 @@
 # tests/run_spec.sh, with this repo's tests/lib first on the module path;
 # spec_app_sheet_rexx runs rexx/'s scripts against it, with node and the
 # RexxJS beside this checkout (./RexxJS -> ../RexxJS). mcp: the MCP
-# server's protocol (tests/mcp/, node --test, a stand-in for sae-bus);
-# spec_app_sheet_mcp drives the app through that server, with node. cli:
-# tests/cli/test_*.sh, a shell test per subcommand of cli/sheet.js, each
-# starting the app headless itself (target/build/bin/sae), with node.
+# server's protocol (tests/mcp/server.test.js, node --test, stand-ins for
+# sae-bus and for the sae it starts); mcp_channel: the server starting the
+# real app (target/build/bin/sae) and driving it over its control channel,
+# sae's stdin and stdout, with nothing on the file system and nothing
+# listening (tests/mcp/channel.test.js, node and lsof); spec_app_sheet_mcp
+# drives an app already running with its control bus through that server
+# (--attach), with node. cli: tests/cli/test_*.sh, a shell test per
+# subcommand of cli/sheet.js, each starting the app headless itself on its
+# control channel (target/build/bin/sae), with node.
 # function_status: docs/function_status.md is what tools/function-status.sh
 # generates now (the functions' records, examples and ledger counts).
 # On Linux with no display it reruns itself under xvfb-run (a 1920 x 1200 screen).
@@ -73,6 +78,7 @@ spec_app_sheet_bus|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-bus-app
 spec_app_sheet_files|AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SAE_APPDATA_DIR=$T/sheet-files-appdata SAE_SHELL_LOG=$T/sheet-shell.log|spec spec_app_sheet_files
 spec_app_sheet_rexx|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-rexx-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SHEET_ROOT=$ROOT|spec spec_app_sheet_rexx
 mcp||mcp
+mcp_channel||mcp_channel
 cli||cli
 real_keys_x11||xkeys
 spec_app_sheet_mcp|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-mcp-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SHEET_ROOT=$ROOT|spec spec_app_sheet_mcp
@@ -96,7 +102,7 @@ for line in $TABLE; do
 '; continue
     fi
     # The MCP server runs on node.
-    case "$label" in mcp|spec_app_sheet_mcp|cli)
+    case "$label" in mcp|mcp_channel|spec_app_sheet_mcp|cli)
         if ! command -v node >/dev/null 2>&1; then
             echo "FAIL $label (needs node)"
             fail=$((fail + 1)); failed="$failed $label"; IFS='
@@ -114,6 +120,7 @@ for line in $TABLE; do
         headless) set -- env SAE_LOWER_OUT="$T/lower-tests" SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/headless" ;;
         status) set -- sh "$ROOT/tools/function-status.sh" --check ;;
         mcp) set -- node --test "$ROOT/tests/mcp/server.test.js" ;;
+        mcp_channel) set -- env SAE_DIR="$SAE" node --test "$ROOT/tests/mcp/channel.test.js" ;;
         cli) set -- sh -c 'r=0; for t in "$0"/tests/cli/test_*.sh; do echo "== $t"; SAE_DIR="$1" sh "$t" || r=1; done; exit $r' "$ROOT" "$SAE" ;;
         spec) set -- env SAE_TEST_LIB_DIR="$ROOT/tests/lib" \
                   "$SAE/tests/run_spec.sh" "$ROOT/tests/specs/$2.ae" "$ROOT/app" ;;
