@@ -26,6 +26,11 @@ find (no courier file, no key) and nothing listens (no port), so another
 account, a web page or another program cannot reach the app this way
 (sae's `docs/app-backend.md`, "The control channel"). When the client goes,
 the window stays open for you; close it and the next call opens it again.
+Neither side can stall the other by not reading: sae drops the channel if
+the server leaves one of its answers untaken for 5 s, and the server gives
+the app up if it leaves a request untaken for 5 s (every call waiting fails
+with `the app stopped reading its channel: ...`; a `--headless` app is
+stopped, a windowed one left to you).
 
 | How | The app | Reached over |
 |---|---|---|
@@ -151,7 +156,8 @@ The tools' descriptions say it too:
 
 `tests/mcp/server.test.js` runs on `node --test` against
 `tests/mcp/fake-sae-bus.js` (attached) and `tests/mcp/fake-sae.js` (a sae
-that answers frames on its stdin). `tests/mcp/channel.test.js` runs the
+that answers frames on its stdin, or with `FAKE_SAE_DEAF=1` one that stops
+reading them). `tests/mcp/channel.test.js` runs the
 server `--headless` on the real sae: a session of tool calls, their results
 read back, no courier file in the app's data folder, `lsof` finding nothing
 listening in sae or the server, and sae gone when the client goes.

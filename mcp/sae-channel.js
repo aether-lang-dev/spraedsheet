@@ -38,6 +38,11 @@ const ANSWER_MS = 12000;
 const START_MS = 60000;
 // The largest answer read (a screenshot, base64).
 const MOST_BYTES = 64 * 1024 * 1024;
+// A request handed to sae's stdin must be taken within this: sae reads its
+// channel every 20 ms whatever its page is doing, so one it has not taken
+// for this long has stopped reading (sae holds the same bound the other
+// way, its frames.WRITE_MS).
+const WRITE_MS = 5000;
 
 class SaeChannel {
   // bin: the sae to start; app: the app's folder; headless: no window
@@ -57,6 +62,7 @@ class SaeChannel {
     this.onServing = null;
     this.why = '';              // why it is not running ('' while it is, or before start)
     this.exited = null;         // resolves with the exit status
+    this.stall = null;          // the timer on bytes sae has not taken, while there are some
   }
 
   // Start sae; resolves once a page serves, rejects with why it did not.
@@ -93,11 +99,13 @@ class SaeChannel {
         done(new Error(this.why));
       });
       child.on('close', (code, signal) => {
+        this.drained();
         this.gone('the app has exited (' + (code === null ? 'signal ' + signal : 'status ' + code) + ')');
         done(new Error(this.why));
       });
       // Its stdin closing early is the same as its exit, said there.
       child.stdin.on('error', () => {});
+      child.stdin.on('drain', () => this.drained());
       child.stdout.on('data', (d) => this.read(d));
     });
   }
@@ -171,8 +179,40 @@ class SaeChannel {
         resolve({ ok: false, error: 'no answer within ' + timeoutMs / 1000 + ' s' });
       }, timeoutMs);
       this.waiting.set(id, { resolve, timer });
-      this.child.stdin.write(Buffer.concat([head, payload]));
+      if (!this.child.stdin.write(Buffer.concat([head, payload]))) this.undrained();
     });
+  }
+
+  // node buffers what sae's stdin has not taken, without bound: past its
+  // high-water mark a write says so, and 'drain' says when it has all gone.
+  // Not gone within WRITE_MS: sae has stopped reading, and is dropped.
+  undrained() {
+    if (this.stall) return;
+    this.stall = setTimeout(() => {
+      this.stall = null;
+      if (!this.child || this.child.stdin.writableLength === 0) return;
+      this.stopped('the app stopped reading its channel: ' + this.child.stdin.writableLength +
+        ' bytes not taken within ' + WRITE_MS / 1000 + ' s');
+    }, WRITE_MS);
+  }
+
+  drained() {
+    if (this.stall) clearTimeout(this.stall);
+    this.stall = null;
+  }
+
+  // The channel is given up on (sae stopped reading): every request fails
+  // with why. Without a window sae is stopped; with one it is the person's,
+  // and only the channel goes (as in close()).
+  stopped(why) {
+    this.gone(why);
+    if (this.headless) {
+      this.kill();
+      return;
+    }
+    try { this.child.stdin.destroy(); } catch (e) { /* gone already */ }
+    this.child.stdout.destroy();
+    this.child.unref();
   }
 
   // Close the channel. A headless sae goes by itself; one that has not
@@ -181,6 +221,7 @@ class SaeChannel {
   async close(graceMs = 3000) {
     if (!this.child) return;
     const child = this.child;
+    this.drained();
     try { child.stdin.end(); } catch (e) { /* gone already */ }
     if (!this.headless) {
       // Not waited for: it is the person's now.
@@ -200,4 +241,4 @@ class SaeChannel {
   }
 }
 
-module.exports = { SaeChannel, ANSWER_MS };
+module.exports = { SaeChannel, ANSWER_MS, WRITE_MS };

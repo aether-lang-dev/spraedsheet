@@ -5,7 +5,8 @@
 // request frame on its stdin with fake-sae-bus.js's canned answer for that
 // command (so every request is in $FAKE_BUS_LOG as on the bus), on its
 // stdout, as frames. When its stdin ends it logs "stopped" and exits, as a
-// headless sae does.
+// headless sae does. With FAKE_SAE_DEAF=1 it says a page serves and then
+// never reads its stdin, nor exits: a sae that has stopped reading.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -23,6 +24,10 @@ function frame(obj) {
 }
 
 frame({ event: 'serving' });
+if (process.env.FAKE_SAE_DEAF === '1') {
+  setInterval(() => {}, 60000);
+  return;
+}
 let buf = Buffer.alloc(0);
 process.stdin.on('data', (d) => {
   buf = Buffer.concat([buf, d]);

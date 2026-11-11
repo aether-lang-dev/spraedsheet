@@ -413,6 +413,23 @@ test('an app that does not start is a tool error saying why, not a crash', async
   assert.match(replies[1].result.content[0].text, /^no spreadsheet to ask: the app did not start \(\/nonexistent\/sae\)/);
 });
 
+test('a sae that stops reading its channel: a request fails once it has waited 5 s, saying so, and a headless sae is stopped', async () => {
+  const { SaeChannel, WRITE_MS } = require('../../mcp/sae-channel');
+  const app = new SaeChannel({ bin: FAKE_SAE, app: 'app', headless: true, env: { FAKE_SAE_DEAF: '1' }, stderr: 'ignore' });
+  await app.start();
+  const t0 = Date.now();
+  // 4 MB: past what a pipe holds, so most of it waits in node for sae to take.
+  const a = await app.request('x'.repeat(4 * 1024 * 1024));
+  const took = Date.now() - t0;
+  assert.equal(a.ok, false);
+  assert.match(a.error, /^the app stopped reading its channel: \d+ bytes not taken within 5 s$/);
+  assert.ok(took >= WRITE_MS && took < WRITE_MS + 3000, 'at the write bound, not the answer deadline (' + took + ' ms)');
+  assert.equal(app.running(), false);
+  assert.notEqual(await app.exited, 0, 'stopped (killed)');
+  const later = await app.request('after');
+  assert.equal(later.error, a.error, 'a later request fails at once with the same reason');
+});
+
 test('--attach and --headless together are refused at the start', () => {
   const r = spawnSync(process.execPath, [SERVER, '--attach', '--headless'], { encoding: 'utf8', input: '' });
   assert.equal(r.status, 2);
