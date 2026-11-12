@@ -103,8 +103,9 @@ sheet.refresh();
 // A handler's work the page's time limit stopped (a recalculation started
 // from a click or a key, say) never comes back and runs no finally: sae
 // tells the page, which fails the turn that work held, so later changes run.
-ui.on_interrupted(() => {
-  if (sheet.cmds.interrupted()) print("sheet: work was stopped at the page's time limit; the cells it was on are worked out again at the next change");
+ui.on_interrupted(async () => {
+  if (sheet.cmds.interrupted()) print("sheet: work was stopped at the page's time limit; the cells it was on are worked out again now");
+  await sheet.cmds.recoverInterrupted();
   sheet.refresh();
 });
 

@@ -5155,7 +5155,16 @@ export class Commands {
   // so the turn it held fails, and the changes behind it are not left
   // waiting for it. The cells it was working out are worked out by the next
   // turn (Sheet). True when a turn was in progress.
-  interrupted(): boolean { return this.#wb.interruptTurns("the page's time limit"); }
+  // A group of undo a stopped script left open (the UI path: a request's is
+  // ended by stopped()) is ended, its changes one step.
+  interrupted(): boolean {
+    const had = this.#wb.interruptTurns("the page's time limit");
+    if (!this.#request) this.#wb.endStoppedGroup();
+    return had;
+  }
+
+  // The work the time limit stopped, done now rather than at the next change.
+  recoverInterrupted(): Promise<boolean> { return this.#wb.recoverInterrupted(); }
 
   // The request in flight, which sae's control bus answered without it
   // (bus.serve's stopped): "interrupted", the page's time limit stopped it

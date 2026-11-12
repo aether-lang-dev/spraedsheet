@@ -527,6 +527,14 @@ export class Sheet {
   // Whether any of its cells is on a cycle through other sheets.
   get cycling(): boolean { return this.#onCycle.size > 0; }
 
+  // The cells a recalculation that was stopped had in hand, worked out now
+  // (once; see #recompute). True when there were any.
+  async recoverUnsettled(): Promise<boolean> {
+    if (this.#unsettled.size === 0) return false;
+    await this.#inTurn(() => this.#recompute([]));
+    return true;
+  }
+
   // The cells out of date under manual calculation, in sheet order.
   stale(): string[] { return [...this.#stale].sort(byOrder); }
 

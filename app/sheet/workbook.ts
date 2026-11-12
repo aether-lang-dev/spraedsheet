@@ -352,7 +352,35 @@ export class Workbook {
   readonly #turns = new Turns();
   // The change being worked out failed, for good (a page job the time limit
   // killed): the changes behind it go on. True when one was in progress.
-  interruptTurns(why: string): boolean { return this.#turns.interrupt(why); }
+  interruptTurns(why: string): boolean {
+    const had = this.#turns.interrupt(why);
+    // The changes settle() was passing between sheets when it was stopped
+    // (it never comes back to finish them) wait for recoverInterrupted.
+    if (this.#inFlight) {
+      for (const [from, keys] of this.#inFlight) {
+        let mine = this.#pending.get(from);
+        if (!mine) this.#pending.set(from, (mine = new Set()));
+        for (const k of keys) mine.add(k);
+      }
+      this.#inFlight = null;
+    }
+    return had;
+  }
+  #inFlight: Map<string, Set<string>> | null = null;
+
+  // After work was stopped (interruptTurns): the cells it was on worked out
+  // again, and the changes between sheets it had not yet passed on passed on.
+  // False when it left nothing.
+  async recoverInterrupted(): Promise<boolean> {
+    let work = this.#pending.size > 0;
+    for (const p of [...this.#pages]) if (await p.sheet.recoverUnsettled()) work = true;
+    if (!work) return false;
+    await this.settle();
+    return true;
+  }
+
+  // Whether a group of undo is open (a script, a request, a preview).
+  get grouping(): boolean { return this.#group !== null; }
   // How Excel formulas are shown and typed (a view of them: they are
   // stored A1 either way, and RexxJS formulas are shown as written).
   referenceStyle: "A1" | "R1C1" = "A1";
@@ -911,11 +939,13 @@ export class Workbook {
       const pending = this.#pending;
       this.#rounds++;
       this.#pending = new Map();
+      this.#inFlight = pending;
       for (const [from, keys] of pending) {
         const touched = [...keys].map((k) => `${from}!${k}`);
         for (const p of this.#pages) if (p.name.toUpperCase() !== from) await p.sheet.touch(touched);
       }
     }
+    this.#inFlight = null;
     this.#pending.clear();
     await this.#restyle();
   }
