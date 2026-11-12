@@ -1318,17 +1318,17 @@ defDist("T.DIST", 3, 3, (args) => {
   const t = num(args, 0), df = degrees(args, 1);
   return flag(args, 2) ? D.tCdf(t, df) : D.tDensity(t, df);
 });
-defDist("T.DIST.RT", 2, 2, (args) => 1 - D.tCdf(num(args, 0), degrees(args, 1)));
+defDist("T.DIST.RT", 2, 2, (args) => { const t = num(args, 0), df = degrees(args, 1); return t >= 0 ? D.tUpperTail(t, df) : 1 - D.tUpperTail(-t, df); });
 defDist("T.DIST.2T", 2, 2, (args) => {
   const t = num(args, 0);
   need(t >= 0, `T.DIST.2T's x is 0 or more, not ${t}`);
-  return 2 * (1 - D.tCdf(t, degrees(args, 1)));
+  return 2 * D.tUpperTail(t, degrees(args, 1));
 });
 defDist("T.INV", 2, 2, (args) => { const p = num(args, 0); probability(p); return D.tInverse(p, degrees(args, 1)); });
 defDist("T.INV.2T", 2, 2, (args) => {
   const p = num(args, 0);
   need(p > 0 && p <= 1, `a probability is above 0, up to 1, not ${p}`);
-  return D.tInverse(1 - p / 2, degrees(args, 1));
+  return D.tInverseUpper(p / 2, degrees(args, 1));
 });
 
 // χ²: left tail (or density), right tail, and their inverses.
@@ -1542,7 +1542,7 @@ defDist("T.TEST", 4, 4, (args) => {
       df = (sa + sb) ** 2 / (sa ** 2 / (na - 1) + sb ** 2 / (nb - 1));
     }
   }
-  const one = 1 - D.tCdf(Math.abs(t), df);
+  const one = D.tUpperTail(Math.abs(t), df);
   return tails === 1 ? one : 2 * one;
 });
 defDist("F.TEST", 2, 2, (args) => {
@@ -1601,7 +1601,7 @@ defDist("TDIST", 3, 3, (args) => {
   const tails = Math.trunc(num(args, 2)), x = num(args, 0);
   need(tails === 1 || tails === 2, `tails is 1 or 2, not ${tails}`);
   need(x >= 0, `x is 0 or more, not ${x}`);
-  return tails * (1 - D.tCdf(x, degrees(args, 1)));
+  return tails * D.tUpperTail(x, degrees(args, 1));
 });
 alias("TINV", "T.INV.2T");
 alias("CHIDIST", "CHISQ.DIST.RT");

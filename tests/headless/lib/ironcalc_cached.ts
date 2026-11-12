@@ -35,7 +35,7 @@ export function cachedValues(bytes: Uint8Array): Map<string, [string, string][]>
   return out;
 }
 
-// How a cell differs: legacy (this app spills where Excel, reading a formula with no
+// How a cell differs: legacy (this app spills, or is stopped from spilling by #SPILL!, where Excel, reading a formula with no
 // array flag, intersects implicitly), excel-error (Excel gives an error, this app a
 // value), we-error (the other way round), or value (two values).
 export type Kind = "legacy" | "excel-error" | "we-error" | "value";
@@ -63,7 +63,7 @@ export async function disagreements(name: string, b64: string): Promise<{ diffs:
       else if (t === "str" || t === "s") { ok = typeof got === "string" && got === v; shown = show(got); }
       else { const n = Number(v); ok = typeof got === "number" && Math.abs(got - n) <= 1e-9 * Math.max(1, Math.abs(n)); shown = show(got); }
       if (!ok) {
-        const kind: Kind = shown === "#SPILL!" ? "legacy" : t === "e" ? "excel-error" : shown.startsWith("#") ? "we-error" : "value";
+        const kind: Kind = shown === "#SPILL!" || page.sheet.spillOf(key).length > 1 ? "legacy" : t === "e" ? "excel-error" : shown.startsWith("#") ? "we-error" : "value";
         diffs.push({ cell: `${sheet}!${key}`, kind, said: `want ${t}:${v} got ${shown}` });
       }
     }

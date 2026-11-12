@@ -6,8 +6,8 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1560 cases, 1560 passing);
-29 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (85, a cell counted for each function its workbook names).
+486 functions and forms; 486 with an example and boundary cases (1563 cases, 1563 passing);
+29 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (83, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
 its value as its definition gives it (never another spreadsheet's output); **differs**, the ledger's
@@ -432,12 +432,12 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | SUMXMY2 | function | 2 values | passes | 3 | `SUMXMY2({1, 2}, {3, 5})` = 13 |  |  |
 | SWITCH | function | at least 3 values | passes | 3 | `SWITCH(2, 1, "a", 2, "b")` = "b" |  |  |
 | SYD | function | 4 values | passes | 4 | `SYD(10000, 1000, 5, 1)` = 3000 |  |  |
-| T | function | 1 value | passes | 2 | `T("x")` = "x" | 4 |  |
+| T | function | 1 value | passes | 2 | `T("x")` = "x" | 2 |  |
 | T.DIST | function | 3 values | passes | 4 | `T.DIST(0, 5, TRUE)` = 0.5 |  |  |
 | T.DIST.2T | function | 2 values | passes | 3 | `T.DIST.2T(0, 5)` = 1 |  |  |
-| T.DIST.RT | function | 2 values | passes | 3 | `T.DIST.RT(0, 5)` = 0.5 |  |  |
-| T.INV | function | 2 values | passes | 3 | `T.INV(0.5, 5)` = 0 |  |  |
-| T.INV.2T | function | 2 values | passes | 3 | `T.INV.2T(0.05, 10)` = 2.22813885196 |  |  |
+| T.DIST.RT | function | 2 values | passes | 4 | `T.DIST.RT(0, 5)` = 0.5 |  |  |
+| T.INV | function | 2 values | passes | 4 | `T.INV(0.5, 5)` = 0 |  |  |
+| T.INV.2T | function | 2 values | passes | 4 | `T.INV.2T(0.05, 10)` = 2.22813885196 |  |  |
 | T.TEST | function | 4 values | passes | 3 | `T.TEST({1, 2, 3, 4}, {2, 3, 4, 5}, 2, 2)` = 0.315333596201 |  |  |
 | TAKE | function | 2 or 3 values | passes | 3 | `ROWS(TAKE({1; 2; 3; 4}, 2))` = 2 |  |  |
 | TAN | function | 1 value | passes | 2 | `TAN(PI() / 4)` = 1 |  |  |

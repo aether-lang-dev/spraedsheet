@@ -143,9 +143,30 @@ export function tCdf(t: number, df: number): number {
 }
 export const tDensity = (t: number, df: number): number =>
   Math.exp(lnGamma((df + 1) / 2) - lnGamma(df / 2) - 0.5 * Math.log(df * Math.PI) - ((df + 1) / 2) * Math.log(1 + (t * t) / df));
+// P(T > t) for t of 0 or more, worked out from the tail itself, so a tail of
+// 1E-56 keeps its digits (1 minus the cdf of the other side has none left).
+export const tUpperTail = (t: number, df: number): number => 0.5 * incompleteBeta(df / (df + t * t), df / 2, 0.5);
+// P(-t <= T <= t) for t of 0 or more, worked out from the middle, so a t
+// near 0 keeps its digits (1 minus the two tails has none left).
+const tMiddle = (t: number, df: number): number => incompleteBeta((t * t) / (df + t * t), 0.5, df / 2);
+
+// The t of 0 or more whose upper tail is q (0 < q <= 0.5), found by bisection
+// to a relative precision: from the tail where it is small, from the middle
+// where the tail is nearly a half.
+export function tInverseUpper(q: number, df: number): number {
+  if (q >= 0.5) return 0;
+  const middle = 1 - 2 * q < 0.5;
+  const above = (t: number) => (middle ? tMiddle(t, df) < 1 - 2 * q : tUpperTail(t, df) > q);
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 2000 && above(hi); i++) { lo = hi; hi *= 2; }
+  for (let i = 0; i < 400 && hi - lo > 1e-16 * hi; i++) {
+    const mid = (lo + hi) / 2;
+    if (above(mid)) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
 export function tInverse(p: number, df: number): number {
-  const f = (t: number) => tCdf(t, df);
-  return p < 0.5 ? -inverse(f, 1 - p, 0, upTo(f, 1 - p)) : inverse(f, p, 0, upTo(f, p));
+  return p < 0.5 ? -tInverseUpper(p, df) : tInverseUpper(1 - p, df);
 }
 
 // χ² on df degrees of freedom.

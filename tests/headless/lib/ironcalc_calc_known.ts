@@ -74,16 +74,16 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "DATEVALUE!D41": "legacy",
   },
   "STATISTICAL/EXPONDIST.xlsx": {
-    "EXPON.DIST!D56": "we-error",
+    "EXPON.DIST!D56": "legacy",
   },
   "STATISTICAL/FISHER_FISHERINV.xlsx": {
-    "FISHER FISHERINV!B51": "value",
+    "FISHER FISHERINV!B51": "legacy",
     "FISHER FISHERINV!C51": "value",
-    "FISHER FISHERINV!C52": "value",
+    "FISHER FISHERINV!C52": "legacy",
   },
   "STATISTICAL/GAMMALN_GAMMALNPRECISE.xlsx": {
-    "GAMMALN GAMMALN.PRECISE!B45": "we-error",
-    "GAMMALN GAMMALN.PRECISE!C45": "we-error",
+    "GAMMALN GAMMALN.PRECISE!B45": "legacy",
+    "GAMMALN GAMMALN.PRECISE!C45": "legacy",
   },
   "STATISTICAL/LOGNORM.xlsx": {
     "LOGNORM.DIST LOGNORM.INV!F26": "value",
@@ -91,23 +91,19 @@ export const KNOWN: Record<string, Record<string, string>> = {
     "LOGNORM.DIST LOGNORM.INV!F66": "legacy",
     "LOGNORM.DIST LOGNORM.INV!E67": "legacy",
     "LOGNORM.DIST LOGNORM.INV!F67": "legacy",
-    "LOGNORM.DIST LOGNORM.INV!E68": "we-error",
+    "LOGNORM.DIST LOGNORM.INV!E68": "legacy",
     "LOGNORM.DIST LOGNORM.INV!F68": "we-error",
   },
   "STATISTICAL/NORM_DIST.xlsx": {
-    "NORM.DIST NORM.INV!E64": "value",
+    "NORM.DIST NORM.INV!E64": "legacy",
     "NORM.DIST NORM.INV!F64": "legacy",
     "NORM.S.DIST NORM.S.INV!C48": "legacy",
     "NORM.S.DIST NORM.S.INV!D48": "legacy",
-    "NORM.S.DIST NORM.S.INV!C49": "value",
+    "NORM.S.DIST NORM.S.INV!C49": "legacy",
   },
   "STATISTICAL/POISSON.xlsx": {
     "POISSON.DIST!D60": "legacy",
-    "POISSON.DIST!D61": "value",
-  },
-  "STATISTICAL/T_DIST.xlsx": {
-    "T.DIST T.INV T.DIST.RT!E19": "value",
-    "T.DIST.2T T.INV.2T!D62": "value",
+    "POISSON.DIST!D61": "legacy",
   },
   "TEXT/CONCATENATE.xlsx": {
     "Sheet2!B2": "legacy",

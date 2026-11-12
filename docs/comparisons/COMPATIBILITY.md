@@ -15,7 +15,8 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 ## Intended
 
 - A formula Excel stored without an array flag is intersected implicitly there;
-  this app spills it (38 cells, kind `legacy` in the ledger). Whether to insert
+  this app spills it (47 cells, kind `legacy` in the ledger; 9 of them, whole-column arguments such as
+  `=FISHER(G:G)`, were counted as `value` or `we-error` until 2026-11-11: they spilled into free cells). Whether to insert
   `@` on import as Excel's loader does is Paul's decision (TODO.md).
 - The deliberate differences listed in `third_party/ironcalc/PROVENANCE.md`.
 - RexxJS formulas are not Excel's: a file written from a RexxJS workbook carries
@@ -35,11 +36,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 6 | this app gives an error where Excel stored a value |
+| `we-error` | 2 | this app gives an error where Excel stored a value |
 | `excel-error` | 2 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 20 | both give a value, and they differ |
+| `value` | 13 | both give a value, and they differ |
 
-Counted 2026-11-10 (66 cells with the 38 `legacy`, in 23 workbooks; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-11 (64 cells with the 47 `legacy`, in 22 workbooks; 66 with 38 on 2026-11-10; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -223,6 +224,20 @@ C18). (MAKEARRAY of no rows stays #VALUE!, as Microsoft's documentation of it sa
 spills nothing, #REF! when that is no array). It is read where it comes up, so it is no name in the function
 lists. spill_operator.xlsx I2; headless `sheet_references`.
 
+2026-11-11, 2 cells (Student's t in its tails): `T.INV(p, df)` and `T.INV.2T` find the t from the tail itself
+(or, where the tail is nearly a half, from the middle: `I(t^2/(df+t^2), 1/2, df/2)`), by bisection to a relative
+precision, where they took the cdf of 1 - p (which has no digits left for p near 1, nor for p of 1E-56: T.INV
+answered -108 for what is -1,000,000); `T.DIST.RT`, `T.DIST.2T`, `TDIST` and `T.TEST` read the tail directly too, not
+1 minus the cdf. T_DIST.xlsx `T.DIST T.INV T.DIST.RT!E19`, `T.DIST.2T T.INV.2T!D62`. Cases in `examples.ts`.
+
+2026-11-11, 9 cells moved to `legacy`, none fixed (the ledger's classifier calls a cell `legacy` when it spills,
+not only when #SPILL! stops it): EXPON.DIST D56, FISHER B51 and C52, GAMMALN B45 and C45, LOGNORM.DIST E68,
+NORM.DIST E64, NORM.S.DIST C49, POISSON.DIST D61. Each is a function of a whole column (`F:F`) in a formula the
+file stores with no array flag: Excel intersects the column with the formula's row, this app spills the
+function over a million rows and the cell shows the first element (the header's or a blank's: 0, #NUM!). They
+wait for the `@`-on-import decision with the other legacy cells. FISHER C51 (`FISHERINV(B51)`) and LOGNORM
+F68 (`LOGNORM.INV(E68, ...)`) read one of those and stay as they are until it is made.
+
 ## Intended (found while looking)
 
 - `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`) and I5 (`VALUE("10-12-1999")`): the workbook
@@ -231,6 +246,11 @@ lists. spill_operator.xlsx I2; headless `sheet_references`.
   the ledger.
 
 ## Examined, not changed (still on the ledger, with the reason)
+
+- `LOGNORM.xlsx` `LOGNORM.DIST LOGNORM.INV!F26`: `LOGNORM.INV(0.5 - 8E-13, 3.5, 1E12)`, where Excel stores 3.99976588
+  and this app 4.00047425 (the exact answer, 4, is far under what a double holds of p near a half: its last bit
+  of p is 2.8E-4 of ln x here). Which side the last bit falls on is the inverse's own rounding; Excel's
+  algorithm for it is not documented, so there is nothing to copy.
 
 - `XNPV.xlsx` R2, R5 (`XIRR`): the two agree to 1e-8 of the rate; Excel stops its iteration
   sooner than this app does. Matching would mean copying Excel's stopping rule, which is not

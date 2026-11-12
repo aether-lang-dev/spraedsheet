@@ -41,7 +41,7 @@ which breaks aeb's own build: use the versioned bin directory.) cachyos (ae 0.86
 `./ci.sh` green but for `font_picker` (two cases: a second category widening the list, each row in its own face),
 which reads the host's fonts and came with main's font work (bf0bb8d4), not this.
 
-Toolchain 2026-11-09/10: Aether 0.905.0 + aeb v0.344 + aether-ui 50cbc007 (sae's `pins`), the bare release
+Toolchain 2026-11-09/10: Aether 0.905.0 + aeb v0.344 + aether-ui 50cbc007 (sae's `pins` then; AETHER_UI_REF in `sae/pins` is the current one, 93d1b24e as of 2026-11-11), the bare release
 (`SAE_AETHER_HOME=none`, `AETHER_HOME=~/.aether/versions/v0.905.0` and its `bin` first on PATH). No code change
 was needed in sae's src/ or spraedsheet's app; only tests moved. macOS: sae `lower/run-tests.sh` 70, `tests/run_all.sh`
 61/61, spraedsheet `./run-tests.sh` 9 passed (172 headless cases; spec_sheet passed 3 of 5 runs: the two reds were the
@@ -84,6 +84,21 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
 
 **Done 2026-11-10 (IronCalc ledger, group A: text, lookup, information; COMPATIBILITY.md has each):** FIND, SEARCH, VALUE (and text read as dates, times and numbers: month names, dashes, a time after the date, 15-digit number text), ARRAYTOTEXT, DATEVALUE, TIMEVALUE, FORMULATEXT and ISFORMULA (no cycle through their cell), a file's LAMBDA parameters and names, the range operator over calls (`A1:OFFSET(...)`), ISREF and LET/LAMBDA names that stay references, INDEX, CHOOSE and IF of references, the postfix `%`, SINGLE, lookup tables typed into the call, COUNTIF/SUMIF wildcards and error criteria, SORT and XMATCH (regex mode), a call's value typed, names that are not cell addresses, doubled quotes in a sheet name, empty text cells in a file, ANCHORARRAY of a call, and `#CALC!`/`#SPILL!` read from a file's rich values (which turned DROP, TAKE and SEQUENCE's empty results from #VALUE! to #CALC!). Kept with their reasons: VALUE of a day-first date (2 cells), `spill_operator.xlsx` G2.
 
+**Done 2026-11-11 (each test first):**
+- IronCalc ledger, 66 cells to 64 (38 `legacy` to 47, the other 28 to 17; 23 workbooks to 22): Student's t in its tails
+  (`T.INV`, `T.INV.2T` from the tail or the middle by bisection to a relative precision; `T.DIST.RT`, `T.DIST.2T`,
+  `TDIST`, `T.TEST` read the tail directly): 2 cells; and 9 cells, functions of a whole column in a formula with no
+  array flag, found to be `legacy` (the classifier now says `legacy` of any cell that spills). The 17 left that are not
+  `legacy` are each examined and kept, with why, in COMPATIBILITY.md (ACCRINT 7, RATE 2, XNPV 2, VALUE of a day-first date 2,
+  `spill_operator.xlsx` G2, LOGNORM.INV F26, and FISHER C51 and LOGNORM F68, which read a `legacy` cell). TREND and GROWTH's
+  several known_x were done 2026-11-10.
+- Interrupts, three gaps (`sheet_interrupt_more`, each failing on the old code): a recalculation passing changes between
+  sheets that was stopped lost the changes for the sheets after it (`Workbook.interruptTurns` keeps what `settle()` had in
+  hand, `recoverInterrupted` passes it on); a script run from the UI, stopped, left its group of undo open for good
+  (`Commands.interrupted` ends it, as one step); and the cells a stopped recalculation was on waited for the next change
+  (`ui.on_interrupted` now recovers at once, once per cell: a cell stopped again is left stale).
+- This file's reference to aether-ui 50cbc007 said it was sae's pin; it is now 93d1b24e (`sae/pins`).
+
 **Done 2026-11-12:**
 - XLSX writer: LET and LAMBDA names are written as Excel keeps them, `_xlpm.name` wherever the name is used inside the call
   (an optional LAMBDA parameter's declaration as `_xlop.name`, `[b]` in the sheet), in a cell's formula and in a defined name's
@@ -100,8 +115,8 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
   server thread calling no hook of its own), with a stress test, `tests/driver_threads/stress_focus_reads.py` (ci.sh Phase 5e5c).
   spec_sheet passed 3 of 3 runs on macOS against aether-ui 93d1b24e, no new sae-driver crash report.
 
-**Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger (199 cells: 38 `legacy`,
-161 others in 60 workbooks; the cells looked at and kept are in COMPATIBILITY.md): the remaining we-error and
+**Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger (2026-11-11: 64 cells, 47 `legacy`, the 17 others examined and kept;
+before that 199 cells: 38 `legacy`, 161 others in 60 workbooks; the cells looked at and kept are in COMPATIBILITY.md): the remaining we-error and
 excel-error cells by function (`docs/function_status.md` counts them), the `legacy` cells (Paul's `@` decision),
 multiple known_x in TREND/GROWTH.
 
