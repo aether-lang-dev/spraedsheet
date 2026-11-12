@@ -128,11 +128,11 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
   if (sparks) report.push(`${sparks} sparkline${sparks === 1 ? "" : "s"} written as their text (Excel has no SPARKLINE function)`);
   // The workbook.
   const names: string[] = [];
-  for (const [n, r] of wb.names()) names.push(`<definedName name="${escapeXml(n)}">${escapeXml(r.startsWith("=") ? r.slice(1) : absolute(r))}</definedName>`);
+  for (const [n, r] of wb.names()) names.push(`<definedName name="${escapeXml(n)}">${escapeXml(r.startsWith("=") ? storedFormula(r.slice(1)) : absolute(r))}</definedName>`);
   pages.forEach((p, i) => {
     for (const [n, r] of p.sheet.names()) {
       const prefix = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(p.name) ? `${p.name}!` : `'${p.name.replace(/'/g, "''")}'!`;
-      names.push(`<definedName name="${escapeXml(n)}" localSheetId="${i}">${escapeXml(r.startsWith("=") ? r.slice(1) : absolute(prefix + r))}</definedName>`);
+      names.push(`<definedName name="${escapeXml(n)}" localSheetId="${i}">${escapeXml(r.startsWith("=") ? storedFormula(r.slice(1)) : absolute(prefix + r))}</definedName>`);
     }
   });
   pages.forEach((p, i) => {

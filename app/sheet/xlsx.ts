@@ -63,22 +63,101 @@ export function plainFormula(text: string): string {
 }
 
 // The functions Excel keeps under `_xlfn.` in a file (added since Excel 2007),
-// and the two it keeps under `_xlfn._xlws.`.
+// and the two it keeps under `_xlfn._xlws.`. Source: [MS-XLSX] 2.2.2 Formulas, the
+// future-function-list and worksheet-only-function-list rules
+// (learn.microsoft.com/en-us/openspecs/office_standards/ms-xlsx/3d025add-118d-4413-9856-ab65712ec1b0),
+// plus the names Excel itself writes that the list omits (CONCAT, IFS, SWITCH, TEXTJOIN, MAXIFS, MINIFS,
+// XMATCH, IMAGE, REGEX*, ...: seen in Excel's files, IronCalc's fixtures). The spec leaves
+// NETWORKDAYS.INTL, WORKDAY.INTL, ECMA.CEILING and ISO.CEILING bare, so they are. PY and the
+// PYTHON_*, COPILOT, QUERYSTRING and PQSOURCE names are not modelled here.
 const FUTURE = new Set(`ACOT ACOTH AGGREGATE ANCHORARRAY ARABIC ARRAYTOTEXT BASE BETA.DIST BETA.INV BINOM.DIST BINOM.DIST.RANGE BINOM.INV BITAND BITLSHIFT BITOR BITRSHIFT BITXOR
 BYCOL BYROW CEILING.MATH CEILING.PRECISE CHISQ.DIST CHISQ.DIST.RT CHISQ.INV CHISQ.INV.RT CHISQ.TEST CHOOSECOLS CHOOSEROWS COMBINA CONCAT CONFIDENCE.NORM CONFIDENCE.T COT COTH
 COVARIANCE.P COVARIANCE.S CSC CSCH DAYS DECIMAL DROP ERF.PRECISE ERFC.PRECISE EXPAND EXPON.DIST F.DIST F.DIST.RT F.INV F.INV.RT F.TEST FLOOR.MATH FLOOR.PRECISE
 FORECAST.ETS FORECAST.LINEAR FORMULATEXT GAMMA GAMMA.DIST GAMMA.INV GAMMALN.PRECISE GAUSS HSTACK HYPGEOM.DIST IFNA IFS IMAGE ISFORMULA ISOMITTED ISOWEEKNUM LAMBDA LET
-LOGNORM.DIST LOGNORM.INV MAKEARRAY MAP MAXIFS MINIFS MODE.MULT MODE.SNGL MUNIT NEGBINOM.DIST NETWORKDAYS.INTL NORM.DIST NORM.INV NORM.S.DIST NORM.S.INV NUMBERVALUE
+LOGNORM.DIST LOGNORM.INV MAKEARRAY MAP MAXIFS MINIFS MODE.MULT MODE.SNGL MUNIT NEGBINOM.DIST  NORM.DIST NORM.INV NORM.S.DIST NORM.S.INV NUMBERVALUE
 PDURATION PERCENTILE.EXC PERCENTILE.INC PERCENTRANK.EXC PERCENTRANK.INC PERMUTATIONA PHI POISSON.DIST QUARTILE.EXC QUARTILE.INC RANDARRAY RANK.AVG RANK.EQ REDUCE
 REGEXEXTRACT REGEXREPLACE REGEXTEST RRI SCAN SEC SECH SEQUENCE SHEET SHEETS SKEW.P SORTBY STDEV.P STDEV.S SWITCH T.DIST T.DIST.2T T.DIST.RT T.INV T.INV.2T T.TEST
-TAKE TEXTAFTER TEXTBEFORE TEXTJOIN TEXTSPLIT TOCOL TOROW TRIMRANGE UNICHAR UNICODE UNIQUE VALUETOTEXT VAR.P VAR.S VSTACK WEIBULL.DIST WORKDAY.INTL WRAPCOLS WRAPROWS
-XLOOKUP XMATCH XOR Z.TEST`.split(/\s+/));
+TAKE TEXTAFTER TEXTBEFORE TEXTJOIN TEXTSPLIT TOCOL TOROW TRIMRANGE UNICHAR UNICODE UNIQUE VALUETOTEXT VAR.P VAR.S VSTACK WEIBULL.DIST  WRAPCOLS WRAPROWS
+XLOOKUP XMATCH XOR Z.TEST
+FIELDVALUE FILTERXML IMCOSH IMCOT IMCSC IMCSCH IMSEC IMSECH IMSINH IMTAN WEBSERVICE`.split(/\s+/));
 const FUTURE_WS = new Set(["FILTER", "SORT"]);
+
+// The names a LET declares and a LAMBDA takes, put where Excel keeps them: `_xlpm.x` wherever the name is
+// used inside that call (a declaration too), and an optional parameter [b] as `_xlop.b` where it is
+// declared. Scope is the call's own text, so a name outside it is left alone. Text in quotes (or
+// single quotes: a sheet's name) is left alone.
+function parameterForms(text: string): string {
+  // Tokens outside quotes: [start, end, text] of each identifier or number, and the call spans.
+  const toks: [number, number, string][] = [];
+  const parens: number[] = [];
+  const match = new Map<number, number>();
+  for (let i = 0; i < text.length;) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      for (; j < text.length; j++) if (text[j] === c) { if (text[j + 1] === c) j++; else break; }
+      i = j + 1;
+      continue;
+    }
+    if (c === "(") parens.push(i);
+    else if (c === ")") { const o = parens.pop(); if (o !== undefined) match.set(o, i); }
+    const m = /^(?:[A-Za-z_][A-Za-z0-9_.]*|[0-9][A-Za-z0-9_.]*)/.exec(text.slice(i));
+    if (m) { toks.push([i, i + m[0].length, m[0]]); i += m[0].length; continue; }
+    i++;
+  }
+  // Each LET( and LAMBDA( with the names it declares: [open, close, names, optional name starts].
+  const calls: { open: number; close: number; names: Set<string>; decl: Map<number, boolean> }[] = [];
+  for (const [a, b, t] of toks) {
+    const up = t.toUpperCase();
+    if ((up !== "LET" && up !== "LAMBDA") || text[b] !== "(" || /[A-Za-z0-9_.]/.test(text[a - 1] ?? "")) continue;
+    const open = b, close = match.get(open);
+    if (close === undefined) continue;
+    // The arguments' extents at depth 1 (quotes skipped).
+    const args: [number, number][] = [];
+    let depth = 0, from = open + 1;
+    for (let i = open + 1; i < close; i++) {
+      const ch = text[i];
+      if (ch === '"' || ch === "'") { let j = i + 1; for (; j < close; j++) if (text[j] === ch) { if (text[j + 1] === ch) j++; else break; } i = j; continue; }
+      if (ch === "(" || ch === "{" || ch === "[") depth++;
+      else if (ch === ")" || ch === "}" || ch === "]") depth--;
+      else if (ch === "," && depth === 0) { args.push([from, i]); from = i + 1; }
+    }
+    args.push([from, close]);
+    const names = new Set<string>(), decl = new Map<number, boolean>();
+    const last = args.length - 1;
+    args.forEach(([x, y], k) => {
+      if (k === last || (up === "LET" && k % 2 === 1)) return;
+      const d = /^(\s*)(\[)?\s*([A-Za-z_][A-Za-z0-9_.]*)\s*(\])?\s*$/.exec(text.slice(x, y));
+      if (!d) return;
+      const at = x + text.slice(x, y).indexOf(d[3], d[1].length);
+      names.add(d[3].toLowerCase());
+      decl.set(at, up === "LAMBDA" && !!d[2] && !!d[4]);
+    });
+    calls.push({ open, close, names, decl });
+  }
+  if (!calls.length) return text;
+  const edits: [number, number, string][] = [];
+  for (const [a, b, t] of toks) {
+    if (/^[0-9]/.test(t) || text[b] === "!" || /[A-Za-z0-9_.!$]/.test(text[a - 1] ?? "")) continue;
+    const low = t.toLowerCase();
+    let kind = "";
+    for (const c of calls) {
+      if (a <= c.open || a >= c.close || !c.names.has(low)) continue;
+      kind = c.decl.get(a) ? "_xlop." : "_xlpm.";
+    }
+    if (!kind) continue;
+    if (kind === "_xlop." && text[a - 1] === "[") edits.push([a - 1, text[b] === "]" ? b + 1 : b, kind + t]);
+    else edits.push([a, b, kind + t]);
+  }
+  for (const [a, b, r] of edits.sort((x, y) => y[0] - x[0])) text = text.slice(0, a) + r + text.slice(b);
+  return text;
+}
 
 // A formula as the sheet writes it, as the file stores it (the reverse of
 // plainFormula): the prefix before each newer function, and ANCHORARRAY(A1)
 // for A1#. Text in quotes is left alone.
-export function storedFormula(text: string): string {
+export function storedFormula(source: string): string {
+  const text = parameterForms(source);
   let out = "", i = 0;
   while (i < text.length) {
     if (text[i] === '"') {

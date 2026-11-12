@@ -5,7 +5,7 @@
 // the IronCalc calc_tests workbooks (docs/comparisons/IRONCALC.md action 2).
 import { Commands } from "./sheet/commands.ts";
 import { Workbook } from "./sheet/workbook.ts";
-import { readXlsx, plainFormula } from "./sheet/xlsx.ts";
+import { readXlsx, plainFormula, storedFormula } from "./sheet/xlsx.ts";
 import { writeXlsx } from "./sheet/xlsxwrite.ts";
 import { unzip, utf8Text } from "./sheet/zip.ts";
 import { eq } from "./lib/check.ts";
@@ -39,6 +39,40 @@ const o = await cmds2.execute("file.import", { text: JSON.stringify(readXlsx(byt
 eq("read back as typed", [o.ok, back.sheet.input("B1"), back.sheet.input("B2"), back.sheet.input("C1"), back.sheet.input("D1"), back.sheet.input("D2"), back.sheet.value("B1"), back.sheet.value("D2")],
   [true, wb.sheet.input("B1"), "=SORT(A1:A3)", "=SUM(LEN(B2#))", "=STDEV.S(1,2,3)", wb.sheet.input("D2"), "Tea-Cake-Soup", "Cake"]);
 
+// LET and LAMBDA names go to the file as _xlpm.name (an optional parameter's declaration as _xlop.name),
+// as Excel's own files (IronCalc's LET.xlsx, LAMBDA.xlsx, ISOMITTED.xlsx) have them, and come back as typed.
+{
+  const w = new Workbook(), wc = new Commands(w);
+  for (const l of ["formulas.use language=Excel", "cell.set cell=A1 input=7",
+    "cell.set cell=B1 input==LET(x,A1,y,2,x*y)", "cell.set cell=B2 input==LAMBDA(a,[b],IF(ISOMITTED(b),a/2,a*b))(A1)",
+    "cell.set cell=B3 input==x+LET(x,1,x)", 'cell.set cell=B4 input="=LET(s,""x y"",LEN(s)&""s"")"',
+    "cell.set cell=B5 input==LET(area,LAMBDA(x,y,x*y),area(A1,2))", "cell.set cell=B6 input==MAP(A1:A1,LAMBDA(q,q+1))"]) {
+    const o = await wc.run(l);
+    if (!o.ok) print(`FAIL setup ${l}: ${o.message}`);
+  }
+  const xb = writeXlsx(w).bytes, xs = utf8Text(unzip(xb).get("xl/worksheets/sheet1.xml")!);
+  const g = (ref: string) => { const m = new RegExp(`<c r="${ref}"[^>]*>\\s*<f(?: [^>]*)?>([^<]*)</f>`).exec(xs); return m ? m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">") : null; };
+  eq("LET and LAMBDA written with _xlpm. and _xlop.", [g("B1"), g("B2"), g("B3"), g("B4"), g("B5"), g("B6")], [
+    "_xlfn.LET(_xlpm.x,A1,_xlpm.y,2,_xlpm.x*_xlpm.y)",
+    "_xlfn.LAMBDA(_xlpm.a,_xlop.b,IF(_xlfn.ISOMITTED(_xlpm.b),_xlpm.a/2,_xlpm.a*_xlpm.b))(A1)",
+    "x+_xlfn.LET(_xlpm.x,1,_xlpm.x)",
+    '_xlfn.LET(_xlpm.s,"x y",LEN(_xlpm.s)&"s")',
+    "_xlfn.LET(_xlpm.area,_xlfn.LAMBDA(_xlpm.x,_xlpm.y,_xlpm.x*_xlpm.y),_xlpm.area(A1,2))",
+    "_xlfn.MAP(A1:A1,_xlfn.LAMBDA(_xlpm.q,_xlpm.q+1))",
+  ]);
+  const b2 = new Workbook(), c2 = new Commands(b2);
+  await c2.execute("file.import", { text: JSON.stringify(readXlsx(xb).file) });
+  eq("LET and LAMBDA read back as typed", ["B1", "B2", "B3", "B4", "B5", "B6"].map((r) => b2.sheet.input(r)), ["B1", "B2", "B3", "B4", "B5", "B6"].map((r) => w.sheet.input(r)));
+  eq("and to the same values", ["B1", "B2", "B4", "B5", "B6"].map((r) => b2.sheet.value(r)), ["B1", "B2", "B4", "B5", "B6"].map((r) => w.sheet.value(r)));
+  // A named LAMBDA is a defined name's formula.
+  const n = new Workbook(), nc = new Commands(n);
+  for (const l of ["formulas.use language=Excel", 'names.define name=Twice formula="=LAMBDA(t,t*2)"', "cell.set cell=A1 input==Twice(4)"]) await nc.run(l);
+  const nb = writeXlsx(n).bytes, wbx = utf8Text(unzip(nb).get("xl/workbook.xml")!);
+  eq("a named LAMBDA written with its prefixes", /<definedName name="TWICE">_xlfn\.LAMBDA\(_xlpm\.t,_xlpm\.t\*2\)<\/definedName>/.test(wbx), true);
+}
+// The names the spec's future-function list has, and the two it leaves bare.
+eq("spec names get the prefix", [storedFormula("IMCOSH(1)"), storedFormula("NETWORKDAYS.INTL(1,2)"), storedFormula("FILTERXML(1,2)")], ["_xlfn.IMCOSH(1)", "NETWORKDAYS.INTL(1,2)", "_xlfn.FILTERXML(1,2)"]);
+
 // A cell of empty text (typed ') is a shared string of nothing in a file, and stays text when
 // read: VALUE of it is #VALUE!, where a blank cell's is 0.
 {
@@ -56,4 +90,9 @@ eq("read back as typed", [o.ok, back.sheet.input("B1"), back.sheet.input("B2"), 
 // expect: ok written with the prefixes Excel needs
 // expect: ok text in a string is left alone
 // expect: ok read back as typed
+// expect: ok LET and LAMBDA written with _xlpm. and _xlop.
+// expect: ok LET and LAMBDA read back as typed
+// expect: ok and to the same values
+// expect: ok a named LAMBDA written with its prefixes
+// expect: ok spec names get the prefix
 // expect: ok empty text survives a file

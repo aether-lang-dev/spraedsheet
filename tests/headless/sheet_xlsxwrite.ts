@@ -39,7 +39,7 @@ eq("the archive's parts", [...parts.keys()], ["[Content_Types].xml", "_rels/.rel
 const sheet1 = utf8Text(parts.get("xl/worksheets/sheet1.xml")!);
 eq("cells as Excel writes them", [/<c r="C2"><f>B2\*2<\/f><v>6<\/v><\/c>/.test(sheet1), /<c r="C3" t="str"><f>&quot;x&quot;&amp;A2<\/f><v>xpens<\/v><\/c>/.test(sheet1), /<c r="D1" t="b"><f>1&gt;0<\/f><v>1<\/v><\/c>/.test(sheet1),
   /<c r="D2" t="e"><f>1\/0<\/f><v>#DIV\/0!<\/v><\/c>/.test(sheet1), /<pane xSplit="1" ySplit="1" topLeftCell="B2"/.test(sheet1)], [true, true, true, true, true]);
-eq("names, absolute, a sheet's own by its number", /<definedName name="QTY">Sales!\$B\$2:\$B\$3<\/definedName><definedName name="TWICE">LAMBDA\(x,x\*2\)<\/definedName><definedName name="RATE" localSheetId="0">Sales!\$D\$1<\/definedName>/.test(utf8Text(parts.get("xl/workbook.xml")!)), true);
+eq("names, absolute, a sheet's own by its number", /<definedName name="QTY">Sales!\$B\$2:\$B\$3<\/definedName><definedName name="TWICE">_xlfn\.LAMBDA\(_xlpm\.x,_xlpm\.x\*2\)<\/definedName><definedName name="RATE" localSheetId="0">Sales!\$D\$1<\/definedName>/.test(utf8Text(parts.get("xl/workbook.xml")!)), true);
 const wb2 = new Workbook(), cmds2 = new Commands(wb2);
 const back = await cmds2.run(`file.importXlsx name=Round.xlsx base64=${o.output}`);
 const v = (k: string) => show(wb2.sheet.value(k));
