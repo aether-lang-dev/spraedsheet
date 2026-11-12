@@ -59,13 +59,6 @@ cli not run there (need node). On ae-x64 run with `SAE_TEST_WAIT_SCALE=6 SAE_PAG
   special forms have cases; MAKEARRAY of no rows is #VALUE!. 2399b0b.
 - IronCalc ledger: 374 cells to 215 (COMPATIBILITY.md lists each batch and the cells looked at and kept, with why):
   f4ca76b, 9168b92, 4b85387, 1dcafa9, 01cf29f, a532a1a, 2a37ac6, 0a19cfb.
-- Found, not fixed: on macOS the sae-driver crashed once in spec_sheet's Tab rounds (EXC_BAD_ACCESS in the driver's
-  server thread popping its autorelease pool; `~/Library/Logs/DiagnosticReports/sae-driver-2026-11-05-230014.ips`).
-  The suspect is AppKit read off the UI thread: `hook_widget_text_into` (`[NSTextField stringValue]`) builds the
-  widget JSON of every `/focus/move` and `/widgets` answer on the server's thread while a field editor is being put
-  away. It did not come again (spec_sheet passed twice after, macOS), and a 1,500-move walk over fields with text in focus_order_demo did not
-  crash, so there is no failing test yet; the fix would be to read the text on the UI thread as
-  `hook_dispatch_action` does.
 
 **Not done, and why:**
 - Univer 1's remainder: recording and MCP discovery reading `effect`. Recording records by `journaled`; reading
@@ -90,6 +83,22 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
 **Done 2026-11-10 (IronCalc ledger, group B: maths, statistics, finance, dates; 199 cells to 160; COMPATIBILITY.md has each):** QUOTIENT, MULTINOMIAL, SERIESSUM, POWER (odd roots), COUNT, FREQUENCY, POISSON, PROB, DDB, XNPV, XIRR, the importer's LAMBDA names, SINGLE and volatile array cells, and several known_x in TREND and GROWTH.
 
 **Done 2026-11-10 (IronCalc ledger, group A: text, lookup, information; COMPATIBILITY.md has each):** FIND, SEARCH, VALUE (and text read as dates, times and numbers: month names, dashes, a time after the date, 15-digit number text), ARRAYTOTEXT, DATEVALUE, TIMEVALUE, FORMULATEXT and ISFORMULA (no cycle through their cell), a file's LAMBDA parameters and names, the range operator over calls (`A1:OFFSET(...)`), ISREF and LET/LAMBDA names that stay references, INDEX, CHOOSE and IF of references, the postfix `%`, SINGLE, lookup tables typed into the call, COUNTIF/SUMIF wildcards and error criteria, SORT and XMATCH (regex mode), a call's value typed, names that are not cell addresses, doubled quotes in a sheet name, empty text cells in a file, ANCHORARRAY of a call, and `#CALC!`/`#SPILL!` read from a file's rich values (which turned DROP, TAKE and SEQUENCE's empty results from #VALUE! to #CALC!). Kept with their reasons: VALUE of a day-first date (2 cells), `spill_operator.xlsx` G2.
+
+**Done 2026-11-12:**
+- XLSX writer: LET and LAMBDA names are written as Excel keeps them, `_xlpm.name` wherever the name is used inside the call
+  (an optional LAMBDA parameter's declaration as `_xlop.name`, `[b]` in the sheet), in a cell's formula and in a defined name's
+  (a named LAMBDA); the `_xlfn.` and `_xlfn._xlws.` prefixes the writer already put on newer functions were checked against
+  [MS-XLSX] 2.2.2's future-function-list (learn.microsoft.com/en-us/openspecs/office_standards/ms-xlsx/3d025add-118d-4413-9856-ab65712ec1b0):
+  FIELDVALUE, FILTERXML, WEBSERVICE and IMCOSH, IMCOT, IMCSC, IMCSCH, IMSEC, IMSECH, IMSINH, IMTAN added; NETWORKDAYS.INTL and
+  WORKDAY.INTL, which the spec leaves bare, no longer prefixed (the names Excel writes that the spec omits, CONCAT, IFS,
+  TEXTJOIN, XLOOKUP ..., stay prefixed, as Excel's files and IronCalc's fixtures have them). The reader already took every
+  prefix off. Tests first (`sheet_xlfn`, `sheet_xlsxwrite`: raw XML for each prefix, a round trip of LET, LAMBDA with an
+  optional parameter, a LET-bound LAMBDA, MAP, a named LAMBDA); shown failing on the old code. Not modelled: `_xlfn._xlws.PY`,
+  the PYTHON_*, COPILOT, QUERYSTRING and PQSOURCE names.
+- The macOS sae-driver crash (Found, not fixed, 2026-11-05) is closed: aether-ui a5e82ec1 (2026-11-06) answers every driver request
+  on the UI thread on AppKit and Win32 (`hook_run_on_ui_thread`, called from `handle_request` for every parsed request, the
+  server thread calling no hook of its own), with a stress test, `tests/driver_threads/stress_focus_reads.py` (ci.sh Phase 5e5c).
+  spec_sheet passed 3 of 3 runs on macOS against aether-ui 93d1b24e, no new sae-driver crash report.
 
 **Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger (199 cells: 38 `legacy`,
 161 others in 60 workbooks; the cells looked at and kept are in COMPATIBILITY.md): the remaining we-error and
