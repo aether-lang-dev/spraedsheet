@@ -270,9 +270,10 @@ whole `./run-tests.sh` green on macOS before its push):
   (editing regressions and `calc_tests` workbooks, reusable with attribution),
   4, 5; HyperFormula 1, 3, 4, 5; Gnumeric; VisiData; LibreOffice 2 to 7 (and
   copy-versus-move `$` anchors, and the same structural workload by REXX/bus/UI).
-- A gap found: a structured reference to a table on another sheet
+- ~~A gap found: a structured reference to a table on another sheet
   (`=SUM(Sales[Amount])` away from the table's sheet) gives `#REF!`; Excel's
-  tables are the workbook's. Noted in `docs/comparisons/LIBREOFFICE.md`.
+  tables are the workbook's. Noted in `docs/comparisons/LIBREOFFICE.md`.~~ Closed 2026-10-21 (ef8af39, headless
+  `sheet_crosstable`); checked still closed 2026-11-19 (that test passes on the current tree; the note here was left stale).
 - B.7's spec_sheet case was not run against the old code to show it failing (its
   headless `sheet_editmode` was); sheet_scriptreads documents behaviour that
   already held.
