@@ -14,10 +14,22 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 ## Intended
 
-- A formula Excel stored without an array flag is intersected implicitly there;
-  this app spills it (47 cells, kind `legacy` in the ledger; 9 of them, whole-column arguments such as
-  `=FISHER(G:G)`, were counted as `value` or `we-error` until 2026-11-11: they spilled into free cells). Whether to insert
-  `@` on import as Excel's loader does is Paul's decision (TODO.md).
+- A formula Excel stored without an array flag is intersected implicitly there, and Excel's loader shows that
+  with an `@` (`=@H34:H37`, `=ROMAN(@H34:H37)`, `=@INDEX(...)`). The importer puts the `@` in where the
+  loader does (`app/sheet/implicit.ts`; Paul decided yes, 2026-11-18, done 2026-11-19), so such a formula is one
+  value, as it was, and not a spill. Where: before a range (`A1:A3`, `A:A`, a name of a range, a table's
+  column) that is an operand or an argument of one value, and before a call that may give a range or an array
+  (INDEX, OFFSET, INDIRECT, TRANSPOSE ...) where one value goes; not before what is one value, nor where the
+  function takes a range (`SUM(A1:A3)`), nor inside an array-class argument (`SUMPRODUCT(A1:A3*B1:B3)` is
+  worked out as arrays, as Excel does). Which arguments take one value is found by asking the function (a
+  call with a range there that it refuses, `functions.ts` `takesOneAt`), not a table; a function it cannot
+  reach the argument of is taken to take a range, so its formula is left as it was. A cell with `t="array"`
+  (a dynamic-array formula, or a legacy `{=...}`) gets no `@`. The writer takes the `@`s the loader would
+  put in out again, so the formula returns as the legacy one it was, with no array flag; a formula the
+  loader would intersect otherwise (`SUM(A1:A3*2)` typed here, where arrays are native) or one with an `@`
+  of its own (`SUM(@A1:A3)`, written as `SINGLE(...)`) is written as an array formula of its cell, which the
+  loader leaves alone. Not checked against Excel itself (no Excel here): the rule is Microsoft's
+  description of the `@` operator and the 46 cells the IronCalc workbooks stored.
 - The deliberate differences listed in `third_party/ironcalc/PROVENANCE.md`.
 - RexxJS formulas are not Excel's: a file written from a RexxJS workbook carries
   their values, not the formulas (the file report says so).
@@ -36,11 +48,11 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 2 | this app gives an error where Excel stored a value |
+| `we-error` | 1 | this app gives an error where Excel stored a value |
 | `excel-error` | 2 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 13 | both give a value, and they differ |
+| `value` | 12 | both give a value, and they differ |
 
-Counted 2026-11-11 (64 cells with the 47 `legacy`, in 22 workbooks; 66 with 38 on 2026-11-10; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-19 (15 cells in 6 workbooks: 12 `value`, 2 `excel-error`, 1 `we-error`, no `legacy`; 64 with the 47 `legacy` on 2026-11-11, in 22 workbooks; 66 with 38 on 2026-11-10; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
@@ -235,8 +247,23 @@ not only when #SPILL! stops it): EXPON.DIST D56, FISHER B51 and C52, GAMMALN B45
 NORM.DIST E64, NORM.S.DIST C49, POISSON.DIST D61. Each is a function of a whole column (`F:F`) in a formula the
 file stores with no array flag: Excel intersects the column with the formula's row, this app spills the
 function over a million rows and the cell shows the first element (the header's or a blank's: 0, #NUM!). They
-wait for the `@`-on-import decision with the other legacy cells. FISHER C51 (`FISHERINV(B51)`) and LOGNORM
-F68 (`LOGNORM.INV(E68, ...)`) read one of those and stay as they are until it is made.
+waited for the `@`-on-import decision with the other legacy cells (made 2026-11-19, below). FISHER C51 (`FISHERINV(B51)`) and LOGNORM
+F68 (`LOGNORM.INV(E68, ...)`) read one of those.
+
+2026-11-19, 49 cells (the `@` on import, `app/sheet/implicit.ts`; 64 cells to 15, 47 `legacy` to none; each came right with the
+importer, the ledger test says so, and `sheet_implicit` has the cases): the 46 `legacy` cells (a range where one
+value goes, in ARABIC_ROMAN, COMBIN, CONCATENATE, DEGREES_RADIANS, EVEN_ODD, EXP_SIGN, MOD_QUOTIENT, TIMEVALUE,
+YEARFRAC_DATEDIF, CHOOSE, and the statistical functions of a whole column, `F:F`), the two that read one
+(FISHERINV C51, `=FISHERINV(B51)`, and LOGNORM.INV F68), and `ISREF.xlsx` D9, which was never a legacy cell:
+`=FILTER(L1:L2, M1:M2, {1,2,3})` is a dynamic-array formula (`t="array" cm="1"`) that Excel stores as `#VALUE!`
+with a rich value, and the rich value says `#SPILL!` (E9 holds text in the way): the reader took a rich
+error's type from the first value of its structure, which is right of `{errorType, subType}` and wrong of a
+spill's `{colOffset, errorType, rwOffset, subType}`; it now finds the `errorType` key (`xlsxparts.ts`
+`richErrorsOf`). The evaluator's `@` of a call that gives a reference (`@INDEX(A1:C3,0,2)`, `@OFFSET`) now
+meets the formula's row or column as `@A1:A3` does (it took the first value). LOGNORM.DIST LOGNORM.INV F26
+stays `value`, and is not a legacy cell: E26 is Excel's own 0.49999999999915673 for a sigma of 10^12 and F26
+inverts it, which multiplies the input's digits by 10^12; Excel's 3.99977 and this app's 4.00047 are both far
+from the 4 that went in, so the last digits are each one's approximation, not a rule.
 
 ## Intended (found while looking)
 

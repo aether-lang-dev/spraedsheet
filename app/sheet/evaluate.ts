@@ -642,18 +642,18 @@ class Evaluator {
   // @x: of a range, the cell in the formula's own row (a column), its own
   // column (a row), or both; of anything else, its first value.
   #intersect(e: Expr): Result {
-    if (e.kind === "range") {
-      const [from, to] = this.#corners(e);
-      const a = cellAddr(from), b = cellAddr(to);
-      if (!a || !b) return fail("#REF!", `${a ? to : from} is not on the sheet`);
+    // A range, or a reference a call makes (INDEX, OFFSET, INDIRECT, CHOOSE, IF) of more than a cell.
+    const r = e.kind === "range" || (e.kind === "call" && MAY_GIVE_REFERENCES.has(e.name)) ? this.#reference(e) : null;
+    if (r && (r.a.row !== r.b.row || r.a.col !== r.b.col)) {
       const here = this.#at ? cellAddr(this.#at) : null;
-      const r0 = Math.min(a.row, b.row), r1 = Math.max(a.row, b.row), c0 = Math.min(a.col, b.col), c1 = Math.max(a.col, b.col);
+      const r0 = Math.min(r.a.row, r.b.row), r1 = Math.max(r.a.row, r.b.row), c0 = Math.min(r.a.col, r.b.col), c1 = Math.max(r.a.col, r.b.col);
       const row = r0 === r1 ? r0 : here ? here.row : -1, col = c0 === c1 ? c0 : here ? here.col : -1;
-      if (row < r0 || row > r1 || col < c0 || col > c1) return fail("#VALUE!", `@${e.from}:${e.to} does not meet the formula's row or column`);
-      return this.#env.get(qualify(splitKey(e.from).sheet, keyOf({ row, col })));
+      const shown = e.kind === "range" ? `${e.from}:${e.to}` : "the reference";
+      if (row < r0 || row > r1 || col < c0 || col > c1) return fail("#VALUE!", `@${shown} does not meet the formula's row or column`);
+      return this.#env.get(qualify(r.sheet, keyOf({ row, col })));
     }
-    const r = this.result(e);
-    return isArray(r) ? r.values[0] : r;
+    const v = this.result(e);
+    return isArray(v) ? v.values[0] : v;
   }
 
   // The workbook as the Env tells it: a sheet alone is a book of one.

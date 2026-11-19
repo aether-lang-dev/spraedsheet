@@ -99,6 +99,14 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
   (`ui.on_interrupted` now recovers at once, once per cell: a cell stopped again is left stale).
 - This file's reference to aether-ui 50cbc007 said it was sae's pin; it is now 93d1b24e (`sae/pins`).
 
+**Done 2026-11-19 (each test first):**
+- `@` on import (Paul's yes of 2026-11-18): a formula Excel stored with no array flag gets the `@` its loader puts in
+  (`=@H34:H37`, `=ROMAN(@H34:H37)`, `=@INDEX(...)`), so it is one value, not a spill; the writer takes the loader's `@`s out and
+  writes a formula the loader would intersect otherwise (or an `@` of its own, as `SINGLE(...)`) as an array formula of its cell.
+  `@` of a call that gives a reference meets the formula's row or column. A spill's rich error was read as the wrong type
+  (`richErrorsOf` took the first value, not `errorType`'s): `ISREF.xlsx` D9 is `#SPILL!`, as Excel stored. IronCalc ledger
+  64 cells to 15 (47 `legacy` to none, the 15 each examined and kept in COMPATIBILITY.md).
+
 **Done 2026-11-12:**
 - XLSX writer: LET and LAMBDA names are written as Excel keeps them, `_xlpm.name` wherever the name is used inside the call
   (an optional LAMBDA parameter's declaration as `_xlop.name`, `[b]` in the sheet), in a cell's formula and in a defined name's
@@ -115,10 +123,9 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
   server thread calling no hook of its own), with a stress test, `tests/driver_threads/stress_focus_reads.py` (ci.sh Phase 5e5c).
   spec_sheet passed 3 of 3 runs on macOS against aether-ui 93d1b24e, no new sae-driver crash report.
 
-**Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger (2026-11-11: 64 cells, 47 `legacy`, the 17 others examined and kept;
+**Resume point:** `git pull --ff-only` spraedsheet, sae and aether-ui. Next on the ledger (2026-11-19: 15 cells, none `legacy`, all examined and kept; 2026-11-11: 64 cells, 47 `legacy`;
 before that 199 cells: 38 `legacy`, 161 others in 60 workbooks; the cells looked at and kept are in COMPATIBILITY.md): the remaining we-error and
-excel-error cells by function (`docs/function_status.md` counts them), the `legacy` cells (Paul's `@` decision),
-multiple known_x in TREND/GROWTH.
+excel-error cells by function (`docs/function_status.md` counts them), multiple known_x in TREND/GROWTH.
 
 ## Paused 2026-10-25 (resumed 2026-11-05, above)
 
@@ -208,8 +215,9 @@ Gnumeric 2 to 5, VisiData 2, LibreOffice 2, 3, 5, and 4 and 6 in part (`docs/com
 - Grist 1 to 4, Airtable 1 to 3, VisiData 1 and 4, LibreOffice 7 (and the record form and batch-wide unique keys
   of LibreOffice 3): a record model (stable record IDs independent of row position, reference fields, saved
   views, keyed reconcile). Wanted, and how far (an ID column plus references on tables, or a full relations layer)?
-- Importer: a formula Excel stored with no array flag is intersected implicitly; this app spills it
-  (38 cells in the ledger). Insert `@` as Excel's loader does?
+- ~~Importer: a formula Excel stored with no array flag is intersected implicitly; this app spills it
+  (38 cells in the ledger). Insert `@` as Excel's loader does?~~ Paul decided **yes** on 2026-11-18; done
+  2026-11-19 (`app/sheet/implicit.ts`, `docs/comparisons/COMPATIBILITY.md` "Intended"): 64 ledger cells to 15, none `legacy`.
 - Charts on aether-ui's `vg/chart` (as before).
 - HyperFormula 3: a cumulative `SUM($A$1:An)` down 1,000 rows costs 0.9 s per edit at its head (n squared
   reads; 2,000 rows passes the 4 s a page entry gets). Prefix sums fix it but round differently from a plain

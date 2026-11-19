@@ -38,8 +38,8 @@ the number-format cases, the series-detection cases.
    `#NUM!`, financial and statistical corners, TEXT and SUBSTITUTE options,
    WEEKDAY's return types 11 to 17), and one cause the ledger calls *legacy*:
    a formula Excel stored with no array flag is intersected implicitly
-   (`=H34:H37` in row 36 is H36), where this app spills it; an importer that
-   writes `@` where Excel's loader would is not done. 2026-11-05: 25 more cells
+   (`=H34:H37` in row 36 is H36), where this app spilled it; the importer now writes `@` where Excel's
+   loader would (2026-11-19: 64 cells to 15, none `legacy`; COMPATIBILITY.md). 2026-11-05: 25 more cells
    fixed (YEARFRAC basis 1, DATEDIF, the loan functions' type and rate edges, IPMT's
    fractional period, DB of no cost), and 18 of dates out of range (YEAR,
    MONTH, DAY, EDATE, EOMONTH), and 22 of text read as a number ("8%", "€100"):

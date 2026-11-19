@@ -129,6 +129,32 @@ function lifted(fn: Fn, args: readonly Arg[], over: ReadonlySet<number>): Result
   return array(rows, cols, values);
 }
 
+// Whether argument `i` of a call with `nargs` arguments is one where the function takes one
+// value, not a range or an array (the loader of a file puts @ before a range given there).
+// Found by asking: the function is called with a range of two values there and ordinary
+// ones elsewhere, and it says so by refusing it (val()). A function this cannot reach the
+// argument of, because it fails on the ordinary values first, or that is not in the library,
+// is taken to take a range.
+const oneAt = new Map<string, boolean>();
+export function takesOneAt(name: string, nargs: number, i: number): boolean {
+  const key = `${name}/${nargs}/${i}`, known = oneAt.get(key);
+  if (known !== undefined) return known;
+  const spec = library.get(name);
+  let one = false;
+  if (spec && nargs >= spec.min && nargs <= spec.max && i < nargs) {
+    for (const d of [1, "1", 0.5, "A"] as Value[]) {
+      const args = Array.from({ length: nargs }, (_, k) => (k === i ? { values: [d, d], cols: 1 } : single(d)));
+      try {
+        spec.fn(args);
+      } catch (e) {
+        if (e instanceof ScalarWanted && e.index === i) { one = true; break; }
+      }
+    }
+  }
+  oneAt.set(key, one);
+  return one;
+}
+
 // The evaluator's own forms count too (IF; ROW and COLUMN read references;
 // OFFSET and INDIRECT make them).
 export const names = (): string[] => [...library.keys(), "IF", "ROW", "COLUMN", "OFFSET", "INDIRECT", "FORMULATEXT", "ISFORMULA", "ISREF", "SHEET", "SHEETS", "INFO", "SUBTOTAL", "AGGREGATE", "GROUPBY", "PIVOTBY", "ISOMITTED"].sort();

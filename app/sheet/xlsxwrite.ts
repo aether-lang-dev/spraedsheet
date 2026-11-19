@@ -13,6 +13,7 @@ import { CellError } from "./values.ts";
 import type { Value } from "./values.ts";
 import type { Page, Workbook } from "./workbook.ts";
 import { BUILTIN_FORMATS, storedFormula } from "./xlsx.ts";
+import { rangeNamesOf, singled, stored } from "./implicit.ts";
 import type { Look } from "./formats.ts";
 import type { Rule } from "./validation.ts";
 import { cfXml, personId, personsXml, styleDxf, tableXml, threadsXml } from "./xlsxparts.ts";
@@ -100,7 +101,7 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
   const dxfs: string[] = [];
   const dxfOf = (style: string) => { const x = styleDxf(style); let i = dxfs.indexOf(x); if (i < 0) { dxfs.push(x); i = dxfs.length - 1; } return i; };
   let tableId = 0;
-  const sheetParts = pages.map((page) => sheetOf(page, wb, sst, styleOf, excel, dxfOf, () => ++tableId));
+  const sheetParts = pages.map((page) => sheetOf(page, wb, rangeNamesOf([...wb.names(), ...page.sheet.names()]), sst, styleOf, excel, dxfOf, () => ++tableId));
   const sheetXml = sheetParts.map((x) => x.xml);
   // The people who wrote the threads, the workbook's one list of them.
   const people = [...new Set(sheetParts.flatMap((x) => x.threads.flatMap(([, t]) => [t.author, ...t.replies.map((r) => r.author)])))];
@@ -223,7 +224,7 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
 // Sheet1!B2:B4 as Sheet1!$B$2:$B$4, as Excel writes a name's.
 const absolute = (r: string): string => r.replace(/(^|[!:])\$?([A-Z]{1,3})\$?(\d+)/g, "$1$$$2$$$3");
 
-function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: (code: string, look: Look) => number, excel: boolean, dxfOf: (style: string) => number, nextTable: () => number) {
+function sheetOf(page: Page, wb: Workbook, rangeNames: ReadonlySet<string>, sst: (s: string) => number, styleOf: (code: string, look: Look) => number, excel: boolean, dxfOf: (style: string) => number, nextTable: () => number) {
   const keys = [...new Set([...page.sheet.keys(), ...page.notes.keys()])].filter((k) => addrOf(k)).sort((a, b) => order(addrOf(a)!) - order(addrOf(b)!));
   const rows = new Map<number, string[]>();
   let sparks = 0;
@@ -245,7 +246,10 @@ function sheetOf(page: Page, wb: Workbook, sst: (s: string) => number, styleOf: 
       // result, not cells of their own to block it when the file is read.
       const area = page.sheet.spillOf(k);
       const span = area.length ? `${k}:${area[area.length - 1]}` : "";
-      const f = span ? `<f t="array" ref="${span}">${escapeXml(storedFormula(input.slice(1)))}</f>` : `<f>${escapeXml(storedFormula(input.slice(1)))}</f>`;
+      // One that Excel would intersect implicitly, as it does a formula with no array flag, is an array
+      // formula of its own cell (implicit.ts); the @s of the loader are not written.
+      const own = span ? { text: singled(input.slice(1)), legacy: false } : stored(input.slice(1), rangeNames);
+      const f = span || !own.legacy ? `<f t="array" ref="${span || k}">${escapeXml(storedFormula(own.text))}</f>` : `<f>${escapeXml(storedFormula(own.text))}</f>`;
       c = v instanceof CellError ? `<c r="${k}" t="e"${attrS}>${f}<v>${escapeXml(v.code)}</v></c>`
         : typeof v === "string" ? `<c r="${k}" t="str"${attrS}>${f}<v>${escapeXml(v)}</v></c>`
         : typeof v === "boolean" ? `<c r="${k}" t="b"${attrS}>${f}<v>${v ? 1 : 0}</v></c>`

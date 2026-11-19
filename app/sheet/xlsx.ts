@@ -14,6 +14,7 @@ import type { El } from "./xml.ts";
 import { COLS, ROWS, addrOf, colName, keyOf } from "./address.ts";
 import type { Addr } from "./address.ts";
 import { moved } from "./excel.ts";
+import { intersected } from "./implicit.ts";
 import type { Look } from "./formats.ts";
 import { ALLOWS } from "./protection.ts";
 import { TYPED_ERRORS } from "./values.ts";
@@ -70,7 +71,7 @@ export function plainFormula(text: string): string {
 // XMATCH, IMAGE, REGEX*, ...: seen in Excel's files, IronCalc's fixtures). The spec leaves
 // NETWORKDAYS.INTL, WORKDAY.INTL, ECMA.CEILING and ISO.CEILING bare, so they are. PY and the
 // PYTHON_*, COPILOT, QUERYSTRING and PQSOURCE names are not modelled here.
-const FUTURE = new Set(`ACOT ACOTH AGGREGATE ANCHORARRAY ARABIC ARRAYTOTEXT BASE BETA.DIST BETA.INV BINOM.DIST BINOM.DIST.RANGE BINOM.INV BITAND BITLSHIFT BITOR BITRSHIFT BITXOR
+const FUTURE = new Set(`SINGLE ACOT ACOTH AGGREGATE ANCHORARRAY ARABIC ARRAYTOTEXT BASE BETA.DIST BETA.INV BINOM.DIST BINOM.DIST.RANGE BINOM.INV BITAND BITLSHIFT BITOR BITRSHIFT BITXOR
 BYCOL BYROW CEILING.MATH CEILING.PRECISE CHISQ.DIST CHISQ.DIST.RT CHISQ.INV CHISQ.INV.RT CHISQ.TEST CHOOSECOLS CHOOSEROWS COMBINA CONCAT CONFIDENCE.NORM CONFIDENCE.T COT COTH
 COVARIANCE.P COVARIANCE.S CSC CSCH DAYS DECIMAL DROP ERF.PRECISE ERFC.PRECISE EXPAND EXPON.DIST F.DIST F.DIST.RT F.INV F.INV.RT F.TEST FLOOR.MATH FLOOR.PRECISE
 FORECAST.ETS FORECAST.LINEAR FORMULATEXT GAMMA GAMMA.DIST GAMMA.INV GAMMALN.PRECISE GAUSS HSTACK HYPGEOM.DIST IFNA IFS IMAGE ISFORMULA ISOMITTED ISOWEEKNUM LAMBDA LET
@@ -347,6 +348,12 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
   // The people threaded comments are by (a persons part), by id.
   const people = new Map<string, string>();
   for (const [n, b] of parts) if (/^xl\/persons\/person\d*\.xml$/i.test(n)) for (const p of all(parseXml(utf8Text(b)), "person")) people.set(attr(p, "id") ?? "", attr(p, "displayName") ?? "Unknown");
+  // The defined names that are a range of more than one cell (an @ goes before one in a legacy formula).
+  const rangeNames = new Set<string>();
+  for (const dn of all(wb, "definedName")) {
+    const n = (attr(dn, "name") ?? "").toUpperCase(), text = textOf(dn).trim();
+    if (n && /^(?:'[^']+'|[^'!]+)!\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+$/i.test(text) && text.replace(/^.*!/, "").replace(/\$/g, "").split(":")[0].toUpperCase() !== text.replace(/^.*!/, "").replace(/\$/g, "").split(":")[1].toUpperCase()) rangeNames.add(n);
+  }
   sheetEls.forEach((se) => {
     const name = attr(se, "name") ?? `Sheet${sheets.length + 1}`, path = wbRels.get(attr(se, "id") ?? "") ?? "";
     const xml = parts.get(path);
@@ -356,6 +363,8 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
     const merges: string[] = [];
     if (!xml) { report.push(`${name}: not a worksheet (a chart sheet or dialog sheet), left out`); return; }
     const ws = parseXml(utf8Text(xml));
+    // A formula with no array flag is the one Excel intersects implicitly: its @s (implicit.ts).
+    const legacyFormula = (text: string): string => intersected(text, rangeNames);
     const shared = new Map<string, { formula: string; from: string }>();
     // An array formula's cells (A1:C3): the others hold only the values it gave,
     // which are its spill here, not cells of their own.
@@ -380,13 +389,13 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
         if (f) {
           const kind = attr(f, "t"), si = attr(f, "si"), text = textOf(f);
           if (kind === "shared" && si !== undefined) {
-            if (text) shared.set(si, { formula: plainFormula(text), from: ref });
+            if (text) shared.set(si, { formula: legacyFormula(plainFormula(text)), from: ref });
             const master = shared.get(si);
             if (master) {
               const a = addrOf(master.from.replace(/\$/g, "")), b = addrOf(ref.replace(/\$/g, ""));
               input = a && b ? moved(`=${master.formula}`, { cols: b.col - a.col, rows: b.row - a.row }) : `=${master.formula}`;
             }
-          } else if (text) input = `=${plainFormula(text)}`;
+          } else if (text) input = `=${kind === "array" || kind === "dataTable" ? plainFormula(text) : legacyFormula(plainFormula(text))}`;
         }
         if (!input && !spilled) {
           const raw = v ? textOf(v) : "";

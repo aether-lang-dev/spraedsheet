@@ -243,17 +243,19 @@ export function richErrorsOf(parts: ReadonlyMap<string, Uint8Array>): (vm: numbe
   const meta = read("xl/metadata.xml"), data = read("xl/richData/rdrichvalue.xml"), structs = read("xl/richData/rdrichvaluestructure.xml");
   if (!meta || !data || !structs) return () => null;
   // Which metadata type is the rich values (1-based), what each future metadata block points at,
-  // and each rich value's structure: an _error's errorType is its first value.
+  // and each rich value's structure: an _error's errorType is the value of its key of that name
+  // (the first of {errorType, subType}, the third of {colOffset, errorType, rwOffset, subType}, a spill's).
   const types = kids(kid(meta, "metadataTypes") ?? EMPTY, "metadataType").map((t) => attr(t, "name"));
   const type = types.indexOf("XLRICHVALUE") + 1;
   const future = kids(kids(meta, "futureMetadata").find((f) => attr(f, "name") === "XLRICHVALUE") ?? EMPTY, "bk").map((b) => Number(attr(all(b, "rvb")[0] ?? EMPTY, "i") ?? -1));
-  const shapes = kids(structs, "s").map((s) => attr(s, "t"));
+  const shapes = kids(structs, "s").map((s) => ({ type: attr(s, "t"), at: kids(s, "k").findIndex((k) => attr(k, "n") === "errorType") }));
   const rich = kids(data, "rv");
   return (vm: number) => {
     const rc = all(kids(kid(meta, "valueMetadata") ?? EMPTY, "bk")[vm - 1] ?? EMPTY, "rc")[0];
     if (!rc || type === 0 || Number(attr(rc, "t")) !== type) return null;
     const rv = rich[future[Number(attr(rc, "v"))] ?? -1];
-    if (!rv || shapes[Number(attr(rv, "s"))] !== "_error") return null;
-    return RICH_ERRORS[Number(textOf(kids(rv, "v")[0] ?? EMPTY))] ?? null;
+    const shape = shapes[Number(attr(rv ?? EMPTY, "s"))];
+    if (!rv || !shape || shape.type !== "_error" || shape.at < 0) return null;
+    return RICH_ERRORS[Number(textOf(kids(rv, "v")[shape.at] ?? EMPTY))] ?? null;
   };
 }
