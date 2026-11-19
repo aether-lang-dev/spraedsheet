@@ -15,7 +15,7 @@ eq("constants: numbers, text, nothing", [compile("42"), compile(" -1.5e1 "), com
 eq("a formula", compile("=1").kind, "formula");
 const broken = compile("=SUM(A1");
 eq("a parse error becomes #ERROR!, with where", broken.kind === "broken" ? `${broken.error.code} ${broken.error.why}` : broken.kind, "#ERROR! parse error at 8: expected ')' but found the end");
-eq("refsOf spells out ranges and skips the off-sheet", [...refsOf(parse("A1+SUM(B1:C2)*XFE9+IF(A1, D4)"))], ["A1", "B1", "C1", "B2", "C2", "A1", "D4"]);
+eq("refsOf spells out ranges and skips the off-sheet", [...refsOf(parse("A1+SUM(B1:C2)*#REF!+IF(A1, D4)"))], ["A1", "B1", "C1", "B2", "C2", "A1", "D4"]);
 
 {
   const l = mock<SheetListener>();
