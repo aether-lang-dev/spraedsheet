@@ -32,9 +32,11 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 // expect: ok escape_strings.xlsx
 // expect: ok issue_341.xlsx
 // expect: ok logical.xlsx
+// expect: ok named_ranges.xlsx
 // expect: ok percentage.xlsx
 // expect: ok quotes.xlsx
 // expect: ok range_operator.xlsx
 // expect: ok simple_arrays.xlsx
+// expect: ok simple_functions.xlsx
 // expect: ok spill_operator.xlsx
 // expect: ok every workbook was opened and its formulas compared

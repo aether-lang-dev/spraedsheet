@@ -4,7 +4,7 @@
 // argument that is an error arrives as that error, so IFERROR and ISERROR
 // can look at it; everything else rethrows it as soon as it reads it.
 import { CellError, ERROR_NUMBERS, array, compare, fail, finite, isArray, power, scalar, textNumber, toNumber, toText, trimmed } from "./values.ts";
-import { numberFormat } from "./numfmt.ts";
+import { formatRefused, numberFormat } from "./numfmt.ts";
 import type { ArrayValue, Comparison, Result, Value } from "./values.ts";
 import { sortOrder } from "./sortfind.ts";
 import { SPARKLINE_TYPES, sparkline, sparklineOptions } from "./charts.ts";
@@ -68,7 +68,7 @@ export const arityOf = (name: string): { min: number; max: number } | null => li
 
 // Functions whose numbers must be numbers: Excel gives #VALUE! for TRUE or
 // FALSE (the maths functions read them as 1 and 0).
-const NO_LOGICALS = new Set(["ERF", "ERFC", "ERF.PRECISE", "ERFC.PRECISE", "GESTEP", "DELTA", "NOMINAL", "EFFECT", "DOLLAR", "DOLLARDE", "DOLLARFR",
+const NO_LOGICALS = new Set(["TBILLEQ", "TBILLPRICE", "TBILLYIELD", "BESSELI", "BESSELJ", "BESSELK", "BESSELY", "ERF", "ERFC", "ERF.PRECISE", "ERFC.PRECISE", "GESTEP", "DELTA", "NOMINAL", "EFFECT", "DOLLAR", "DOLLARDE", "DOLLARFR",
   "ISODD", "ISEVEN", "EOMONTH", "EDATE", "YEARFRAC", "DATEDIF", "NETWORKDAYS", "NETWORKDAYS.INTL",
   "WORKDAY", "WORKDAY.INTL", "DATEVALUE", "TIMEVALUE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX",
   "XIRR", "CUMIPMT", "CUMPRINC", "QUOTIENT", "MULTINOMIAL"]);
@@ -163,7 +163,7 @@ export function takesOneAt(name: string, nargs: number, i: number): boolean {
 
 // The evaluator's own forms count too (IF; ROW and COLUMN read references;
 // OFFSET and INDIRECT make them).
-export const names = (): string[] => [...library.keys(), "IF", "ROW", "COLUMN", "OFFSET", "INDIRECT", "FORMULATEXT", "ISFORMULA", "ISREF", "SHEET", "SHEETS", "INFO", "SUBTOTAL", "AGGREGATE", "GROUPBY", "PIVOTBY", "ISOMITTED"].sort();
+export const names = (): string[] => [...library.keys(), "IF", "ROW", "COLUMN", "CELL", "OFFSET", "INDIRECT", "FORMULATEXT", "ISFORMULA", "ISREF", "SHEET", "SHEETS", "INFO", "SUBTOTAL", "AGGREGATE", "GROUPBY", "PIVOTBY", "ISOMITTED"].sort();
 
 // --- reading arguments ---
 
@@ -227,11 +227,13 @@ export function criterion(c: Value): (v: Value) => boolean {
   }
   const m = /^(<>|<=|>=|=|<|>)?([\s\S]*)$/.exec(c)!;
   const op = (m[1] ?? "=") as Comparison, text = m[2];
-  const rhs: Value = text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : text;
+  // A criterion's text that reads as a number (a date's, "50%", "$5") is that number.
+  const rhs: Value = text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : text.trim() !== "" && !/[*?~]/.test(text) ? textNumber(text) ?? text : text;
   // Text with a wildcard in it is matched whole, as a pattern (for = and <>).
   const like = typeof rhs === "string" && (op === "=" || op === "<>") && /[*?~]/.test(rhs) ? wildcard(rhs) : null;
   return (v) => {
-    if (v instanceof CellError) return false;
+    // An error cell is "not equal" to anything (COUNTIF(range, "<>a") counts it), and nothing else.
+    if (v instanceof CellError) return op === "<>";
     if (rhs === "") return (op === "=") === blank(v);
     if (like) return typeof v === "string" ? like(v) === (op === "=") : op === "<>";
     if (typeof rhs === "number" ? typeof v !== "number" : typeof v !== "string") return op === "<>";
@@ -287,10 +289,13 @@ def("AVERAGE", 1, Infinity, (args) => {
   const ns = numbers(args);
   return ns.length ? sum(ns) / ns.length : fail("#DIV/0!", "AVERAGE of no numbers");
 });
+// The largest and smallest, by a loop: a spread of a million numbers (MAX(ROW(A:A))) is more arguments than the engine takes.
+const greatest = (ns: readonly number[]): number => ns.reduce((m, n) => (n > m ? n : m));
+const least = (ns: readonly number[]): number => ns.reduce((m, n) => (n < m ? n : m));
 // An argument left out (MAX(,-1)) counts as 0.
 const withBlanks = (args: readonly Arg[]): number[] => [...numbers(args), ...args.filter((_, i) => absent(args, i)).map(() => 0)];
-def("MIN", 1, Infinity, (args) => { const ns = withBlanks(args); return ns.length ? Math.min(...ns) : 0; });
-def("MAX", 1, Infinity, (args) => { const ns = withBlanks(args); return ns.length ? Math.max(...ns) : 0; });
+def("MIN", 1, Infinity, (args) => { const ns = withBlanks(args); return ns.length ? least(ns) : 0; });
+def("MAX", 1, Infinity, (args) => { const ns = withBlanks(args); return ns.length ? greatest(ns) : 0; });
 def("MEDIAN", 1, Infinity, (args) => {
   const ns = numbers(args).sort((a, b) => a - b), mid = ns.length >> 1;
   if (!ns.length) return fail("#NUM!", "MEDIAN of no numbers");
@@ -308,8 +313,8 @@ def("COUNT", 1, Infinity, (args) => args.reduce((n, a) => n + (a.typed ? numbers
 // text 0, an error itself.
 // Typed into the call, text is read as a number (#VALUE! if it is not one).
 const everything = (args: readonly Arg[]): number[] => args.flatMap((a) => a.typed ? numbers([a]) : a.values.map(scalar).flatMap((v) => (v === null ? [] : typeof v === "number" ? [v] : v === true ? [1] : [0])));
-def("MAXA", 1, Infinity, (args) => { const ns = everything(args); return ns.length ? Math.max(...ns) : 0; });
-def("MINA", 1, Infinity, (args) => { const ns = everything(args); return ns.length ? Math.min(...ns) : 0; });
+def("MAXA", 1, Infinity, (args) => { const ns = everything(args); return ns.length ? greatest(ns) : 0; });
+def("MINA", 1, Infinity, (args) => { const ns = everything(args); return ns.length ? least(ns) : 0; });
 def("AVERAGEA", 1, Infinity, (args) => {
   const ns = everything(args);
   return ns.length ? sum(ns) / ns.length : fail("#DIV/0!", "AVERAGEA of nothing");
@@ -661,8 +666,9 @@ def("SUBSTITUTE", 3, 4, (args) => {
   return text.slice(0, at) + by + text.slice(at + old.length);
 });
 def("REPT", 2, 2, (args) => {
-  const n = Math.trunc(num(args, 1));
-  return n < 0 ? fail("#VALUE!", "REPT fewer than no times") : str(args, 0).repeat(n);
+  const text = str(args, 0), n = Math.trunc(num(args, 1));
+  // A cell holds 32,767 characters: a longer result is #VALUE!, and is not built.
+  return n < 0 ? fail("#VALUE!", "REPT fewer than no times") : text.length * n > 32767 ? fail("#VALUE!", "REPT of over 32767 characters") : text.repeat(n);
 });
 // HYPERLINK(link, [friendly name]): the friendly name shown (the link
 // itself without one); following the cell opens the link (cell.followHyperlink).
@@ -687,13 +693,19 @@ export function imageOf(src: string): string | null {
 }
 
 // CODE and CHAR over the first 255 codes; UNICODE and UNICHAR over all.
+// CHAR and CODE work in Windows-1252, the code page Excel for Windows and the Mac files carry: 128 to
+// 159 are the characters of that page (128 is the euro sign), not the C1 controls; the five it leaves
+// unassigned (129, 141, 143, 144, 157) are those controls.
+const CP1252 = "\u20ac\u0081\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u008d\u017d\u008f\u0090\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u009d\u017e\u0178";
 def("CODE", 1, 1, (args) => {
   const s = str(args, 0);
-  return s === "" ? fail("#VALUE!", "CODE of no text") : s.charCodeAt(0);
+  if (s === "") return fail("#VALUE!", "CODE of no text");
+  const i = CP1252.indexOf(s[0]);
+  return i >= 0 ? 128 + i : s.charCodeAt(0);
 });
 def("CHAR", 1, 1, (args) => {
   const n = Math.trunc(num(args, 0));
-  return n >= 1 && n <= 255 ? String.fromCharCode(n) : fail("#VALUE!", `CHAR(${n}): 1 to 255`);
+  return n >= 1 && n <= 255 ? (n >= 128 && n < 160 ? CP1252[n - 128] : String.fromCharCode(n)) : fail("#VALUE!", `CHAR(${n}): 1 to 255`);
 });
 def("UNICODE", 1, 1, (args) => {
   const s = str(args, 0);
@@ -703,6 +715,18 @@ def("UNICHAR", 1, 1, (args) => {
   const n = Math.trunc(num(args, 0));
   if (n < 1 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) return fail("#VALUE!", `UNICHAR(${n}): not a character`);
   return String.fromCodePoint(n);
+});
+// ENCODEURL(text): every character but the letters, digits and - _ . ~ as the percent-encoding of its UTF-8
+// bytes (Excel encodes ! * ' ( ) too); a result of 32767 characters or more is #VALUE!.
+def("ENCODEURL", 1, 1, (args) => {
+  const text = str(args, 0);
+  let out: string;
+  try {
+    out = encodeURIComponent(text).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  } catch {
+    return fail("#VALUE!", "ENCODEURL of text that is not valid Unicode");
+  }
+  return out.length >= 32767 ? fail("#VALUE!", "ENCODEURL's result is over 32766 characters") : out;
 });
 // CLEAN: the control characters (codes 0 to 31) taken out.
 def("CLEAN", 1, 1, (args) => str(args, 0).replace(/[\x00-\x1f]/g, ""));
@@ -756,14 +780,19 @@ def("CONCATENATE", 1, Infinity, (args) => args.map((_, i) => toText(val(args, i)
 // NUMBERVALUE(text, [decimal], [group]): text as a number, with the
 // separators given (the locale's, "." and ",", unless told); spaces are
 // ignored, and a % at the end divides by 100 (each one).
+// NUMBERVALUE(text, [decimal], [group]): spaces, tabs and line breaks are ignored anywhere in the text, but
+// only when there is a group separator (an empty one, "", leaves spaces to be trimmed from the ends); other
+// characters, a non-breaking space among them, are not; text of nothing, or of nothing but percent signs, is 0.
 def("NUMBERVALUE", 1, 3, (args) => {
-  const text = str(args, 0), dec = (args.length > 1 ? str(args, 1) : ".")[0] ?? ".", grp = (args.length > 2 ? str(args, 2) : ",")[0] ?? ",";
-  if (text.trim() === "") return 0;
+  const text = str(args, 0), dec = (args.length > 1 ? str(args, 1) : ".")[0] ?? ".", grp = args.length > 2 ? (str(args, 2)[0] ?? "") : ",";
   if (dec === grp) return fail("#VALUE!", "NUMBERVALUE's separators are the same");
-  let s = text.replace(/\s+/g, ""), pct = 0;
-  while (s.endsWith("%")) { s = s.slice(0, -1); pct++; }
-  if (s.includes(grp) && s.includes(dec) && s.lastIndexOf(grp) > s.indexOf(dec)) return fail("#VALUE!", `'${text}' is not a number`);
-  s = s.split(grp).join("").split(dec).join(".");
+  const space = /[ \t-\r]/g;
+  let s = grp !== "" ? text.replace(space, "") : text.replace(/^[ \t-\r]+|[ \t-\r]+$/g, ""), pct = 0;
+  while (s.endsWith("%")) { s = s.slice(0, -1).replace(/[ \t-\r]+$/, ""); pct++; }
+  if (s === "") return 0;
+  if (grp !== "" && s.includes(grp) && s.includes(dec) && s.lastIndexOf(grp) > s.indexOf(dec)) return fail("#VALUE!", `'${text}' is not a number`);
+  if (grp !== "") s = s.split(grp).join("");
+  s = s.split(dec).join(".");
   if (!/^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/.test(s)) return fail("#VALUE!", `'${text}' is not a number`);
   return Number(s) / 100 ** pct;
 });
@@ -826,6 +855,8 @@ def("REGEXREPLACE", 3, 5, (args) => {
 // "yyyy-mm-dd"); text that reads as a number is formatted as one.
 def("TEXT", 2, 2, (args) => {
   const v = scalar(val(args, 0)), n = typeof v === "string" && v.trim() !== "" && !isNaN(Number(v)) ? Number(v) : v;
+  const refused = formatRefused(n, str(args, 1));
+  if (refused) return fail("#VALUE!", `TEXT: ${refused}`);
   return numberFormat(n, str(args, 1))?.text ?? toText(v);
 });
 
@@ -849,15 +880,24 @@ const delimiters = (a: Arg): string[] => a.values.map(toText);
 // delimiter, counted from the end when negative; match_mode 1 ignores
 // case; match_end 1 counts the text's end (start, from the end) as one;
 // if_not_found, or #N/A.
+// Excel's own limits: instance_num is cut off downward (-1.2 is -2); match_mode and match_end are 0 or 1 (another
+// is #VALUE!); a delimiter longer than the text is #VALUE!; if_not_found left as an empty cell is "".
 const around = (before: boolean): Fn => (args) => {
-  const text = str(args, 0), ds = delimiters(args[1]), n = whole(args, 2, 1);
-  const anyCase = !absent(args, 3) && num(args, 3) !== 0, atEnd = !absent(args, 4) && num(args, 4) !== 0;
-  if (n === 0 || Math.abs(n) > text.length + 1) return fail("#VALUE!", `${before ? "TEXTBEFORE" : "TEXTAFTER"}'s instance_num is ${n}`);
+  const name = before ? "TEXTBEFORE" : "TEXTAFTER";
+  const text = str(args, 0), ds = delimiters(args[1]), n = absent(args, 2) ? 1 : Math.floor(num(args, 2));
+  const flag = (i: number): boolean => {
+    const f = absent(args, i) ? 0 : num(args, i);
+    return f === 0 || f === 1 ? f === 1 : fail("#VALUE!", `${name}'s argument ${i + 1} is 0 or 1, not ${f}`);
+  };
+  const anyCase = flag(3), atEnd = flag(4);
+  // With no instance_num a delimiter longer than the text is just not found (#N/A); with one it is #VALUE!.
+  if (args.length > 2 && ds.some((d) => d.length > text.length)) return fail("#VALUE!", `${name}'s delimiter is longer than the text`);
+  if (n === 0 || Math.abs(n) > text.length + 1) return fail("#VALUE!", `${name}'s instance_num is ${n}`);
   if (ds.every((d) => d === "")) return (n > 0) === before ? "" : text;
   const found = delimited(text, ds, anyCase);
   if (atEnd) n > 0 ? found.push([text.length, text.length]) : found.unshift([0, 0]);
   const m = n > 0 ? found[n - 1] : found[found.length + n];
-  if (!m) return absent(args, 5) ? fail("#N/A", `${before ? "TEXTBEFORE" : "TEXTAFTER"} found no delimiter ${n}`) : val(args, 5);
+  if (!m) return absent(args, 5) ? fail("#N/A", `${name} found no delimiter ${n}`) : val(args, 5) ?? "";
   return before ? text.slice(0, m[0]) : text.slice(m[1]);
 };
 def("TEXTBEFORE", 2, 6, around(true));
@@ -1859,8 +1899,14 @@ def("FV", 3, 5, (args) => {
 });
 def("PV", 3, 5, (args) => finite(pv(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), due(args, 4))));
 def("NPER", 3, 5, (args) => finite(nper(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), due(args, 4))));
-def("RATE", 3, 6, (args) =>
-  rate(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), due(args, 4), num(args, 5, 0.1)) ?? fail("#NUM!", "RATE did not settle"));
+// A guess of -1 or less is #VALUE!, and so is no rate: a root of -1 or less is one Excel's iteration does not
+// reach, #NUM! (RATE_guess.xlsx and RATE.xlsx).
+def("RATE", 3, 6, (args) => {
+  const guess = num(args, 5, 0.1);
+  if (guess <= -1) return fail("#VALUE!", `RATE's guess ${guess} is above -1`);
+  const r = rate(num(args, 0), num(args, 1), num(args, 2), num(args, 3, 0), due(args, 4), guess);
+  return r === null || r <= -1 ? fail("#NUM!", "RATE found no rate above -1") : r;
+});
 def("NPV", 2, Infinity, (args) => npv(num(args, 0), numbers(args.slice(1))));
 def("IRR", 1, 2, (args) => {
   const flows = numbersIn(args[0].values);
@@ -1879,10 +1925,13 @@ def("IPMT", 4, 6, (args) => finite(ipmt(...loan(args, "IPMT"))));
 def("PPMT", 4, 6, (args) => finite(ppmt(...loan(args, "PPMT"))));
 // CUMIPMT and CUMPRINC(rate, nper, pv, start, end, type): from period
 // start to end; Excel takes no negative pv, rate or periods.
+// A first period with a fraction is taken as the next period, a last period's fraction is cut off, and the number of
+// periods may have a fraction; the periods are held to their order before that (5.1 to 5 is #NUM!), and the type must be 0 or 1 as given.
 const cumulative = (name: string, part: typeof ipmt) => (args: readonly Arg[]): number => {
-  const r = num(args, 0), n = Math.trunc(num(args, 1)), pv0 = num(args, 2), start = Math.trunc(num(args, 3)), end = Math.trunc(num(args, 4)), type = Math.trunc(num(args, 5));
+  const r = num(args, 0), n = num(args, 1), pv0 = num(args, 2), first = num(args, 3), last = num(args, 4), kind = num(args, 5);
+  const start = Math.ceil(first), end = Math.floor(last), type = kind;
   if (r <= 0 || n <= 0 || pv0 <= 0) return fail("#NUM!", `${name}'s rate, periods and present value are positive`);
-  if (start < 1 || end < start || end > n) return fail("#NUM!", `${name}'s periods ${start} to ${end}, of ${n}`);
+  if (first < 1 || last < first || end > n) return fail("#NUM!", `${name}'s periods ${first} to ${last}, of ${n}`);
   if (type !== 0 && type !== 1) return fail("#NUM!", `${name}'s type is 0 or 1, not ${type}`);
   let total = 0;
   for (let p = start; p <= end; p++) total += part(r, p, n, pv0, 0, type);
@@ -1910,7 +1959,10 @@ def("XIRR", 2, 3, (args) => {
   if (!flows.some((c) => c < 0) || !flows.some((c) => c > 0)) return fail("#NUM!", "XIRR needs a negative and a positive cash flow");
   return xirr(flows, dates, num(args, 2, 0.1)) ?? fail("#NUM!", "XIRR did not settle");
 });
-def("MIRR", 3, 3, (args) => mirr(numbersIn(args[0].values), num(args, 1), num(args, 2)) ?? fail("#DIV/0!", "MIRR needs a negative and a positive cash flow"));
+def("MIRR", 3, 3, (args) => {
+  const m = mirr(numbersIn(args[0].values), num(args, 1), num(args, 2));
+  return m === null ? fail("#DIV/0!", "MIRR needs a negative cash flow") : real(m, "MIRR is not a real number");
+});
 // Depreciation: straight line, sum of the years' digits, fixed and double
 // declining balance, and the variable (VDB) over any span of periods.
 def("SLN", 3, 3, (args) => {
@@ -2359,15 +2411,24 @@ const bill = (args: readonly Arg[]): [number, number, number] => {
   if (!(dsm > 0) || dsm > 366 || m > B.addMonthsKeep(s, 12, false)) throw new RangeError("maturity is after settlement, within a year");
   return [s, m, dsm];
 };
-defBond("TBILLPRICE", 3, 3, (args) => { const [, , dsm] = bill(args), d = num(args, 2); above0(d, "the discount"); return 100 * (1 - (d * dsm) / 360); });
+// (A price that comes to 0 or less, a discount of 7, is #NUM!.)
+defBond("TBILLPRICE", 3, 3, (args) => {
+  const [, , dsm] = bill(args), d = num(args, 2);
+  above0(d, "the discount");
+  const price = 100 * (1 - (d * dsm) / 360);
+  if (price <= 0) throw new RangeError("the discount leaves no price");
+  return price;
+});
 defBond("TBILLYIELD", 3, 3, (args) => { const [, , dsm] = bill(args), pr = num(args, 2); above0(pr, "the price"); return ((100 - pr) / pr) * (360 / dsm); });
 defBond("TBILLEQ", 3, 3, (args) => {
   const [, , dsm] = bill(args), d = num(args, 2);
   above0(d, "the discount");
   if (dsm <= 182) return (365 * d) / (360 - d * dsm);
-  // Past half a year, the bond-equivalent yield of a semiannual coupon.
-  const price = 1 - (d * dsm) / 360, t = dsm / 365;
-  return (-2 * t + 2 * Math.sqrt(t * t - (2 * t - 1) * (1 - 1 / price))) / (2 * t - 1);
+  // Past half a year, the bond-equivalent yield of a semiannual coupon, on a year of 365 days (366 for a span of 366).
+  const price = 1 - (d * dsm) / 360, t = dsm / (dsm === 366 ? 366 : 365);
+  const y = (-2 * t + 2 * Math.sqrt(t * t - (2 * t - 1) * (1 - 1 / price))) / (2 * t - 1);
+  if (!Number.isFinite(y)) throw new RangeError("the discount leaves no yield");
+  return y;
 });
 // Discounted and at-maturity securities: their days on the basis, over
 // the basis's year.
@@ -2532,7 +2593,8 @@ const complexes = (name: string, args: readonly Arg[]): E.Complex[] => {
   return zs.map((z) => ({ ...z, unit }));
 };
 def("COMPLEX", 2, 3, (args) => {
-  const unit = absent(args, 2) ? "i" : str(args, 2);
+  // The suffix left out, or an empty cell or empty text, is i.
+  const unit = absent(args, 2) || val(args, 2) === null || val(args, 2) === "" ? "i" : str(args, 2);
   if (unit !== "i" && unit !== "j") return fail("#VALUE!", `COMPLEX's suffix is i or j, not '${unit}'`);
   return E.formatComplex({ re: num(args, 0), im: num(args, 1), unit });
 });
@@ -2577,7 +2639,8 @@ defEng("BESSELY", 2, 2, (args) => E.besselY(num(args, 0), order(args)));
 // "=Apple", "<>x") compares as COUNTIF's does; plain text is what the
 // cell starts with, in any case (Excel's way, with * and ? as wildcards).
 const rowsOfArg = (a: Arg): Value[][] => Array.from({ length: a.values.length / a.cols }, (_, r) => a.values.slice(r * a.cols, (r + 1) * a.cols) as Value[]);
-const label = (v: Value): string => toText(v).trim().toUpperCase();
+// (A header that is an error is its code: the criteria under it hold for no record.)
+const label = (v: Value): string => (v instanceof CellError ? v.code : toText(v)).trim().toUpperCase();
 function dbCondition(c: Value): (v: Value) => boolean {
   if (typeof c === "string" && !/^(<>|<=|>=|=|<|>)/.test(c)) {
     const pattern = new RegExp(`^${c.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}`, "i");
@@ -2588,7 +2651,9 @@ function dbCondition(c: Value): (v: Value) => boolean {
 // A criteria range's rows (its header row first) as a test of a record
 // whose fields `header` names; or why it cannot be one. Advanced Filter's
 // criteria too (commands.ts).
-export function recordTest(header: readonly Value[], cRows: readonly (readonly Value[])[], computed?: (row: number, col: number) => readonly Value[] | undefined): ((rec: readonly Value[], i: number) => boolean) | string {
+// `refuse`: a criterion under a header that is no field is an error message (the Advanced Filter says so), not a condition no
+// record meets (the database functions' answer, as Excel's is).
+export function recordTest(header: readonly Value[], cRows: readonly (readonly Value[])[], refuse: boolean, computed?: (row: number, col: number) => readonly Value[] | undefined): ((rec: readonly Value[], i: number) => boolean) | string {
   const names = header.map(label), cHead = (cRows[0] ?? []).map(label);
   const tests: ((rec: readonly Value[], i: number) => boolean)[][] = [];
   for (const [r, row] of cRows.slice(1).entries()) {
@@ -2599,7 +2664,11 @@ export function recordTest(header: readonly Value[], cRows: readonly (readonly V
       const per = at < 0 ? computed?.(r + 1, j) : undefined;
       if (per) { t.push((_rec, i) => { const v = per[i] ?? null; return typeof v === "boolean" ? v : typeof v === "number" && v !== 0; }); continue; }
       if (c === null || c === "") continue;
-      if (at < 0) return `the criteria's ${toText(cRows[0][j])} is not a field of the database`;
+      if (at < 0) {
+        if (refuse) return `the criteria's ${toText(cRows[0][j])} is not a field of the database`;
+        t.push(() => false);
+        continue;
+      }
       const test = dbCondition(c);
       t.push((rec) => test(rec[at] ?? null));
     }
@@ -2611,19 +2680,21 @@ export function recordTest(header: readonly Value[], cRows: readonly (readonly V
 // The field's values in the records that match.
 function matching(name: string, args: readonly Arg[], fieldOptional: boolean): { values: Value[]; count: number } {
   const db = rowsOfArg(args[0]);
-  if (db.length < 1) return fail("#VALUE!", `${name}'s database has no header row`);
-  const header = db[0].map(label), records = db.slice(1);
   const crit = args.length > 2 ? args[2] : args[1];
   const fieldGiven = args.length > 2 && !absent(args, 1);
+  // The field is read first: a range there is one value wanted (ScalarWanted), whatever the database is.
+  const f = fieldGiven ? val(args, 1) : null;
+  if (db.length < 2) return fail("#VALUE!", `${name}'s database has no records, only a header row`);
+  const header = db[0].map(label), records = db.slice(1);
   let column = -1;
   if (fieldGiven) {
-    const f = val(args, 1);
-    column = typeof f === "number" ? Math.trunc(f) - 1 : header.indexOf(label(f));
+    // A number, or TRUE or FALSE (1 and 0), is a column's place; text is its name.
+    column = typeof f === "number" || typeof f === "boolean" ? Math.trunc(Number(f)) - 1 : header.indexOf(label(f));
     if (column < 0 || column >= header.length) return fail("#VALUE!", `${name}: no field ${toText(f)} in the database`);
   } else if (!fieldOptional) return fail("#VALUE!", `${name} takes a field`);
   const cRows = rowsOfArg(crit);
   if (cRows.length < 1) return fail("#VALUE!", `${name}'s criteria have no header row`);
-  const test = recordTest(db[0], cRows, crit.computed ? (r, c) => crit.computed!.get(r * crit.cols + c) : undefined);
+  const test = recordTest(db[0], cRows, false, crit.computed ? (r, c) => crit.computed!.get(r * crit.cols + c) : undefined);
   if (typeof test === "string") return fail("#VALUE!", `${name}: ${test}`);
   const keep = records.filter(test);
   return { values: column < 0 ? keep.map(() => 1) : keep.map((rec) => rec[column] ?? null), count: keep.length };

@@ -2055,7 +2055,7 @@ const SPECS: readonly Spec[] = [
       const rowOf = (row: number, [a, b]: [Addr, Addr]) => Array.from({ length: Math.abs(a.col - b.col) + 1 }, (_, i) => wb.sheet.value(keyOf({ col: Math.min(a.col, b.col) + i, row })));
       const top = Math.min(r[0].row, r[1].row), bottom = Math.max(r[0].row, r[1].row), left = Math.min(r[0].col, r[1].col), width = Math.abs(r[0].col - r[1].col) + 1;
       const cTop = Math.min(c[0].row, c[1].row), cBottom = Math.max(c[0].row, c[1].row);
-      const test = recordTest(rowOf(top, r), Array.from({ length: cBottom - cTop + 1 }, (_, i) => rowOf(cTop + i, c)));
+      const test = recordTest(rowOf(top, r), Array.from({ length: cBottom - cTop + 1 }, (_, i) => rowOf(cTop + i, c)), true);
       if (typeof test === "string") refuse(test);
       const seen = new Set<string>(), picked: number[] = [];
       for (let row = top + 1; row <= bottom; row++) {

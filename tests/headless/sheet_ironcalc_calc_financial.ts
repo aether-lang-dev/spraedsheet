@@ -27,6 +27,7 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 // expect: ok FINANCIAL/ACCRINT.xlsx
 // expect: ok FINANCIAL/ACCRINTM.xlsx
 // expect: ok FINANCIAL/COUPDAYS.xlsx
+// expect: ok FINANCIAL/CUMPRINC_CUMIPMT.xlsx
 // expect: ok FINANCIAL/DB_DDB.xlsx
 // expect: ok FINANCIAL/DISC.xlsx
 // expect: ok FINANCIAL/FV.xlsx
@@ -34,6 +35,7 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 // expect: ok FINANCIAL/INTRATE.xlsx
 // expect: ok FINANCIAL/IPMT_PPMT.xlsx
 // expect: ok FINANCIAL/ISPMT.xlsx
+// expect: ok FINANCIAL/MIRR.xlsx
 // expect: ok FINANCIAL/NOMINAL_EFFECT.xlsx
 // expect: ok FINANCIAL/NPER.xlsx
 // expect: ok FINANCIAL/NPV.xlsx
@@ -41,7 +43,9 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 // expect: ok FINANCIAL/PMT.xlsx
 // expect: ok FINANCIAL/PV.xlsx
 // expect: ok FINANCIAL/RATE.xlsx
+// expect: ok FINANCIAL/RATE_guess.xlsx
 // expect: ok FINANCIAL/RRI.xlsx
 // expect: ok FINANCIAL/SLN_SYD.xlsx
+// expect: ok FINANCIAL/TBILLs.xlsx
 // expect: ok FINANCIAL/XNPV.xlsx
 // expect: ok every workbook was opened and its formulas compared

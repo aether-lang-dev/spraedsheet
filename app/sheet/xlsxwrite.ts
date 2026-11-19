@@ -7,7 +7,7 @@
 // 1904 date system. RexxJS formulas are not Excel's: their values are
 // written, and said in the report.
 import { zip, utf8Bytes } from "./zip.ts";
-import { escapeXml } from "./xml.ts";
+import { encodeXstring, escapeXml } from "./xml.ts";
 import { COLS, addrOf, keyOf, order } from "./address.ts";
 import { CellError } from "./values.ts";
 import type { Value } from "./values.ts";
@@ -172,7 +172,7 @@ export function writeXlsx(wb: Workbook): XlsxWritten {
     return `<xf numFmtId="${id}" fontId="${x.font}" fillId="${x.fill}" borderId="${x.border}" xfId="0"${id ? ' applyNumberFormat="1"' : ""}${x.font ? ' applyFont="1"' : ""}${x.fill ? ' applyFill="1"' : ""}${x.border ? ' applyBorder="1"' : ""}${al ? ' applyAlignment="1"' : ""}${pr ? ' applyProtection="1"' : ""}${al || pr ? `>${al}${pr}</xf>` : "/>"}`;
   }).join("");
   const styles = `${HEAD}<styleSheet xmlns="${MAIN}">${ownCodes.length ? `<numFmts count="${ownCodes.length}">${ownCodes.map((c, i) => `<numFmt numFmtId="${164 + i}" formatCode="${escapeXml(c)}"/>`).join("")}</numFmts>` : ""}<fonts count="${fonts.length}">${fonts.join("")}</fonts><fills count="${fills.length}">${fills.join("")}</fills><borders count="${borders.length}">${borders.join("")}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfXml}</cellXfs>${dxfs.length ? `<dxfs count="${dxfs.length}">${dxfs.join("")}</dxfs>` : ""}</styleSheet>`;
-  const shared = `${HEAD}<sst xmlns="${MAIN}" count="${strings.length}" uniqueCount="${strings.length}">${strings.map((s) => `<si><t${/^\s|\s$|\n/.test(s) ? ' xml:space="preserve"' : ""}>${escapeXml(s)}</t></si>`).join("")}</sst>`;
+  const shared = `${HEAD}<sst xmlns="${MAIN}" count="${strings.length}" uniqueCount="${strings.length}">${strings.map((s) => `<si><t${/^\s|\s$|\n/.test(s) ? ' xml:space="preserve"' : ""}>${escapeXml(encodeXstring(s))}</t></si>`).join("")}</sst>`;
   const types = `${HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>${exts.map((e) => `<Default Extension="${e}" ContentType="image/${e}"/>`).join("")}<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${
     pages.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}${sheetParts.map((x, i) => (x.comments.length ? `<Override PartName="/xl/comments${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>` : "")).join("")}${
     people.length ? '<Override PartName="/xl/persons/person.xml" ContentType="application/vnd.ms-excel.person+xml"/>' : ""}${
@@ -251,7 +251,7 @@ function sheetOf(page: Page, wb: Workbook, rangeNames: ReadonlySet<string>, sst:
       const own = span ? { text: singled(input.slice(1)), legacy: false } : stored(input.slice(1), rangeNames);
       const f = span || !own.legacy ? `<f t="array" ref="${span || k}">${escapeXml(storedFormula(own.text))}</f>` : `<f>${escapeXml(storedFormula(own.text))}</f>`;
       c = v instanceof CellError ? `<c r="${k}" t="e"${attrS}>${f}<v>${escapeXml(v.code)}</v></c>`
-        : typeof v === "string" ? `<c r="${k}" t="str"${attrS}>${f}<v>${escapeXml(v)}</v></c>`
+        : typeof v === "string" ? `<c r="${k}" t="str"${attrS}>${f}<v>${escapeXml(encodeXstring(v))}</v></c>`
         : typeof v === "boolean" ? `<c r="${k}" t="b"${attrS}>${f}<v>${v ? 1 : 0}</v></c>`
         : typeof v === "number" ? `<c r="${k}"${attrS}>${f}<v>${num(v)}</v></c>` : `<c r="${k}"${attrS}>${f}</c>`;
     } else if (v === null || (v === "" && input !== "'")) c = `<c r="${k}"${attrS}/>`;

@@ -25,4 +25,7 @@ for (const [name, b64] of FIXTURES) {
 eq("every workbook was opened and its formulas compared", total > 0, true);
 
 // expect: ok DATABASE/DAVERAGE.xlsx
+// expect: ok DATABASE/DCOUNT_DCOUNTA_DGET_DPRODUCT.xlsx
+// expect: ok DATABASE/DMIN_DMAX_DAVERAGE_DSUM.xlsx
+// expect: ok DATABASE/DVAR_DVARP_DSTDEV_DSTDEVP.xlsx
 // expect: ok every workbook was opened and its formulas compared

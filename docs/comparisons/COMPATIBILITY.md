@@ -49,14 +49,18 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 | Kind | Cells | Means |
 |---|---|---|
 | `we-error` | 2 | this app gives an error where Excel stored a value |
-| `excel-error` | 6 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 18 | both give a value, and they differ |
+| `excel-error` | 4 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 154 | both give a value, and they differ |
 
-Counted 2026-11-19, after batch 1 (26 cells in 10 workbooks, of the 190 now taken from IronCalc's 228; 15 cells in 6 workbooks before it; 64 with the 47 `legacy` on 2026-11-11, in 22 workbooks; 66 with 38 on 2026-11-10; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-19, after batch 2 (160 cells in 11 workbooks, of the 211 now taken from IronCalc's 228: 135 of them are
+`BESSEL.xlsx`, Excel's polynomial approximations, below; 26 cells in 10 workbooks after batch 1, 15 cells in 6 workbooks before it;
+64 with the 47 `legacy` on 2026-11-11, in 22 workbooks; 66 with 38 on 2026-11-10; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
 
 The 173 workbooks were most of the 221 IronCalc had at the commit first read. IronCalc has 228 now
-(1567c3b7). The ones not yet taken in are the ledger's next work: each comes in when its cells are
+(1567c3b7), 17 not yet taken in: INDIRECT and ROW_COLUM (below), XLOOKUP, COUNTIF, COUNTIFS, BINOM, GAMMA, BETADIST_BETAINV, GEOMEAN (no `docProps/app.xml`: not known to
+be Excel's), and the financial IRR, XIRR, 1682, ACCRINT_ACCRINTM, ACCRINT_extended, accrint_cases and PRICE_YIELD, and NOW_TODAY
+(the day the file was saved: never). They are the ledger's next work: each comes in when its cells are
 fixed or looked at and kept (a workbook enters `tests/headless/lib/ironcalc_calc_<group>.ts` only so,
 never with a loosened comparison), which makes the count below go up by what is kept and down by
 what is fixed.
@@ -335,6 +339,71 @@ Kept in batch 1, each looked at (kind `value` unless said):
   are read); this app reads `Month d, yyyy` as en-US does, and `VALUE("Jan 15, 2026")` in this ledger's own cases says so.
   Kind `excel-error`.
 
+2026-11-19, batch 2 (21 more workbooks: TEXT 7, DATABASE 3, ENGINEERING 3, `named_ranges.xlsx` and `simple_functions.xlsx`, the financial
+MIRR, TBILLs, RATE_guess and CUMPRINC_CUMIPMT, CELL and SUMIFS; 1,073 of their cells differed from Excel's stored value, 136 still do,
+kept below, 135 of them Bessel):
+
+- Text. `CHAR` and `CODE` are Windows-1252's: 128 to 159 are the euro sign, the curly quotes and the like, not the C1 controls. A
+  file's text writes what XML cannot hold as `_xHHHH_` (`CHAR(1)` is `_x0001_`, a literal `_x0041_` is `_x005F_x0041_`): read from
+  shared, inline and formula strings and written back (`decodeXstring`, `encodeXstring` in `xml.ts`). `ENCODEURL` is new (the
+  letters, digits and `-_.~` stay, everything else is percent-encoded UTF-8, `!*'()` too; a result of 32767 characters or more is
+  `#VALUE!`), stored as `_xlfn.ENCODEURL`. `NUMBERVALUE` ignores spaces, tabs and line breaks (not a non-breaking space) when there
+  is a group separator, only trims them when it is empty (`"1 000"` is then `#VALUE!`), and `"%"` is 0. `TEXTBEFORE` and
+  `TEXTAFTER` cut instance_num downward (-1.2 is -2), take only 0 or 1 for match_mode and match_end, answer `#VALUE!` for a
+  delimiter longer than the text beside an instance_num (`#N/A` without), and an if_not_found left as an empty cell is "".
+  `TEXT` of a number that is no date (negative, past 9999-12-31) in a date format, or of a date format with digit placeholders
+  (`mm###`), is `#VALUE!`. `REPT` of over 32767 characters is `#VALUE!` (it ran out of memory), its first argument's error answers
+  before a second argument that is no number. CHAR, ENCODEURL, NUMBERVALUE, SUBSTITUTE, TEXT, TEXTBEFORE_TEXTAFTER, REPT.
+- Database functions. A database of a header row alone is `#VALUE!`; the field TRUE or FALSE is column 1 or 0 (a place), not a name;
+  a criterion text that reads as a number (`">=2024-07-01"`, a date) is that number, in `COUNTIF` and the others too; an error
+  cell is "not equal" to anything (`"<>a"` counts it); a criterion under a header that is no field of the database holds for no
+  record (the answer is 0, not `#VALUE!`; the Advanced Filter still says it is no field), and so does a header that is an error. DATABASE's
+  three workbooks, 44 cells.
+- `COMPLEX` with the suffix an empty cell or `""` is `i`, and its parts are written as a formula's text is (`1E-20`,
+  `0.0000000000000001`). `CONVERT` takes `ft^2`, `m^3` and the like for the area and volume units, the units `Picapt2`, `Picapt3` and
+  `flb`, a prefix before `mph`, `uk_pt`, and kelvin (`MK`, `Mkel`), and none before `ly2` or `ly3`. `BESSELI`, `J`, `K` and `Y` refuse
+  TRUE and FALSE. COMPLEXs.xlsx (612 cells; they all followed from one empty suffix), CONVERT.xlsx.
+- Names. A defined name may begin with an underscore (`_Helper`; only Excel's own `_xlnm.` names are settings), and a name of one
+  sheet that refers to another (`LocalBonus` on `Tests` is `Inputs!$B$10`) keeps the sheet it points to. named_ranges.xlsx, 4 cells.
+- Finance. `MIRR` is the negative flows discounted to the first period and the positive ones compounded to the last, which makes a
+  finance rate of -1 usable (0 to the 0 is 1) and all-negative flows -1 (they were `#DIV/0!`; all-positive stays `#DIV/0!`), and a
+  result that is no real number `#NUM!`. `TBILLEQ` past half a year counts a year of 366 days for a span of 366; `TBILLPRICE` and
+  `TBILLEQ` of a discount that leaves no price (7, 1.19 over 318 days) are `#NUM!`; the three T-bill functions refuse TRUE and FALSE.
+  `RATE` with a guess of -1 or less is `#VALUE!`, and a rate of -1 or less (a root Excel's search does not reach) is `#NUM!`: that
+  takes `RATE.xlsx` F17 and G17 off the ledger, which the entry "RATE.xlsx F17, G17" below kept for want of this rule. `CUMIPMT` and
+  `CUMPRINC` take a first period with a fraction as the next period and cut off the last, keep a fraction in the number of periods
+  (they cut it off), hold the periods to their order before that (5.1 to 5 is `#NUM!`) and the type to 0 or 1 as given.
+  MIRR, TBILLs, RATE_guess, CUMPRINC_CUMIPMT, 47 cells.
+
+- Information and reference. `CELL` is new for "address", "col", "row", "contents" and "type" (b, l or v), about the reference's first
+  cell and without reading the others (`CELL("col", A8:C8)` in B8 is no cycle); the other info types ("format", "color",
+  "width" ...) are `#VALUE!`, which is no match for Excel's but is not asked by the workbook (it stores them as text). `ROWS(C:C)` is
+  1,048,576 and `COLUMNS(14:14)` 16,384 (they were the used part). `INDIRECT` reads a whole column or row as text (`D:D`, `05:05`,
+  `$FF:FG`), R1C1 with the second argument left empty, a row or column alone (`R2`, `C[1]`, `R[-4]`), a relative reference
+  wrapping round the sheet's edge and `#REF!` when it is a whole sheet or more away, a cell and a row together (`R1C1:R2`)
+  as no reference, and a sheet that is not there as `#REF!`; `ROW` and `COLUMN` of what it gives get the importer's `@`. `OFFSET` cuts
+  its height and width off (14.9 is 14; a positive one under 1 is 1), a negative one is `#VALUE!`. `MAX` and `MIN` loop (a spread of
+  a million numbers is more arguments than the engine takes). Each has cases in `examples.ts`. CELL.xlsx, 27 cells.
+- Not taken in yet: `INDIRECT.xlsx` and `ROW_COLUM.xlsx` (they differed in 22 and 34 cells; with the changes above, all but 2 come right: `Ranges!A18`
+  and `B18`, below). Their `WrapAroud` sheet has a cell in row 1,048,576 and a wrapped range (`R[-5]C[-4]:R[-3]C[-4]`) that is the whole
+  column, so every recalculation of INDIRECT (volatile) reads a million cells one by one and the workbook takes minutes (the suite's
+  limit is 60 seconds). They come in when a range of that size is read by its populated cells, not its addresses.
+
+Kept in batch 2, each looked at:
+
+- `BESSEL.xlsx`, 135 cells (kind `value`): Excel's `BESSELI` of order 0 is, to every digit stored, the Abramowitz and Stegun
+  polynomial of the old Numerical Recipes (`I0(0.2)` is 1.0100250221205638 where the series, and this app, give 1.0100250278), and its
+  `BESSELJ`, `BESSELK` and `BESSELY` are the same kind of approximation (`BESSELJ(0, 0)` is 1.00000000283141): they are right to 6 to 9
+  digits, not to a double. This app gives the correctly rounded values of its integral and series forms; `BESSELY(1E5, 5)` the workbook
+  itself marks "Excel gets this wrong". Matching Excel would mean writing its approximations on purpose; IronCalc chose not to as well
+  (its README: "we strive to do better"). Paul to decide.
+- `ROW_COLUM.xlsx` (not in yet) `Ranges!A18` and `B18` (`MAX(ROW(Sheet2!B:B))` is 1,048,576 and `MAX(COLUMN(Sheet2!7:7))` 16,384 in Excel, this app
+  gives the last used row, 7, and column, 3): a whole column in a formula is worked out only as far as the sheet is used, which is what
+  makes `SUM(A:A)` quick (a million-element array in every formula would not be); `ROW` and `COLUMN` of a whole column would have to
+  give the sheet's all and then `(B:B<>"")*ROW(B:B)` is `#N/A` against the shorter B:B. A design choice.
+- `TEXT.xlsx` `NUMBERS!H20`: `TEXT(-1E-8, "General")` is `-0.00000001` in Excel, where the cell rule of General this app uses (scientific from
+  1E-5 down, to fit a column of the standard width) gives `-1E-08`. How far TEXT's General goes is not documented.
+
 ## Intended (found while looking)
 
 - `T_VALUE_VALUETOTEXT.xlsx` C15 (`VALUE("2/3/2023")`) and I5 (`VALUE("10-12-1999")`): the workbook
@@ -366,9 +435,7 @@ Kept in batch 1, each looked at (kind `value` unless said):
   issue's own period. Microsoft's text (FALSE: from first_interest to settlement) does not give
   that either, as the settlement is before the first interest. Not changed: three cases make a rule
   to guess at, not one to copy.
-- `RATE.xlsx` F17, G17: Excel answers #NUM! where this app's iteration finds a root below -1
-  (-1.87) or at -1; Excel's guess-driven Newton search does not reach it. Not changed until
-  Excel's rule for refusing such roots is known.
+- (`RATE.xlsx` F17, G17, kept here until 2026-11-19, are right now: a root of -1 or less is `#NUM!`, see batch 2.)
 - `spill_operator.xlsx` G2 (`SUM(C2#)` where C2 holds a legacy array formula `{=123}` over C2:C5): this
   app's array formula of a scalar fills one cell, so `C2#` is #REF!; Excel's fills the four. The
   importer would have to know the formula's result is one value to fill the range with it.

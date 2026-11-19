@@ -3,7 +3,7 @@
 // IronCalc calc_tests workbooks were saved by Excel, so those cached values are
 // an oracle for functions (third_party/ironcalc/PROVENANCE.md).
 import { unzip, utf8Text } from "../sheet/zip.ts";
-import { parseXml, all, kid, kids, attr, textOf } from "../sheet/xml.ts";
+import { parseXml, all, decodeXstring, kid, kids, attr, textOf } from "../sheet/xml.ts";
 import { richErrorsOf } from "../sheet/xlsxparts.ts";
 import { fromBase64 } from "../sheet/csv.ts";
 import { Commands } from "../sheet/commands.ts";
@@ -28,7 +28,7 @@ export function cachedValues(bytes: Uint8Array): Map<string, [string, string][]>
       const f = kid(c, "f"), v = kid(c, "v");
       // An error with a rich value (#CALC!, #SPILL!) is stored as #VALUE!: the rich value says which.
       const rich = attr(c, "t") === "e" && attr(c, "vm") ? richError(Number(attr(c, "vm"))) : null;
-      if (f && v) cells.push([attr(c, "r") ?? "", `${attr(c, "t") ?? "n"}:${rich ?? textOf(v)}`]);
+      if (f && v) cells.push([attr(c, "r") ?? "", `${attr(c, "t") ?? "n"}:${rich ?? (attr(c, "t") === "str" ? decodeXstring(textOf(v)) : textOf(v))}`]);
     }
     out.set(attr(s, "name") ?? "", cells);
   }

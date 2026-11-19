@@ -24,6 +24,7 @@ for (const [name, b64] of FIXTURES) {
 }
 eq("every workbook was opened and its formulas compared", total > 0, true);
 
+// expect: ok INFORMATION/CELL.xlsx
 // expect: ok INFORMATION/ERROR.TYPE.xlsx
 // expect: ok INFORMATION/FORMULATEXT.xlsx
 // expect: ok INFORMATION/ISOMITTED.xlsx

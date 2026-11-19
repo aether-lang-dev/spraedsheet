@@ -121,6 +121,16 @@ jumped: a count of a billion was endless), and a parser reading CR LF as one LF.
 taken in; `tools/function-status.sh` read the harness's output from a place sae's `lower/run-tests.sh` stopped using (it keeps
 one directory per run and removes it), so `function_status` failed on a clean clone: it keeps the run's directory now.
 
+**Done 2026-11-19 (IronCalc ledger, batch 2: text, databases, engineering, names, some finance; COMPATIBILITY.md "batch 2" has each):** 21 more
+of IronCalc's workbooks (211 of its 228 now), 1,073 of their cells differing from Excel's stored value, 136 still, 135 of those Bessel (Excel's
+polynomial approximations, kept: a decision for Paul). CHAR and CODE in Windows-1252, a file's `_xHHHH_` text read and written, ENCODEURL, NUMBERVALUE,
+TEXTBEFORE and TEXTAFTER, TEXT of non-dates and `mm###`, REPT's limit; the database functions (a header-only database, TRUE as a field, a date
+text as a criterion, error cells under "<>", an unknown criteria header); COMPLEX with an empty suffix (612 cells came right at once), CONVERT's `^`
+units, prefixes and Picapt; defined names that begin with an underscore or are a sheet's own and point to another sheet; MIRR, TBILLEQ, TBILLPRICE,
+RATE (which takes RATE.xlsx's two kept cells off the ledger) and CUMIPMT and CUMPRINC; CELL (new), ROWS and COLUMNS of whole columns,
+INDIRECT's R1C1 and whole spans, OFFSET's sizes. Ledger 26 cells to 160, in 11 of the 211 workbooks taken in; 17 of IronCalc's workbooks are not in yet (INDIRECT and ROW_COLUM wait for a sparse read of
+a whole-sheet range: a recalculation reads a million cells).
+
 - `sheet_large`'s timing budgets follow the host: a fixed workload that is none of the app's code (a map, strings, a sort,
   in the same engine; best of 3, 96 ms on the development Mac) is timed first, and the stated times (8000, 1000, 6000, 4000,
   8000, 300 ms) are multiplied by its ratio to the Mac's, never by less than 1. cachyos measured recalculate 7465, save 5895,

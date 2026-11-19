@@ -13,6 +13,12 @@ export const unescapeXml = (s: string): string =>
   s.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (m, e: string) => (e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENT[e] ?? m));
 export const escapeXml = (s: string): string => s.replace(/&/g, "&amp;").replace(/\r/g, "&#13;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+// A text in a file (an XLSX string) writes what XML cannot hold as _xHHHH_ (a control character, a CR), and an
+// underscore that begins such a spelling itself as _x005F_: read, and written, here.
+export const decodeXstring = (s: string): string => (s.includes("_x") ? s.replace(/_x([0-9A-Fa-f]{4})_/g, (_m, h: string) => String.fromCharCode(parseInt(h, 16))) : s);
+export const encodeXstring = (s: string): string =>
+  s.replace(/_x(?=[0-9A-Fa-f]{4}_)/g, "_x005F_x").replace(/[\u0000-\u0008\u000b-\u001f\ufffe\uffff]|\r/g, (c) => `_x${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}_`);
+
 export function parseXml(source: string): El {
   // A parser reads a line break as one LF, whether the file has CR LF or a lone CR (a character
   // reference, &#13;, is kept): Excel's stored value of CHAR(10) is a CR LF in the file.

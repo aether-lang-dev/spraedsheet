@@ -9,7 +9,7 @@
 // the app's own sheet file (file.ts reads it), with a report of what was
 // left out. Pure: bytes in.
 import { unzip, utf8Text } from "./zip.ts";
-import { attr, all, kid, kids, parseXml, textOf } from "./xml.ts";
+import { attr, all, decodeXstring, kid, kids, parseXml, textOf } from "./xml.ts";
 import type { El } from "./xml.ts";
 import { COLS, ROWS, addrOf, colName, keyOf } from "./address.ts";
 import type { Addr } from "./address.ts";
@@ -73,7 +73,7 @@ export function plainFormula(text: string): string {
 // PYTHON_*, COPILOT, QUERYSTRING and PQSOURCE names are not modelled here.
 const FUTURE = new Set(`SINGLE ACOT ACOTH AGGREGATE ANCHORARRAY ARABIC ARRAYTOTEXT BASE BETA.DIST BETA.INV BINOM.DIST BINOM.DIST.RANGE BINOM.INV BITAND BITLSHIFT BITOR BITRSHIFT BITXOR
 BYCOL BYROW CEILING.MATH CEILING.PRECISE CHISQ.DIST CHISQ.DIST.RT CHISQ.INV CHISQ.INV.RT CHISQ.TEST CHOOSECOLS CHOOSEROWS COMBINA CONCAT CONFIDENCE.NORM CONFIDENCE.T COT COTH
-COVARIANCE.P COVARIANCE.S CSC CSCH DAYS DECIMAL DROP ERF.PRECISE ERFC.PRECISE EXPAND EXPON.DIST F.DIST F.DIST.RT F.INV F.INV.RT F.TEST FLOOR.MATH FLOOR.PRECISE
+COVARIANCE.P COVARIANCE.S CSC CSCH DAYS DECIMAL DROP ENCODEURL ERF.PRECISE ERFC.PRECISE EXPAND EXPON.DIST F.DIST F.DIST.RT F.INV F.INV.RT F.TEST FLOOR.MATH FLOOR.PRECISE
 FORECAST.ETS FORECAST.LINEAR FORMULATEXT GAMMA GAMMA.DIST GAMMA.INV GAMMALN.PRECISE GAUSS HSTACK HYPGEOM.DIST IFNA IFS IMAGE ISFORMULA ISOMITTED ISOWEEKNUM LAMBDA LET
 LOGNORM.DIST LOGNORM.INV MAKEARRAY MAP MAXIFS MINIFS MODE.MULT MODE.SNGL MUNIT NEGBINOM.DIST  NORM.DIST NORM.INV NORM.S.DIST NORM.S.INV NUMBERVALUE
 PDURATION PERCENTILE.EXC PERCENTILE.INC PERCENTRANK.EXC PERCENTRANK.INC PERMUTATIONA PHI POISSON.DIST QUARTILE.EXC QUARTILE.INC RANDARRAY RANK.AVG RANK.EQ REDUCE
@@ -205,7 +205,7 @@ function rels(parts: Map<string, Uint8Array>, of: string): Map<string, string> {
 // A shared string: its text, or its rich runs' text together.
 const stringOf = (si: El): string => {
   const t = kid(si, "t");
-  return t && !kids(si, "r").length ? textOf(t) : kids(si, "r").map((r) => textOf(kid(r, "t") ?? { name: "t", attrs: {}, children: [] })).join("");
+  return decodeXstring(t && !kids(si, "r").length ? textOf(t) : kids(si, "r").map((r) => textOf(kid(r, "t") ?? { name: "t", attrs: {}, children: [] })).join(""));
 };
 
 // A cell address as the app's ($ dropped), null when off the sheet.
@@ -400,10 +400,10 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
         if (!input && !spilled) {
           const raw = v ? textOf(v) : "";
           if (t === "s") input = strings[Number(raw)] ?? "";
-          else if (t === "inlineStr") input = textOf(kid(c, "is") ?? { name: "", attrs: {}, children: [] });
+          else if (t === "inlineStr") input = decodeXstring(textOf(kid(c, "is") ?? { name: "", attrs: {}, children: [] }));
           else if (t === "b") input = raw === "1" ? "TRUE" : "FALSE";
           else if (t === "e") input = (attr(c, "vm") ? richError(Number(attr(c, "vm"))) : null) ?? raw;
-          else if (t === "str") input = raw;
+          else if (t === "str") input = decodeXstring(raw);
           else input = raw;
           // Text that the sheet would read as a number, or a formula, kept text.
           if ((t === "s" || t === "inlineStr" || t === "str") && (NUMERIC.test(input) || input.startsWith("=") || input.startsWith("'") || /^\s*(?:true|false)\s*$/i.test(input) || TYPED_ERRORS.has(input.trim().toUpperCase()))) input = `'${input}`;
@@ -569,10 +569,13 @@ export function readXlsx(bytes: Uint8Array, fileName = "Workbook"): XlsxRead {
       } else report.push(`${n.slice(6)} (not a single range) left out`);
       continue;
     }
-    if (!n || n.startsWith("_xlnm.") || n.startsWith("_")) { if (n.startsWith("_xlnm.")) report.push(`${n.slice(6)} (a print setting) left out`); continue; }
+    // (_xlnm. names are Excel's own settings; a name a person gave may begin with an underscore: _Helper.)
+    if (!n || n.startsWith("_xlnm.")) { if (n.startsWith("_xlnm.")) report.push(`${n.slice(6)} (a print setting) left out`); continue; }
     const range = /^(?:'[^']+'|[^'!]+)!\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?$/i.test(text) ? nameRange(text) : null;
     if (local !== undefined && sheets[Number(local)]) {
-      if (range) (sheets[Number(local)].names as Record<string, string>)[n] = range.slice(range.indexOf("!") + 1);
+      // A sheet's own name keeps the sheet it points to when that is another one (LocalBonus on Tests is Inputs!$B$10).
+      const own = sheets[Number(local)].name;
+      if (range) (sheets[Number(local)].names as Record<string, string>)[n] = range.slice(0, range.indexOf("!")).replace(/^'|'$/g, "").replace(/''/g, "'") === own ? range.slice(range.indexOf("!") + 1) : `=${range}`;
       else report.push(`${n}, a sheet's own formula name, left out`);
     } else bookNames[n] = range ?? `=${plainFormula(text)}`;
   }

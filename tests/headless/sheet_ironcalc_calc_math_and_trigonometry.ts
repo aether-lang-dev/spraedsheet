@@ -50,6 +50,7 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 // expect: ok MATH_AND_TRIGONOMETRY/SEQUENCE.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SERIESSUM.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SQRT_SQRTPI.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/SUMIFS.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SUMIF_AVERAGE_IF.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SUMIF_array.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SUMPRODUCT.xlsx

@@ -342,6 +342,26 @@ function render(n: number, s: Section, signed: boolean): string | null {
 
 const shown = (text: string | null, s: Section): Shown | null => (text === null ? null : s.color ? { text, color: s.color } : { text });
 
+// Why TEXT refuses a number in a format (a #VALUE!), or null: the section it uses is a date or time one, and the number is
+// not a date (negative, or past 31 December 9999), or that section has digit placeholders other than the decimals of
+// seconds ("mm###").
+export function formatRefused(v: Value, pattern: string): string | null {
+  if (typeof v !== "number") return null;
+  const sections = split(pattern).map(section).slice(0, 3);
+  const s = !sections.some((x) => x.cond) && v < 0 && sections.length >= 2 ? sections[1] : v === 0 && sections.length >= 3 ? sections[2] : sections[0];
+  if (!s || !isDate(s)) return null;
+  if (v < 0 || v >= 2958466) return `${v} is not a date`;
+  let fraction = false;
+  let bad = false;
+  s.toks.forEach((t, i) => {
+    const before = s.toks[i - 1];
+    if (t.t === "digit") { if (!fraction) bad = true; }
+    else if (t.t === ".") fraction = before?.t === "date" && /^\[?s/.test(before.s);
+    else if (!(t.t === "date" || t.t === "lit")) fraction = false;
+  });
+  return bad ? "a date format with digit placeholders" : null;
+}
+
 // A value in a format: its text and the colour its section gives, or null
 // when the format has nothing for it (text with no @ section, an error).
 export function numberFormat(v: Value, pattern: string): Shown | null {

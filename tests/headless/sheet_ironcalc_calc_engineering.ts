@@ -24,7 +24,10 @@ for (const [name, b64] of FIXTURES) {
 }
 eq("every workbook was opened and its formulas compared", total > 0, true);
 
+// expect: ok ENGINEERING/BESSEL.xlsx
 // expect: ok ENGINEERING/BITs.xlsx
+// expect: ok ENGINEERING/COMPLEXs.xlsx
+// expect: ok ENGINEERING/CONVERT.xlsx
 // expect: ok ENGINEERING/ERFs.xlsx
 // expect: ok ENGINEERING/GESTEP_DELTA.xlsx
 // expect: ok ENGINEERING/NUMBER_SYSTEMS.xlsx

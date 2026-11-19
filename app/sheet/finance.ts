@@ -100,10 +100,13 @@ export function xirr(flows: readonly number[], dates: readonly number[], guess =
 // rate, what comes in reinvested at another.
 export function mirr(flows: readonly number[], financeRate: number, reinvestRate: number): number | null {
   const n = flows.length;
-  const out = npv(financeRate, flows.map((c) => (c < 0 ? c : 0)));
-  const back = npv(reinvestRate, flows.map((c) => (c > 0 ? c : 0)));
-  if (out === 0 || back === 0) return null;
-  return ((-back * (1 + reinvestRate) ** n) / (out * (1 + financeRate))) ** (1 / (n - 1)) - 1;
+  // The negative flows discounted at the finance rate to the first period (a finance rate of -1 leaves that period as it is,
+  // 0 ** 0 being 1), the positive ones compounded at the reinvest rate to the last. No negative flow is no answer (null);
+  // no positive one is a total loss, -1.
+  const out = flows.reduce((s, c, i) => (c < 0 ? s + c / (1 + financeRate) ** i : s), 0);
+  const back = flows.reduce((s, c, i) => (c > 0 ? s + c * (1 + reinvestRate) ** (n - 1 - i) : s), 0);
+  if (out === 0) return null;
+  return (back / -out) ** (1 / (n - 1)) - 1;
 }
 
 // Depreciation, each period's: the declining balance at `factor` times

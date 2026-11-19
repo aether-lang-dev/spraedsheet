@@ -15,7 +15,7 @@
 // name them; and FORMULATEXT, ISFORMULA, ISREF, SHEET and SHEETS, which
 // ask about a reference (its cell's input, the Env's `input`) or the
 // workbook (`book`).
-import { COLS, ROWS, addrOf, cellAddr, keyOf, range, span, splitKey } from "./address.ts";
+import { COLS, ROWS, addrOf, cellAddr, colName, keyOf, range, span, splitKey } from "./address.ts";
 import type { Addr } from "./address.ts";
 import { resolve } from "./structured.ts";
 import type { Expr } from "./parser.ts";
@@ -90,21 +90,44 @@ function referenceOf(text: string, a1: boolean, at: Addr | null): Reference | nu
   const sheet = (m[1] ?? m[2])?.toUpperCase() ?? null;
   const parts = m[3].split(":");
   if (parts.length > 2) return null;
-  const corner = (s: string): Addr | null => {
-    if (a1) {
-      const c = /^\$?([A-Za-z]{1,3})\$?([0-9]+)$/.exec(s);
-      if (!c) return null;
-      return addrOf(c[1] + c[2]) ?? fail("#REF!", `${s.toUpperCase()} is not on the sheet`);
+  // A whole column (D:D, $FF:FG) or row (5:5, 05:05) is its sheet's all; the span must be on the sheet.
+  if (a1 && parts.length === 2) {
+    const col = parts.map((p) => /^\$?([A-Za-z]{1,3})$/.exec(p)), row = parts.map((p) => /^\$?([0-9]+)$/.exec(p));
+    if (col[0] && col[1]) {
+      const [x, y] = [addrOf(`${col[0][1]}1`), addrOf(`${col[1][1]}1`)];
+      return x && y ? { sheet, a: { row: 0, col: x.col }, b: { row: ROWS - 1, col: y.col } } : fail("#REF!", `${text} is not on the sheet`);
     }
-    const c = /^R(?:([0-9]+)|\[(-?[0-9]+)\])?C(?:([0-9]+)|\[(-?[0-9]+)\])?$/i.exec(s);
-    if (!c) return null;
-    const part = (abs: string | undefined, rel: string | undefined, here: number | null): number => {
-      if (abs !== undefined) return Number(abs) - 1;
-      if (here === null) return fail("#REF!", `${s} is relative, and the formula is in no cell`);
-      return here + (rel === undefined ? 0 : Number(rel));
+    if (row[0] && row[1]) {
+      const [x, y] = [Number(row[0][1]), Number(row[1][1])];
+      return x >= 1 && y >= 1 && x <= ROWS && y <= ROWS ? { sheet, a: { row: x - 1, col: 0 }, b: { row: y - 1, col: COLS - 1 } } : fail("#REF!", `${text} is not on the sheet`);
+    }
+  }
+  if (!a1) {
+    // R1C1: R2C3, R[1]C[-1], RC2; R2 is a whole row, C2 a whole column, R[-4] the row four above (and all of it); a
+    // relative one past the edge wraps round to the other side, but not by the sheet's size or more (that is #REF!).
+    const one = (s: string): { row: number | null; col: number | null } | null => {
+      const c = /^(R(?:([0-9]+)|\[(-?[0-9]+)\])?)?(C(?:([0-9]+)|\[(-?[0-9]+)\])?)?$/i.exec(s);
+      if (!c || (!c[1] && !c[4])) return null;
+      const part = (present: string | undefined, abs: string | undefined, rel: string | undefined, here: number | null, size: number): number | null => {
+        if (!present) return null;
+        if (abs !== undefined) return Number(abs) >= 1 && Number(abs) <= size ? Number(abs) - 1 : fail("#REF!", `${s} is not on the sheet`);
+        if (here === null) return fail("#REF!", `${s} is relative, and the formula is in no cell`);
+        const d = rel === undefined ? 0 : Number(rel);
+        return Math.abs(d) >= size ? fail("#REF!", `${s} reaches past the sheet`) : (((here + d) % size) + size) % size;
+      };
+      return { row: part(c[1], c[2], c[3], at?.row ?? null, ROWS), col: part(c[4], c[5], c[6], at?.col ?? null, COLS) };
     };
-    const row = part(c[1], c[2], at?.row ?? null), col = part(c[3], c[4], at?.col ?? null);
-    return row >= 0 && row < ROWS && col >= 0 && col < COLS ? { row, col } : fail("#REF!", `${s} is not on the sheet`);
+    const x = one(parts[0]), y = parts.length === 2 ? one(parts[1]) : x;
+    if (!x || !y) return null;
+    // Both corners are cells, or both rows, or both columns: R1C1:R2 is no reference.
+    if (parts.length === 2 && (x.row === null) !== (y.row === null || false) || (x.col === null) !== (y.col === null)) return fail("#REF!", `${text} mixes a cell and a row or column`);
+    const row = (v: number | null, last: boolean): number => (v === null ? (last ? ROWS - 1 : 0) : v), col = (v: number | null, last: boolean): number => (v === null ? (last ? COLS - 1 : 0) : v);
+    return { sheet, a: { row: row(x.row, false), col: col(x.col, false) }, b: { row: row(y.row, true), col: col(y.col, true) } };
+  }
+  const corner = (s: string): Addr | null => {
+    const c = /^\$?([A-Za-z]{1,3})\$?([0-9]+)$/.exec(s);
+    if (!c) return null;
+    return addrOf(c[1] + Number(c[2])) ?? fail("#REF!", `${s.toUpperCase()} is not on the sheet`);
   };
   const a = corner(parts[0]), b = parts.length === 2 ? corner(parts[1]) : a;
   return a && b ? { sheet, a, b } : null;
@@ -414,6 +437,31 @@ class Evaluator {
         const ns = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i + 1);
         return ns.length === 1 ? ns[0] : which === "row" ? array(ns.length, 1, ns) : array(1, ns.length, ns);
       }
+      // CELL(info_type, [reference]): about the reference's first (top left) cell, never reading the others (so
+      // CELL("col", A8:C8) in B8 is no cycle): "address" ($A$1), "col", "row", "contents" (its value, an error as
+      // itself), "type" ("b" empty, "l" text, "v" otherwise, an error included). The info type is text, in any case,
+      // of one of those; another (or none) is #VALUE!.
+      case "CELL": {
+        if (args.length < 1 || args.length > 2) return fail("#VALUE!", "CELL takes an info type and a reference");
+        const kind = this.#scalar(args[0]);
+        if (typeof kind !== "string") return fail("#VALUE!", "CELL's info type is text");
+        const info = kind.toLowerCase();
+        if (!["address", "col", "row", "contents", "type"].includes(info)) return fail("#VALUE!", `CELL does not give '${kind}'`);
+        let r: Reference | null;
+        if (args.length === 2) r = this.#reference(args[1]);
+        else {
+          const here = this.#at ? cellAddr(this.#at) : null;
+          r = here ? { sheet: null, a: here, b: here } : null;
+        }
+        if (!r) return fail("#VALUE!", "CELL takes a reference");
+        const top = { row: Math.min(r.a.row, r.b.row), col: Math.min(r.a.col, r.b.col) };
+        if (info === "row") return top.row + 1;
+        if (info === "col") return top.col + 1;
+        if (info === "address") return `$${colName(top.col)}$${top.row + 1}`;
+        const v = this.#env.get(qualify(r.sheet, keyOf(top)));
+        if (info === "contents") return v;
+        return v === null ? "b" : typeof v === "string" ? "l" : "v";
+      }
       // OFFSET(reference, rows, cols, [height], [width]): the cells that
       // many rows down and columns across from the reference's top left
       // corner, as high and wide as given (else as the reference is).
@@ -604,6 +652,11 @@ class Evaluator {
         return array(rows, cols, values);
       }
       default: {
+        // The size of a whole column or row is the sheet's (ROWS(C:C) is 1,048,576, COLUMNS(14:14) 16,384), not what is used of it.
+        if ((e.name === "ROWS" || e.name === "COLUMNS") && args.length === 1 && args[0].kind === "range" && args[0].whole) {
+          const a = cellAddr(args[0].from), b = cellAddr(args[0].to);
+          if (a && b) return e.name === "ROWS" ? (args[0].whole === "col" ? ROWS : Math.abs(a.row - b.row) + 1) : args[0].whole === "row" ? COLS : Math.abs(a.col - b.col) + 1;
+        }
         const given = args.map((a) => this.#arg(a));
         return call(e.name, DATABASE.has(e.name) ? this.#withComputed(e, given) : given);
       }
@@ -618,12 +671,14 @@ class Evaluator {
     if (!this.#env.computed || !this.#env.input || last < 1) return given;
     const [db, crit] = [this.#reference(e.args[0]), this.#reference(e.args[last])];
     if (!db || !crit) return given;
-    const fields = given[0].values.slice(0, given[0].cols).map((v) => toText(v).trim().toUpperCase());
+    // (A header that is an error is its code.)
+    const named = (v: Value): string => (v instanceof CellError ? v.code : toText(v)).trim().toUpperCase();
+    const fields = given[0].values.slice(0, given[0].cols).map(named);
     const records = Math.max(0, given[0].values.length / given[0].cols - 1), cols = given[last].cols, computed = new Map<number, Value[]>();
     const top = Math.min(crit.a.row, crit.b.row), left = Math.min(crit.a.col, crit.b.col);
     for (let r = 1; r < given[last].values.length / cols; r++) {
       for (let c = 0; c < cols; c++) {
-        if (fields.includes(toText(given[last].values[c]).trim().toUpperCase())) continue;
+        if (fields.includes(named(given[last].values[c]))) continue;
         const key = qualify(crit.sheet, keyOf({ row: top + r, col: left + c }));
         if (!this.#env.input(key).startsWith("=")) continue;
         computed.set(r * cols + c, Array.from({ length: records }, (_, k) => this.#env.computed!(key, k)));
@@ -778,8 +833,14 @@ class Evaluator {
     const given = (i: number) => i < args.length && args[i].kind !== "missing";
     const n = (i: number) => Math.trunc(toNumber(this.#scalar(args[i])));
     const top = Math.min(base.a.row, base.b.row) + n(1), left = Math.min(base.a.col, base.b.col) + n(2);
-    const height = given(3) ? n(3) : Math.abs(base.a.row - base.b.row) + 1;
-    const width = given(4) ? n(4) : Math.abs(base.a.col - base.b.col) + 1;
+    // The height and width are cut off (14.9 is 14), but a positive one under 1 is 1 (0.9); a negative one is #VALUE!, 0 is #REF!.
+    const size = (i: number, otherwise: number): number => {
+      if (!given(i)) return otherwise;
+      const x = toNumber(this.#scalar(args[i]));
+      return x > 0 && x < 1 ? 1 : Math.trunc(x);
+    };
+    const height = size(3, Math.abs(base.a.row - base.b.row) + 1), width = size(4, Math.abs(base.a.col - base.b.col) + 1);
+    if (height < 0 || width < 0) return fail("#VALUE!", `OFFSET of ${height} rows by ${width} columns`);
     if (height < 1 || width < 1) return fail("#REF!", `OFFSET of ${height} rows by ${width} columns is no reference`);
     const a = { row: top, col: left }, b = { row: top + height - 1, col: left + width - 1 };
     if (top < 0 || left < 0 || b.row >= ROWS || b.col >= COLS) return fail("#REF!", `OFFSET to row ${top + 1}, column ${left + 1}, ${height} by ${width}, is off the sheet`);
@@ -789,9 +850,19 @@ class Evaluator {
   #indirect(args: readonly Expr[]): Reference {
     if (args.length < 1 || args.length > 2) return fail("#VALUE!", "INDIRECT takes 1 or 2 values");
     const text = toText(this.#scalar(args[0]));
-    const a1 = args.length === 2 && args[1].kind !== "missing" ? truth(this.#scalar(args[1])) : true;
+    // A second argument left empty (INDIRECT("R2C2",)) is FALSE: the R1C1 style.
+    const a1 = args.length === 2 ? (args[1].kind === "missing" ? false : truth(this.#scalar(args[1]))) : true;
     const r = referenceOf(text, a1, this.#at ? cellAddr(this.#at) : null);
-    return r ?? fail("#REF!", `INDIRECT of '${text}': not a reference`);
+    // (An Env that does not say which sheets there are takes any.)
+    const book = this.#env.book?.();
+    if (r?.sheet && book && !book.sheets.some((n) => n.toUpperCase() === r.sheet)) return fail("#REF!", `INDIRECT of '${text}': no sheet ${r.sheet}`);
+    if (!r) return fail("#REF!", `INDIRECT of '${text}': not a reference`);
+    // A whole column or row is worked out as far as the sheet is used, as a written one is (#corners).
+    const used = this.#env.extent?.(r.sheet) ?? { rows: 100, cols: 26 };
+    const lo = { row: Math.min(r.a.row, r.b.row), col: Math.min(r.a.col, r.b.col) }, hi = { row: Math.max(r.a.row, r.b.row), col: Math.max(r.a.col, r.b.col) };
+    if (lo.row === 0 && hi.row === ROWS - 1) hi.row = Math.max(lo.row, Math.min(hi.row, used.rows - 1));
+    if (lo.col === 0 && hi.col === COLS - 1) hi.col = Math.max(lo.col, Math.min(hi.col, used.cols - 1));
+    return { sheet: r.sheet, a: lo, b: hi };
   }
 }
 

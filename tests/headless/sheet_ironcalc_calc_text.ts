@@ -25,16 +25,23 @@ for (const [name, b64] of FIXTURES) {
 eq("every workbook was opened and its formulas compared", total > 0, true);
 
 // expect: ok TEXT/ARRAYTOTEXT.xlsx
+// expect: ok TEXT/CHAR.xlsx
 // expect: ok TEXT/CONCAT.xlsx
 // expect: ok TEXT/CONCATENATE.xlsx
 // expect: ok TEXT/DOLLARs.xlsx
+// expect: ok TEXT/ENCODEURL.xlsx
 // expect: ok TEXT/EXACT.xlsx
 // expect: ok TEXT/FIND_SEARCH.xlsx
 // expect: ok TEXT/MID_LEFT_RIGHT_arrays.xlsx
 // expect: ok TEXT/MINUS_MINUS.xlsx
+// expect: ok TEXT/NUMBERVALUE.xlsx
 // expect: ok TEXT/PROPER.xlsx
 // expect: ok TEXT/REGEX.xlsx
+// expect: ok TEXT/REPT.xlsx
 // expect: ok TEXT/STRING_HANDLING.xlsx
+// expect: ok TEXT/SUBSTITUTE.xlsx
+// expect: ok TEXT/TEXT.xlsx
+// expect: ok TEXT/TEXTBEFORE_TEXTAFTER.xlsx
 // expect: ok TEXT/TEXTJOIN.xlsx
 // expect: ok TEXT/TEXTSPLIT.xlsx
 // expect: ok TEXT/T_VALUE_VALUETOTEXT.xlsx

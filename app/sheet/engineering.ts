@@ -5,6 +5,8 @@
 // representations. Pure; a bad argument is a RangeError (#NUM! in
 // functions.ts), a value that is not one a TypeError (#VALUE!).
 
+import { numberText } from "./values.ts";
+
 // --- bases ---
 
 export interface Radix {
@@ -95,25 +97,25 @@ const UNITS: Readonly<Record<string, Unit>> = {
   N: U("force", 1, true), dyn: U("force", 1e-5, true), dy: U("force", 1e-5, true), lbf: U("force", 4.4482216152605), pond: U("force", 0.00980665, true),
   // energy, in joules
   J: U("energy", 1, true), e: U("energy", 1e-7, true), c: U("energy", 4.184, true), cal: U("energy", 4.1868, true), eV: U("energy", 1.602176487e-19, true), ev: U("energy", 1.602176487e-19, true),
-  HPh: U("energy", 2684519.53769617), hh: U("energy", 2684519.53769617), Wh: U("energy", 3600, true), wh: U("energy", 3600, true), BTU: U("energy", 1055.05585262), btu: U("energy", 1055.05585262),
+  flb: U("energy", 1.3558179483314004), HPh: U("energy", 2684519.53769617), hh: U("energy", 2684519.53769617), Wh: U("energy", 3600, true), wh: U("energy", 3600, true), BTU: U("energy", 1055.05585262), btu: U("energy", 1055.05585262),
   // power, in watts
   HP: U("power", 745.69987158227), h: U("power", 745.69987158227), PS: U("power", 735.49875), W: U("power", 1, true), w: U("power", 1, true),
   // magnetism, in teslas
   T: U("magnetism", 1, true), ga: U("magnetism", 1e-4, true),
   // volume, in cubic metres
   tsp: U("volume", 4.92892159375e-6), tspm: U("volume", 5e-6), tbs: U("volume", 1.478676478125e-5), oz: U("volume", 2.95735295625e-5), cup: U("volume", 2.365882365e-4),
-  pt: U("volume", 4.73176473e-4), us_pt: U("volume", 4.73176473e-4), uk_pt: U("volume", 5.6826125e-4), qt: U("volume", 9.46352946e-4), uk_qt: U("volume", 1.1365225e-3),
+  pt: U("volume", 4.73176473e-4), us_pt: U("volume", 4.73176473e-4), uk_pt: U("volume", 5.6826125e-4, true), qt: U("volume", 9.46352946e-4), uk_qt: U("volume", 1.1365225e-3),
   gal: U("volume", 3.785411784e-3), uk_gal: U("volume", 4.54609e-3), l: U("volume", 1e-3, true), L: U("volume", 1e-3, true), lt: U("volume", 1e-3, true),
   ang3: U("volume", 1e-30, true, 3), barrel: U("volume", 0.158987294928), bushel: U("volume", 0.03523907016688), ft3: U("volume", 0.3048 ** 3), in3: U("volume", INCH ** 3),
-  ly3: U("volume", LY ** 3, true, 3), m3: U("volume", 1, true, 3), mi3: U("volume", 1609.344 ** 3), yd3: U("volume", 0.9144 ** 3), Nmi3: U("volume", 1852 ** 3), Pica3: U("volume", PICA_PT ** 3),
+  ly3: U("volume", LY ** 3, false, 3), Picapt3: U("volume", PICA_PT ** 3), m3: U("volume", 1, true, 3), mi3: U("volume", 1609.344 ** 3), yd3: U("volume", 0.9144 ** 3), Nmi3: U("volume", 1852 ** 3), Pica3: U("volume", PICA_PT ** 3),
   GRT: U("volume", 2.8316846592), regton: U("volume", 2.8316846592), MTON: U("volume", 1.13267386368),
   // area, in square metres
   uk_acre: U("area", 4046.8564224), us_acre: U("area", 4046.87260987425), ang2: U("area", 1e-20, true, 2), ar: U("area", 100, true), ft2: U("area", 0.3048 ** 2), ha: U("area", 10000),
-  in2: U("area", INCH ** 2), ly2: U("area", LY ** 2, true, 2), m2: U("area", 1, true, 2), Morgen: U("area", 2500), mi2: U("area", 1609.344 ** 2), Nmi2: U("area", 1852 ** 2), Pica2: U("area", PICA_PT ** 2), yd2: U("area", 0.9144 ** 2),
+  in2: U("area", INCH ** 2), ly2: U("area", LY ** 2, false, 2), Picapt2: U("area", PICA_PT ** 2), m2: U("area", 1, true, 2), Morgen: U("area", 2500), mi2: U("area", 1609.344 ** 2), Nmi2: U("area", 1852 ** 2), Pica2: U("area", PICA_PT ** 2), yd2: U("area", 0.9144 ** 2),
   // information, in bits
   bit: U("information", 1, true), byte: U("information", 8, true),
   // speed, in metres a second
-  admkn: U("speed", 1853.184 / 3600), kn: U("speed", 1852 / 3600), "m/h": U("speed", 1 / 3600, true), "m/hr": U("speed", 1 / 3600, true), "m/s": U("speed", 1, true), "m/sec": U("speed", 1, true), mph: U("speed", 0.44704),
+  admkn: U("speed", 1853.184 / 3600), kn: U("speed", 1852 / 3600), "m/h": U("speed", 1 / 3600, true), "m/hr": U("speed", 1 / 3600, true), "m/s": U("speed", 1, true), "m/sec": U("speed", 1, true), mph: U("speed", 0.44704, true),
 };
 const PREFIXES: Readonly<Record<string, number>> = {
   Y: 1e24, Z: 1e21, E: 1e18, P: 1e15, T: 1e12, G: 1e9, M: 1e6, k: 1e3, h: 1e2, da: 10, e: 10, d: 1e-1, c: 1e-2, m: 1e-3, u: 1e-6, n: 1e-9, p: 1e-12, f: 1e-15, a: 1e-18, z: 1e-21, y: 1e-24,
@@ -129,7 +131,9 @@ const TEMPERATURES: Readonly<Record<string, { to: (x: number) => number; from: (
 
 // A unit written as Excel takes it: one of the table, or a prefix and one
 // that takes prefixes (km, cm2, Kibyte is not: ki is lower case).
-function unitOf(name: string): Unit | null {
+function unitOf(written: string): Unit | null {
+  // An area or a volume may be written with the exponent (ft^2, Picapt^3) as well as without (ft2).
+  const name = written.replace(/\^([23])$/, "$1");
   if (UNITS[name]) return UNITS[name];
   for (const [p, scale] of [...Object.entries(BINARY), ...Object.entries(PREFIXES)]) {
     if (!name.startsWith(p)) continue;
@@ -142,8 +146,14 @@ function unitOf(name: string): Unit | null {
 // x in `from` as `to`; null when either is no unit, or they measure
 // different things (Excel's #N/A).
 export function convert(x: number, from: string, to: string): number | null {
-  const tf = TEMPERATURES[from], tt = TEMPERATURES[to];
-  if (tf || tt) return tf && tt ? tt.from(tf.to(x)) : null;
+  // Kelvin takes the metric prefixes (MK, mkel) and none of the other temperatures do.
+  const scaled = (name: string): [string, number] => {
+    for (const k of ["kel", "K"]) if (name.endsWith(k) && name !== k && PREFIXES[name.slice(0, -k.length)] !== undefined) return [k, PREFIXES[name.slice(0, -k.length)]];
+    return [name, 1];
+  };
+  const [fromT, fromScale] = scaled(from), [toT, toScale] = scaled(to);
+  const tf = TEMPERATURES[fromT], tt = TEMPERATURES[toT];
+  if (tf || tt) return tf && tt ? tt.from(tf.to(x * fromScale)) / toScale : null;
   const a = unitOf(from), b = unitOf(to);
   if (!a || !b || a.kind !== b.kind) return null;
   return (x * a.factor) / b.factor;
@@ -179,7 +189,7 @@ export function parseComplex(v: number | string): Complex {
 
 // As Excel writes it: fifteen significant digits, a part that is 0 left
 // out, a unit coefficient of 1 as the letter alone.
-const part = (x: number): string => String(Number(x.toPrecision(15)));
+const part = (x: number): string => numberText(Number(x.toPrecision(15)));
 export function formatComplex(z: Complex): string {
   const re = Number(z.re.toPrecision(15)), im = Number(z.im.toPrecision(15));
   if (!Number.isFinite(re) || !Number.isFinite(im)) throw new RangeError("the result is not a finite complex number");

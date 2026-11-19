@@ -76,6 +76,14 @@ export function* refsOf(e: Expr, seen: Set<string> = new Set(), self: string | n
         for (const k of refsOf(e.args[0], seen, self)) yield `^${k}`;
         return;
       }
+      // CELL("row"|"col"|"address", ref) reads no cell of the reference (so CELL("col", A8:C8) in B8 is no cycle); its
+      // "contents" and "type" read the reference's first cell only.
+      if (e.name === "CELL" && e.args.length === 2 && e.args[0].kind === "str" && (e.args[1].kind === "ref" || (e.args[1].kind === "range" && !e.args[1].whole))) {
+        const info = e.args[0].value.toLowerCase(), ref = e.args[1];
+        if (info === "row" || info === "col" || info === "address") return;
+        // (The corners, the first being the top left unless the range was written the other way round.)
+        if (ref.kind === "range") { yield* refsOf({ kind: "ref", name: ref.from }, seen, self); yield* refsOf({ kind: "ref", name: ref.to }, seen, self); return; }
+      }
       // IF and CHOOSE work out only the branch taken: the formula's own cell in another is no cycle.
       for (const [i, a] of e.args.entries()) {
         for (const k of refsOf(a, seen, self)) if (!(i > 0 && (e.name === "IF" || e.name === "CHOOSE") && k === self)) yield k;

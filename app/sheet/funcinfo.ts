@@ -27,7 +27,7 @@ export interface FunctionInfo {
 // app still works out differently from the value Excel stored, by function,
 // each workbook counted for the functions its name gives (tests/headless/
 // lib/ironcalc_calc_known.ts is the ledger; sheet_funcinfo recounts it).
-export const DIFFERS: Readonly<Record<string, number>> = { ACCRINT: 7, DATEVALUE: 1, DAYS: 2, DAYS360: 2, NETWORKDAYS: 2, "NETWORKDAYS.INTL": 2, RATE: 2, T: 2, VALUE: 2, VALUETOTEXT: 2, XNPV: 2 };
+export const DIFFERS: Readonly<Record<string, number>> = { ACCRINT: 7, DATEVALUE: 1, DAYS: 2, DAYS360: 2, NETWORKDAYS: 2, "NETWORKDAYS.INTL": 2, T: 2, TEXT: 1, VALUE: 2, VALUETOTEXT: 2, XNPV: 2 };
 
 const plural = (n: number) => `${n} value${n === 1 ? "" : "s"}`;
 const takes = (min: number, max: number | null): string =>

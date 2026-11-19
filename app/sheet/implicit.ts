@@ -27,7 +27,7 @@ type Node =
   | { readonly t: "paren"; readonly inner: Node };
 
 // Calls that may give a range or an array: Excel puts the @ before one where one value goes.
-const MAY_GIVE_RANGE = new Set(["INDEX", "OFFSET", "INDIRECT", "TRANSPOSE", "MMULT", "MINVERSE", "MUNIT", "LINEST", "LOGEST", "TREND", "GROWTH", "FREQUENCY",
+const MAY_GIVE_RANGE = new Set(["ROW", "COLUMN", "INDEX", "OFFSET", "INDIRECT", "TRANSPOSE", "MMULT", "MINVERSE", "MUNIT", "LINEST", "LOGEST", "TREND", "GROWTH", "FREQUENCY",
   "FILTER", "SORT", "SORTBY", "UNIQUE", "SEQUENCE", "RANDARRAY", "TEXTSPLIT", "VSTACK", "HSTACK", "TOCOL", "TOROW", "TAKE", "DROP", "EXPAND", "WRAPROWS", "WRAPCOLS", "CHOOSECOLS", "CHOOSEROWS"]);
 
 // What a function's arguments are to the loader: V (one value), R (a range
