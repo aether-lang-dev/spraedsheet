@@ -24,6 +24,9 @@ export interface Arg {
   // reference or a range: SUM("7") counts the 7 and SUM(TRUE) the 1, where
   // a cell holding "7" or TRUE is passed over, as Excel has it.
   readonly typed?: true;
+  // An error the argument's own expression raised (1/0, NA(), FILTER of nothing), not a cell
+  // that holds one: ROWS and COLUMNS of it are that error, of the cell they count it.
+  readonly raised?: true;
 }
 
 export const single = (v: Value): Arg => ({ values: [v], cols: 1 });
@@ -2125,8 +2128,9 @@ def("HLOOKUP", 3, 4, (args) => {
   return c < 0 ? notFound(x) : values[(r - 1) * cols + c];
 });
 
-def("ROWS", 1, 1, (args) => args[0].values.length / args[0].cols);
-def("COLUMNS", 1, 1, (args) => args[0].cols);
+const counted = (a: Arg): Arg => (a.raised ? fail((a.values[0] as CellError).code, (a.values[0] as CellError).why) : a);
+def("ROWS", 1, 1, (args) => counted(args[0]).values.length / args[0].cols);
+def("COLUMNS", 1, 1, (args) => counted(args[0]).cols);
 // ADDRESS(row, column, [abs], [a1], [sheet]): a cell's address as text. abs
 // 1 is $A$1, 2 A$1, 3 $A1, 4 A1; a1 FALSE gives the R1C1 form, its
 // relative parts in brackets (R2C[3]); a sheet is put in front, quoted when

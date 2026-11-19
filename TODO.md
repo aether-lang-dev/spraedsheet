@@ -113,6 +113,12 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
   open 8077 against the old fixed 6000, 4000, 8000. A deliberate 2 ms in `Workbook.textOf` fails the scroll case on the Mac
   (400 ms over 303), which the workload does not feel.
 
+- Names: a name shaped like a cell past the sheet's edge (`XFE1`, `A1048577`, `A0`, `ZZZ9`) is a name, not a reference
+  (the lexer and `names.define` took any one to three letters and digits for a cell: `=SUM(XFE1)` was `#REF!`, the define refused).
+  `ROWS(1/0)`, `ROWS(NA())`, `ROWS(FILTER(none))`, `COLUMNS(...)` are that error (they counted 1). `#CALC!` elsewhere
+  was checked case by case (gridcraft_parity.md 4); `RANDARRAY(0)` left at `#VALUE!` (Excel's answer not known), as is
+  accepting `R1C1`/`RC1` as names (Excel refuses them).
+
 **Done 2026-11-12:**
 - XLSX writer: LET and LAMBDA names are written as Excel keeps them, `_xlpm.name` wherever the name is used inside the call
   (an optional LAMBDA parameter's declaration as `_xlop.name`, `[b]` in the sheet), in a cell's formula and in a defined name's

@@ -6,7 +6,7 @@ the examples and boundary cases (`tests/headless/lib/examples.ts`, checked by he
 `docs/comparisons/COMPATIBILITY.md`). Do not edit it: run the script. `./run-tests.sh`
 fails while this page is not what the script prints (`function_status`).
 
-486 functions and forms; 486 with an example and boundary cases (1563 cases, 1563 passing);
+486 functions and forms; 486 with an example and boundary cases (1569 cases, 1569 passing);
 6 with cells of IronCalc's Excel-authored workbooks that still differ from Excel's stored value (17, a cell counted for each function its workbook names).
 
 Columns: **status**, the cases worked out now; **cases**, how many; **example**, the first case and
@@ -78,7 +78,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | CLEAN | function | 1 value | passes | 3 | `CLEAN("a" & CHAR(7) & "b")` = "ab" |  |  |
 | CODE | function | 1 value | passes | 2 | `CODE("A")` = 65 |  |  |
 | COLUMN | form | (its own) | passes | 3 | `COLUMN(C3)` = 3 |  |  |
-| COLUMNS | function | 1 value | passes | 2 | `COLUMNS({1, 2})` = 2 |  |  |
+| COLUMNS | function | 1 value | passes | 4 | `COLUMNS({1, 2})` = 2 |  |  |
 | COMBIN | function | 2 values | passes | 5 | `COMBIN(5, 2)` = 10 |  |  |
 | COMBINA | function | 2 values | passes | 4 | `COMBINA(3, 2)` = 6 |  |  |
 | COMPLEX | function | 2 or 3 values | passes | 7 | `COMPLEX(3, 4)` = "3+4i" |  |  |
@@ -387,7 +387,7 @@ cells for the function (unverified until looked at: COMPATIBILITY.md).
 | ROUNDDOWN | function | 1 or 2 values | passes | 2 | `ROUNDDOWN(-2.7, 0)` = -2 |  |  |
 | ROUNDUP | function | 1 or 2 values | passes | 3 | `ROUNDUP(2.1, 0)` = 3 |  |  |
 | ROW | form | (its own) | passes | 3 | `ROW(C3)` = 3 |  |  |
-| ROWS | function | 1 value | passes | 2 | `ROWS({1; 2; 3})` = 3 |  |  |
+| ROWS | function | 1 value | passes | 6 | `ROWS({1; 2; 3})` = 3 |  |  |
 | RRI | function | 3 values | passes | 3 | `RRI(2, 100, 200)` = 0.414213562373 |  |  |
 | RSQ | function | 2 values | passes | 2 | `RSQ({1, 2, 3}, {2, 4, 7})` = 0.986842105263 |  |  |
 | SCAN | special form | (its own) | passes | 3 | `INDEX(SCAN(0, {1, 2, 3}, LAMBDA(a, b, a + b)), 1, 3)` = 6 |  |  |

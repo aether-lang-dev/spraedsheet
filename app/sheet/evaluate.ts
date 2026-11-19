@@ -348,7 +348,7 @@ class Evaluator {
       const typed = TYPED.has(e.kind) || (e.kind === "call" && !PASS_REFERENCES.has(e.name) && !(MAY_GIVE_REFERENCES.has(e.name) && this.#reference(e) !== null));
       return typed && !(r instanceof CellError) ? { values: [r], cols: 1, typed: true } : single(r);
     } catch (err) {
-      if (err instanceof CellError && e.kind !== "range" && e.kind !== "table") return single(err);
+      if (err instanceof CellError && e.kind !== "range" && e.kind !== "table") return { ...single(err), raised: true };
       throw err;
     }
   }
