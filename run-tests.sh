@@ -21,7 +21,7 @@
 # sae-bus and for the sae it starts); mcp_channel: the server starting the
 # real app (target/build/bin/sae) and driving it over its control channel,
 # sae's stdin and stdout, with nothing on the file system and nothing
-# listening (tests/mcp/channel.test.js, node and lsof); spec_app_sheet_mcp
+# listening (tests/mcp/channel.test.js, node, and lsof off Linux); spec_app_sheet_mcp
 # drives an app already running with its control bus through that server
 # (--attach), with node. cli: tests/cli/test_*.sh, a shell test per
 # subcommand of cli/sheet.js, each starting the app headless itself on its

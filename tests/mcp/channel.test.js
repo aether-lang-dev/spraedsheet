@@ -6,7 +6,7 @@
 // data folder, and no listening socket, TCP or Unix, in sae or in the
 // server. When the client goes, the server goes, and sae with it.
 //   node --test tests/mcp/channel.test.js     (./run-tests.sh mcp_channel)
-// Needs node, lsof (macOS, Linux, the BSDs) and sae's target/build/bin/sae
+// Needs node, lsof (macOS and the BSDs; Linux reads /proc) and sae's target/build/bin/sae
 // (SAE_DIR names another sae checkout).
 'use strict';
 const test = require('node:test');
@@ -55,13 +55,41 @@ function children(pid) {
   return r.stdout.split('\n').map((s) => s.trim()).filter((s) => s);
 }
 
-// What `pid` listens on, as lsof names it ('' for nothing): its listening
-// TCP sockets, and its Unix sockets that have a name in the file system (one
-// a client could connect to; the system's unnamed pairs, "->0x...", are not).
+// What `pid` listens on ('' for nothing): its listening TCP sockets, and its
+// Unix sockets that have a name in the file system (one a client could
+// connect to; the system's unnamed pairs, "->0x...", are not). On Linux from
+// /proc (a process's socket inodes, found in its net/tcp, net/tcp6 as state
+// 0A and in net/unix), so there is no need for lsof; elsewhere as lsof names
+// them.
 function listening(pid) {
+  if (process.platform === 'linux') return listeningProc(pid);
   const tcp = spawnSync('lsof', ['-nP', '-a', '-p', pid, '-iTCP', '-sTCP:LISTEN', '-Fn'], { encoding: 'utf8' }).stdout;
   const unix = spawnSync('lsof', ['-nP', '-a', '-p', pid, '-U', '-Fn'], { encoding: 'utf8' }).stdout;
   return [...tcp.split('\n').filter((l) => l.startsWith('n')), ...unix.split('\n').filter((l) => l.startsWith('n/'))].join(' ');
+}
+
+function listeningProc(pid) {
+  const inodes = new Set();
+  for (const fd of fs.readdirSync(`/proc/${pid}/fd`)) {
+    try {
+      const m = /^socket:\[(\d+)\]$/.exec(fs.readlinkSync(`/proc/${pid}/fd/${fd}`));
+      if (m) inodes.add(m[1]);
+    } catch (e) { /* the descriptor closed meanwhile */ }
+  }
+  const rows = (file) => fs.readFileSync(file, 'utf8').split('\n').slice(1).map((l) => l.trim().split(/\s+/)).filter((f) => f.length > 6);
+  const out = [];
+  for (const t of ['tcp', 'tcp6']) {
+    for (const f of rows(`/proc/${pid}/net/${t}`)) {
+      if (f[3] !== '0A' || !inodes.has(f[9])) continue;
+      const [addr, port] = f[1].split(':');
+      const ip = t === 'tcp' ? addr.match(/../g).reverse().map((h) => parseInt(h, 16)).join('.') : `[${addr}]`;
+      out.push(`${ip}:${parseInt(port, 16)}`);
+    }
+  }
+  for (const f of rows('/proc/net/unix')) {
+    if (inodes.has(f[6]) && (f[7] || '').startsWith('/')) out.push(f[7]);
+  }
+  return out.join(' ');
 }
 
 // The files in `dir`, all the way down.
@@ -75,8 +103,26 @@ function files(dir) {
   return out;
 }
 
+test('listening() sees what this process listens on, so the test below means something', async () => {
+  const net = require('net');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-listening-'));
+  const tcp = net.createServer();
+  const unix = net.createServer();
+  await new Promise((r) => tcp.listen(0, '127.0.0.1', r));
+  await new Promise((r) => unix.listen(path.join(dir, 's.sock'), r));
+  try {
+    const got = listening(String(process.pid));
+    assert.ok(got.includes('127.0.0.1:' + tcp.address().port), 'the TCP listener in: ' + got);
+    assert.ok(got.includes(path.join(dir, 's.sock')), 'the Unix socket in: ' + got);
+  } finally {
+    tcp.close();
+    unix.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('an AI client drives the app through the MCP server over the control channel: no courier file, nothing listening, and the app gone with the client', { skip: !fs.existsSync(SAE_BIN) && 'no ' + SAE_BIN }, async () => {
-  assert.equal(spawnSync('lsof', ['-v']).error, undefined, 'lsof, to see what listens');
+  if (process.platform !== 'linux') assert.equal(spawnSync('lsof', ['-v']).error, undefined, 'lsof, to see what listens');
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-channel-'));
   const c = client({ SAE_BIN, SAE_APPDATA_DIR: data, SPREADSHEET_MCP_TOOLS: 'all' });
   let sae = '';

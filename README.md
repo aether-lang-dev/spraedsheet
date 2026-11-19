@@ -81,8 +81,8 @@ they hold (sae's `docs/app-backend.md`, "The control channel").
 ```
 
 It needs `node`, and RexxJS checked out beside this repository, for the
-REXX scripts' spec and the MCP server's tests (and `lsof`, for what
-listens). That runs the headless tests, the MCP server's tests and the
+REXX scripts' spec and the MCP server's tests (and, off Linux, `lsof`, for
+what listens). That runs the headless tests, the MCP server's tests and the
 specs, one line of PASS or FAIL
 each, with logs under `target/run-tests/`. `./run-tests.sh headless` runs
 only the headless tests; `./run-tests.sh spec_sheet` only that spec.
