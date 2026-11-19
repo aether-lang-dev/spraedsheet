@@ -1,0 +1,185 @@
+// spec_team.ae — two people, each in their own sae, on one team workbook
+// served by sheet-server (docs/design/teamware-over-http.md). Started by
+// tests/specs/spec_team.sh, which runs the server, Bob's sae-driver on the
+// driver port + 1, and this spec with Ann's sae-driver on the driver port.
+// Each step reads the real widgets of both windows through their drivers,
+// with a screenshot of each window kept under target/spec-team/shots/.
+//   ./run-tests.sh spec_team
+import std.spec
+import std.string
+import std.os
+import std.os (os_getenv)
+import std.fs
+import saedriver as b
+import griddriver as g
+import uidriver
+
+env_(name: string) -> string {
+    v = os_getenv(name)
+    if v == null { return "" }
+    return v
+}
+
+// Which browser the driver verbs talk to: its driver port and its console.
+struct Who {
+    name: string
+    port: string
+    log: string
+    token: string
+}
+
+as_(w: *Who) {
+    _p = os.setenv("AETHER_UI_TEST_PORT", w.port)
+    _l = os.setenv("SAE_TEST_LOG", w.log)
+}
+
+// 1 once some text on the page holds `part` (the team line is one text).
+wait_part(part: string, secs: int) -> int {
+    i = 0
+    while i < secs * 20 {
+        if string.contains(b.page_texts(), part) == 1 { return 1 }
+        sleep(50)
+        i = i + 1
+    }
+    return 0
+}
+
+// 1 once no text on the page holds `part`.
+wait_no_part(part: string, secs: int) -> int {
+    i = 0
+    while i < secs * 20 {
+        if string.contains(b.page_texts(), part) == 0 { return 1 }
+        sleep(50)
+        i = i + 1
+    }
+    return 0
+}
+
+shot(w: *Who, step: string) {
+    dir = "${env_("SHEET_TEAM_DIR")}/shots"
+    _m = fs.mkdir_p(dir)
+    as_(w)
+    err = b.screenshot("${dir}/${step}-${w.name}.png")
+    if err != "" { println("spec_team: no screenshot ${step}-${w.name}: ${err}") }
+}
+
+main() {
+    fw = spec.init()
+    ann = heap.new(Who)
+    ann.name = "ann"
+    ann.port = env_("AETHER_UI_TEST_PORT")
+    ann.log = env_("SAE_TEST_LOG")
+    ann.token = env_("SHEET_TEAM_ANN")
+    bob = heap.new(Who)
+    bob.name = "bob"
+    bob.port = env_("SHEET_TEAM_BOB_PORT")
+    bob.log = env_("SHEET_TEAM_BOB_LOG")
+    bob.token = env_("SHEET_TEAM_BOB")
+    token_field = "your team token (from whoever runs the server)"
+
+    spec.describe(fw, "a team workbook over HTTP: two people, two sae") {
+        spec.it("each signs in once with their token; the page keeps it and opens the workbook") callback {
+            as_(ann)
+            uidriver.wait_server()
+            spec.assert_true(wait_part("sign in with your token", 60), "Ann's page asks for her token")
+            b.set_field_by(token_field, ann.token)
+            b.click("Sign in")
+            spec.assert_true(b.wait_for_console_secs("sheet: team workbook budget open as ann, revision 1", 20), "Ann made and opened budget")
+            g.enter("A1", "Tea")
+            g.enter("B1", "3")
+            g.enter("C1", "=B1*2")
+            spec.assert_true(g.wait_cell("C", 1, "6"), "Ann's formula")
+            as_(bob)
+            uidriver.wait_server()
+            spec.assert_true(wait_part("sign in with your token", 60), "Bob's page asks for his token")
+            b.set_field_by(token_field, bob.token)
+            b.click("Sign in")
+            spec.assert_true(b.wait_for_console_secs("sheet: team workbook budget open as bob", 20), "Bob opened it")
+            spec.assert_true(g.wait_cell("C", 1, "6"), "Bob sees Ann's cells, worked out in his sae")
+            spec.assert_true(g.wait_cell("A", 1, "Tea"), "and her text")
+            shot(ann, "1-open")
+            shot(bob, "1-open")
+        }
+        spec.it("Bob's edit reaches Ann's grid, her formula worked out again there") callback {
+            as_(bob)
+            g.enter("B1", "5")
+            spec.assert_true(g.wait_cell("C", 1, "10"), "Bob's own grid")
+            as_(ann)
+            spec.assert_true(g.wait_cell("B", 1, "5"), "Ann's grid has Bob's B1")
+            spec.assert_true(g.wait_cell("C", 1, "10"), "and her C1 follows it")
+            spec.assert_true(b.wait_for_console(" bob: cell.set cell=B1 input=5"), "Ann's console names who and what")
+            shot(ann, "2-reached")
+        }
+        spec.it("who else is here, and on which cell") callback {
+            as_(bob)
+            g.goto("D4")
+            as_(ann)
+            g.enter("A2", "Milk")
+            spec.assert_true(wait_part("Here: bob", 15), "Ann's team line shows Bob")
+            as_(bob)
+            spec.assert_true(wait_part("Here: ann", 15), "Bob's shows Ann")
+            spec.assert_true(g.wait_cell("A", 2, "Milk"), "and Bob has her A2")
+        }
+        spec.it("a true conflict: both change B2 before hearing of the other; one is kept, the other told whose change won and shown it") callback {
+            // Both type, then both press Return a moment apart.
+            as_(ann)
+            b.set_field_by("cell", "B2")
+            b.set_field_by("formula", "100")
+            as_(bob)
+            b.set_field_by("cell", "B2")
+            b.set_field_by("formula", "200")
+            as_(ann)
+            uidriver.post_ok("/widget/${g.formula_field()}/submit", "Ann presses Return")
+            as_(bob)
+            uidriver.post_ok("/widget/${g.formula_field()}/submit", "Bob presses Return")
+            // Bob's came second: refused, in words, and his grid shows Ann's.
+            spec.assert_true(wait_part("Not kept: your B2 = 200. ann changed Sheet1!B2 (B2 = 100) at ", 15), "Bob is told plainly")
+            spec.assert_true(wait_part("the sheet shows theirs now. Make your change again to replace it.", 5), "and what to do")
+            spec.assert_true(g.wait_cell("B", 2, "100"), "Bob's grid shows Ann's B2")
+            shot(bob, "3-conflict")
+            as_(ann)
+            spec.assert_true(g.wait_cell("B", 2, "100"), "Ann's too")
+            spec.assert_false(string.contains(b.page_texts(), "Not kept"), "Ann's was kept")
+            shot(ann, "3-conflict")
+            // Bob types his again: now it replaces Ann's, and his line clears.
+            as_(bob)
+            g.enter("B2", "200")
+            as_(ann)
+            spec.assert_true(g.wait_cell("B", 2, "200"), "Ann gets Bob's second try")
+            as_(bob)
+            spec.assert_true(wait_no_part("Not kept", 10), "Bob's notice gone after his next edit")
+        }
+        spec.it("Undo takes back Ann's own last edit, for everyone; Bob's later edit stays") callback {
+            as_(ann)
+            g.enter("E5", "mine")
+            as_(bob)
+            spec.assert_true(g.wait_cell("E", 5, "mine"), "Bob has Ann's E5")
+            g.enter("F6", "his")
+            as_(ann)
+            spec.assert_true(g.wait_cell("F", 6, "his"), "Ann has Bob's F6")
+            g.command("edit.undo")
+            spec.assert_true(g.wait_cell("E", 5, ""), "Ann's E5 taken back")
+            as_(bob)
+            spec.assert_true(g.wait_cell("E", 5, ""), "for Bob too")
+            spec.assert_true(g.wait_cell("F", 6, "his"), "and Bob's F6 stays")
+        }
+        spec.it("a row inserted by Ann moves Bob's view of the sheet too") callback {
+            as_(ann)
+            g.command("rows.insert at=1 count=1")
+            spec.assert_true(g.wait_cell("A", 2, "Tea"), "Ann's rows moved down")
+            as_(bob)
+            spec.assert_true(g.wait_cell("A", 2, "Tea"), "Bob's too")
+            spec.assert_true(g.wait_cell("C", 2, "10"), "the formula moved with its row and still reads B")
+            shot(ann, "4-inserted")
+            shot(bob, "4-inserted")
+        }
+        spec.it("the server's text is what both show: the workbook on disk, in the log and the head snapshot") callback {
+            data = env_("SHEET_TEAM_DATA")
+            log, lerr = fs.read("${data}/books/budget/ops.log")
+            spec.assert_true(lerr == "", "the log is there")
+            spec.assert_true(string.contains(log, "\"who\":\"bob\",") == 1, "with Bob's ops")
+            spec.assert_true(string.contains(log, "\"cmd\":\"rows.insert at=1 count=1\"") == 1, "and Ann's insert, as she ran it")
+        }
+    }
+    return spec.run_summary(fw)
+}

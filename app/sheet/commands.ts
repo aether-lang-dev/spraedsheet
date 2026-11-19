@@ -100,6 +100,7 @@ import { AGGREGATES, LAYOUTS, SHOW_AS, pivoted } from "./pivot.ts";
 import type { PivotOptions } from "./pivot.ts";
 import type { Aggregate } from "./pivot.ts";
 import { FormulaError } from "./lexer.ts";
+import type { TeamEdit, TeamHook } from "./team.ts";
 
 export type Params = Readonly<Record<string, string>>;
 
@@ -4917,7 +4918,72 @@ export class Commands {
       .map((c) => ({ id: c.id, label: c.label, params: [...c.params, ...(c.optional ?? []).map((o) => `${o}?`)].join(", "), effect: c.effect }));
   }
 
+  // A team workbook (team.ts): asked before each command run from outside
+  // (refused, or Undo and Redo done there), and told after each one that may
+  // have changed the workbook, once, when the outermost command is done.
+  team: TeamHook | null = null;
+  #depth = 0;
+  // Commands running that may change the workbook (an edit or external
+  // effect): what hold() waits for. A view or query command still running
+  // (a selection gliding over frames a hidden window does not draw) does not
+  // keep the team's versions out.
+  #changing = 0;
+  #done: TeamEdit[] = [];
+  // While the team puts the server's workbook in place (hold), commands wait.
+  #held: Promise<void> | null = null;
+
   async execute(id: string, params: Params = {}): Promise<Outcome> {
+    while (this.#held) await this.#held;
+    const team = this.team;
+    if (team && this.#depth === 0) {
+      const instead = await team.before(id, params);
+      if (instead) return instead;
+      while (this.#held) await this.#held;
+    }
+    const spec = BY_ID.get(id);
+    const cut = id === "edit.paste" && !!this.#wb.clip?.cut;
+    const sheet = this.#wb.active;
+    const changing = !spec || spec.effect === "edit" || spec.effect === "external" ? 1 : 0;
+    this.#depth++;
+    this.#changing += changing;
+    let o: Outcome;
+    try {
+      o = await this.#execute(id, params);
+    } finally {
+      this.#depth--;
+      this.#changing -= changing;
+    }
+    if (team) {
+      if (o.ok && spec?.journaled && (spec.effect === "edit" || spec.effect === "external")) this.#done.push({ id, sheet, cut });
+      if (this.#depth === 0 && this.#done.length) team.edited(lineOf(id, o.resolved ?? params), this.#done.splice(0));
+    }
+    return o;
+  }
+
+  // `fn` run with every command held back until it is done, once none that
+  // may change the workbook is running: how a team workbook puts the
+  // server's version in place. It runs its commands with runHeld.
+  async hold(fn: () => Promise<void>): Promise<void> {
+    while (this.#changing > 0 || this.#held) {
+      if (this.#held) await this.#held;
+      else await new Promise((r) => setTimeout(r, 5));
+    }
+    let release = () => {};
+    this.#held = new Promise<void>((r) => { release = r; });
+    try {
+      await fn();
+    } finally {
+      this.#held = null;
+      release();
+    }
+  }
+
+  // A command inside hold(): not held back, and not told to the team.
+  runHeld(id: string, params: Params = {}): Promise<Outcome> {
+    return this.#execute(id, params);
+  }
+
+  async #execute(id: string, params: Params = {}): Promise<Outcome> {
     const spec = BY_ID.get(id);
     // Whole rows and columns go as far as this workbook's active sheet is used.
     setExtent(() => this.#wb.extent());

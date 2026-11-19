@@ -4,6 +4,7 @@
 "seeks open-urls, reduced functionality without";
 "seeks print, reduced functionality without";
 "seeks local-filesystem, reduced functionality without";
+"seeks outgoing-http GET,POST /api/**, reduced functionality without";
 // Spreadsheet (sae/docs/roadmap.md demo 18), declared as panels over a seam.
 //
 // app/sheet/ is the spreadsheet with no ui: two formula languages (Excel's,
@@ -40,6 +41,7 @@ import { functionList, problemList, setupScript, statusBar, statusLine } from ".
 import { menuBar } from "./sheet/view/menubar.ts";
 import { toolBar } from "./sheet/view/toolbar.ts";
 import { panelTabs } from "./sheet/view/paneltabs.ts";
+import { teamBar, teamBookOf } from "./sheet/view/teambar.ts";
 
 // What this page needs of the sae it runs on (its ui API): an older sae
 // build than the spreadsheet (sae's ./build.sh not run since a pull) lacks
@@ -58,12 +60,15 @@ if (typeof (ui as any).on_interrupted !== "function") (ui as any).on_interrupted
 if (lacking.length) print(`sheet: this sae lacks ui.${lacking.join(", ui.")}: rebuild it (../sae, its ./build.sh)`);
 
 const sheet = new SheetView();
+// A page from a sheet-server (?book=<name>): a team workbook (teambar.ts).
+const teamBook = teamBookOf(browserContext.currentUrl);
 
 // The page in one column with the window's own padding round it.
 ui.vstack(() => {
 ui.margin(8, 12, 8, 12);
 ui.text("Spreadsheet");
 if (lacking.length) ui.text(`This sae is older than the spreadsheet: it lacks ui.${lacking.join(", ui.")}. Rebuild it (../sae, its ./build.sh).`);
+if (teamBook) teamBar(sheet, teamBook);
 toolBar(sheet);
 ui.divider();
 // The Name Box and the formula bar, one row under the toolbar.

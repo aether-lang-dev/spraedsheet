@@ -29,7 +29,11 @@
 # server: sheet-server (server/sheetserver.ae, docs/design/teamware-over-http.md),
 # built into target/sheet-server with ae, driven headless over real HTTP on
 # real files (tests/server/server.test.js, node --test; SHEET_TEST_PORT, default
-# 18393, the first of the ports it takes).
+# 18393, the first of the ports it takes), and two people's spreadsheets (the
+# model on node, app/sheet/team.ts) on one workbook through it
+# (tests/server/team.test.js). spec_team: the same in two sae-drivers, the
+# server on the page-server port, Bob's driver on the driver port + 1
+# (tests/specs/spec_team.sh).
 # function_status: docs/function_status.md is what tools/function-status.sh
 # generates now (the functions' records, examples and ledger counts).
 # On Linux with no display it reruns itself under xvfb-run (a 1920 x 1200 screen).
@@ -86,6 +90,7 @@ mcp||mcp
 mcp_channel||mcp_channel
 cli||cli
 real_keys_x11||xkeys
+spec_team||team
 spec_app_sheet_mcp|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-mcp-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app SHEET_ROOT=$ROOT|spec spec_app_sheet_mcp
 "
 
@@ -125,7 +130,8 @@ for line in $TABLE; do
         headless) set -- env SAE_LOWER_OUT="$T/lower-tests" SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/headless" ;;
         status) set -- sh "$ROOT/tools/function-status.sh" --check ;;
         mcp) set -- node --test "$ROOT/tests/mcp/server.test.js" ;;
-        server) set -- sh -c 'ae build "$0/server/sheetserver.ae" -o "$0/target/sheet-server" && node --test --test-timeout=60000 "$0/tests/server/server.test.js"' "$ROOT" ;;
+        server) set -- sh -c 'ae build "$0/server/sheetserver.ae" -o "$0/target/sheet-server.new" && mv -f "$0/target/sheet-server.new" "$0/target/sheet-server" && node --test --test-timeout=60000 "$0/tests/server/server.test.js" "$0/tests/server/team.test.js"' "$ROOT" ;;
+        team) set -- sh "$ROOT/tests/specs/spec_team.sh" ;;
         mcp_channel) set -- env SAE_DIR="$SAE" node --test "$ROOT/tests/mcp/channel.test.js" ;;
         cli) set -- sh -c 'r=0; for t in "$0"/tests/cli/test_*.sh; do echo "== $t"; SAE_DIR="$1" sh "$t" || r=1; done; exit $r' "$ROOT" "$SAE" ;;
         spec) set -- env SAE_TEST_LIB_DIR="$ROOT/tests/lib" \

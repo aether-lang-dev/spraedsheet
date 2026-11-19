@@ -24,6 +24,7 @@ import { checksLine } from "../checks.ts";
 import { sliderToZoom, zoomToSlider } from "./zoom.ts";
 import { syncFloats } from "./floats.ts";
 import type { CellEditor } from "../editors.ts";
+import type { TeamBook } from "../team.ts";
 
 export class SheetView {
   // The workbooks open (books.ts), their files saved in the page's storage;
@@ -56,6 +57,8 @@ export class SheetView {
     };
     return true;
   })();
+  // The team workbook this page shows (teambar.ts), or null.
+  team: TeamBook | null = null;
   readonly address = state("A1");
   readonly input = state("");
   readonly status = state("");

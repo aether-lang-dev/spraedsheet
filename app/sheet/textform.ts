@@ -37,7 +37,7 @@ function canon(v: unknown): unknown {
 const json = (v: unknown): string => JSON.stringify(canon(v));
 
 // Raw where that reads back as it is, else a JSON string.
-const field = (s: string): string => (/[\u0000-\u001f]/.test(s) || s.startsWith('"') || s !== s.trim() ? JSON.stringify(s) : s);
+export const field = (s: string): string => (/[\u0000-\u001f]/.test(s) || s.startsWith('"') || s !== s.trim() ? JSON.stringify(s) : s);
 const unfield = (s: string): string => (s.startsWith('"') ? JSON.parse(s) : s);
 
 function sheetLines(sheet: Record<string, any>, out: string[]): void {
