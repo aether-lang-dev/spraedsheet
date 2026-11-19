@@ -24,6 +24,7 @@ import { COLS, ROWS, addrOf, cellAddr, keyOf, order, splitKey } from "./address.
 import { CellError, TYPED_ERRORS, isArray } from "./values.ts";
 import type { ArrayValue, Result, Value } from "./values.ts";
 import { EXCEL } from "./excel.ts";
+import { byOffset } from "./shift.ts";
 import { Overlay, snapshot } from "./overlay.ts";
 import type { FoundTable, Formula, Formulas, Hidden, Language, Named, Names, TableDef, Tables, Wide } from "./language.ts";
 import type { Addr } from "./address.ts";
@@ -641,6 +642,15 @@ export class Sheet {
         return { sheets, here: Math.max(0, sheets.findIndex((s) => s.toUpperCase() === this.#context.name)) };
       },
       calc: () => this.#context.calc?.() ?? AUTOMATIC,
+      computed: (k: string, rows: number): Value => {
+        const local = this.#local(k);
+        if (local === null) return new CellError("#VALUE!", "a computed criterion on another sheet");
+        const f = compile(this.#language.rewrite(this.input(local), byOffset({ cols: 0, rows })), this.#language, this.#named, (n) => this.#tableNamed(n), this.#formula, local);
+        if (f.kind !== "formula") return f.error;
+        for (const r of f.reads) read?.(this.#local(r) ?? r);
+        const v = f.run(this.#env(read));
+        return v instanceof Promise ? new CellError("#VALUE!", "a computed criterion in a language that works asynchronously") : isArray(v) ? v.values[0] : v;
+      },
       extent: (sheet: string | null) => (sheet === null || sheet === this.#context.name ? this.usedExtent() : this.#context.extent?.(sheet) ?? { rows: 0, cols: 0 }),
       hidden: (k: string) => { const local = this.#local(k); return this.#context.hidden?.(local === null ? k : `${this.#context.name}!${local}`) ?? null; },
     };

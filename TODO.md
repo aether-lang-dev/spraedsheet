@@ -119,6 +119,14 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
   was checked case by case (gridcraft_parity.md 4); `RANDARRAY(0)` left at `#VALUE!` (Excel's answer not known), as is
   accepting `R1C1`/`RC1` as names (Excel refuses them).
 
+- Computed criteria for the database functions: a criteria cell below a header that is no field of the database, holding a
+  formula (`=B6>AVERAGE($B$6:$B$11)`), is worked out for each record with its relative references moved down from the first
+  record's row (the evaluator asks the Env's `computed`, the sheet compiles the formula moved by `byOffset`), the record kept
+  when it is TRUE or not 0, beside text criteria in its row (and) and other rows (or). What the formula reads outside the
+  database (a threshold cell) is a dependency of the D* cell (`sheet_dbcomputed`: change it, the result follows). Not done:
+  Advanced Filter's criteria (commands.ts `recordTest` has no computed cells), criteria on another sheet (`#VALUE!`), RexxJS formulas.
+  Also: `XFE1`-shaped names (above) moved five tests that wrote a cell past the edge as `XFE1` to `INDIRECT("XFE1")`.
+
 **Done 2026-11-12:**
 - XLSX writer: LET and LAMBDA names are written as Excel keeps them, `_xlpm.name` wherever the name is used inside the call
   (an optional LAMBDA parameter's declaration as `_xlop.name`, `[b]` in the sheet), in a cell's formula and in a defined name's

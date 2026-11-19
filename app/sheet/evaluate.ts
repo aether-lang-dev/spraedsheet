@@ -49,7 +49,13 @@ export interface Env {
   book?(): { readonly sheets: readonly string[]; readonly here: number };
   // Whether a cell's row is hidden by hand, by a filter, or not.
   hidden?(key: string): "manual" | "filter" | null;
+  // What a cell's formula comes to with its relative references moved down `rows` rows, as if copied
+  // there (the database functions' computed criteria).
+  computed?(key: string, rows: number): Value;
 }
+
+// The database functions: their criteria range is the last argument.
+const DATABASE: ReadonlySet<string> = new Set(["DSUM", "DCOUNT", "DCOUNTA", "DGET", "DMAX", "DMIN", "DAVERAGE", "DPRODUCT", "DSTDEV", "DSTDEVP", "DVAR", "DVARP"]);
 
 // The forms that make a reference at run time, and the functions that
 // draw a random number: a formula calling one is volatile (worked out
@@ -596,9 +602,33 @@ class Evaluator {
         for (let i = 1; i <= rows; i++) for (let j = 1; j <= cols; j++) values.push(this.#one("MAKEARRAY", () => this.#invoke(fn, [i, j])));
         return array(rows, cols, values);
       }
-      default:
-        return call(e.name, args.map((a) => this.#arg(a)));
+      default: {
+        const given = args.map((a) => this.#arg(a));
+        return call(e.name, DATABASE.has(e.name) ? this.#withComputed(e, given) : given);
+      }
     }
+  }
+
+  // A database function's criteria: each cell of them below the header row that holds a formula, under a
+  // header that is no field of the database, is worked out for each record (the formula's relative
+  // references to the first record's cells moved down to that record's), as Excel does.
+  #withComputed(e: Extract<Expr, { kind: "call" }>, given: Arg[]): Arg[] {
+    const last = given.length - 1;
+    if (!this.#env.computed || !this.#env.input || last < 1) return given;
+    const [db, crit] = [this.#reference(e.args[0]), this.#reference(e.args[last])];
+    if (!db || !crit) return given;
+    const fields = given[0].values.slice(0, given[0].cols).map((v) => toText(v).trim().toUpperCase());
+    const records = Math.max(0, given[0].values.length / given[0].cols - 1), cols = given[last].cols, computed = new Map<number, Value[]>();
+    const top = Math.min(crit.a.row, crit.b.row), left = Math.min(crit.a.col, crit.b.col);
+    for (let r = 1; r < given[last].values.length / cols; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (fields.includes(toText(given[last].values[c]).trim().toUpperCase())) continue;
+        const key = qualify(crit.sheet, keyOf({ row: top + r, col: left + c }));
+        if (!this.#env.input(key).startsWith("=")) continue;
+        computed.set(r * cols + c, Array.from({ length: records }, (_, k) => this.#env.computed!(key, k)));
+      }
+    }
+    return computed.size ? given.map((a, i) => (i === last ? { ...a, computed } : a)) : given;
   }
 
   #scalar(e: Expr): Value {

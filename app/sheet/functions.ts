@@ -27,6 +27,9 @@ export interface Arg {
   // An error the argument's own expression raised (1/0, NA(), FILTER of nothing), not a cell
   // that holds one: ROWS and COLUMNS of it are that error, of the cell they count it.
   readonly raised?: true;
+  // A database function's criteria range, for each of its cells that holds a formula (by its place
+  // in `values`): what that formula comes to for each record, in order (see recordTest).
+  readonly computed?: ReadonlyMap<number, readonly Value[]>;
 }
 
 export const single = (v: Value): Arg => ({ values: [v], cols: 1 });
@@ -2496,21 +2499,24 @@ function dbCondition(c: Value): (v: Value) => boolean {
 // A criteria range's rows (its header row first) as a test of a record
 // whose fields `header` names; or why it cannot be one. Advanced Filter's
 // criteria too (commands.ts).
-export function recordTest(header: readonly Value[], cRows: readonly (readonly Value[])[]): ((rec: readonly Value[]) => boolean) | string {
+export function recordTest(header: readonly Value[], cRows: readonly (readonly Value[])[], computed?: (row: number, col: number) => readonly Value[] | undefined): ((rec: readonly Value[], i: number) => boolean) | string {
   const names = header.map(label), cHead = (cRows[0] ?? []).map(label);
-  const tests: [number, (v: Value) => boolean][][] = [];
-  for (const row of cRows.slice(1)) {
-    const t: [number, (v: Value) => boolean][] = [];
+  const tests: ((rec: readonly Value[], i: number) => boolean)[][] = [];
+  for (const [r, row] of cRows.slice(1).entries()) {
+    const t: ((rec: readonly Value[], i: number) => boolean)[] = [];
     for (let j = 0; j < row.length; j++) {
-      const c = row[j];
+      const c = row[j], at = names.indexOf(cHead[j]);
+      // A formula under a header that is no field is worked out for each record: TRUE, or a number but 0, keeps it.
+      const per = at < 0 ? computed?.(r + 1, j) : undefined;
+      if (per) { t.push((_rec, i) => { const v = per[i] ?? null; return typeof v === "boolean" ? v : typeof v === "number" && v !== 0; }); continue; }
       if (c === null || c === "") continue;
-      const at = names.indexOf(cHead[j]);
       if (at < 0) return `the criteria's ${toText(cRows[0][j])} is not a field of the database`;
-      t.push([at, dbCondition(c)]);
+      const test = dbCondition(c);
+      t.push((rec) => test(rec[at] ?? null));
     }
     tests.push(t);
   }
-  return (rec) => tests.length === 0 || tests.some((row) => row.every(([at, t]) => t(rec[at] ?? null)));
+  return (rec, i) => tests.length === 0 || tests.some((row) => row.every((t) => t(rec, i)));
 }
 
 // The field's values in the records that match.
@@ -2528,7 +2534,7 @@ function matching(name: string, args: readonly Arg[], fieldOptional: boolean): {
   } else if (!fieldOptional) return fail("#VALUE!", `${name} takes a field`);
   const cRows = rowsOfArg(crit);
   if (cRows.length < 1) return fail("#VALUE!", `${name}'s criteria have no header row`);
-  const test = recordTest(db[0], cRows);
+  const test = recordTest(db[0], cRows, crit.computed ? (r, c) => crit.computed!.get(r * crit.cols + c) : undefined);
   if (typeof test === "string") return fail("#VALUE!", `${name}: ${test}`);
   const keep = records.filter(test);
   return { values: column < 0 ? keep.map(() => 1) : keep.map((rec) => rec[column] ?? null), count: keep.length };

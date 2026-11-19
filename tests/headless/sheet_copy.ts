@@ -19,7 +19,7 @@ eq("a fixed reference keeps its case too", moved("=$a$1+a1", by(0, 1)), "=$a$1+A
 eq("one that leaves the sheet becomes #REF!", moved("=A1+XFD100", by(1, 0)), "=B1+#REF!");
 eq("and above or left of it", moved("=B2*2", by(-2, 0)), "=#REF!*2");
 eq("a range with a corner off the sheet is #REF! whole", moved("=SUM(A1:XFD2)", by(1, 0)), "=SUM(#REF!)");
-eq("a reference already off the sheet stays #REF!", moved("=XFE9", by(0, 1)), "=#REF!");
+eq("a reference already off the sheet stays #REF!", moved("=#REF!", by(0, 1)), "=#REF!");
 eq("a constant is not a formula", moved("A1", by(1, 1)), "A1");
 eq("a formula that does not lex is left alone", moved(`=A1&"open`, by(1, 1)), `=A1&"open`);
 eq("not moving changes nothing", moved("=a1+aa9", by(0, 0)), "=a1+aa9");
