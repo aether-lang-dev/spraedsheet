@@ -69,7 +69,7 @@ export const arityOf = (name: string): { min: number; max: number } | null => li
 // Functions whose numbers must be numbers: Excel gives #VALUE! for TRUE or
 // FALSE (the maths functions read them as 1 and 0).
 const NO_LOGICALS = new Set(["ERF", "ERFC", "ERF.PRECISE", "ERFC.PRECISE", "GESTEP", "DELTA", "NOMINAL", "EFFECT", "DOLLAR", "DOLLARDE", "DOLLARFR",
-  "ISODD", "ISEVEN", "EOMONTH", "EDATE", "WEEKDAY", "WEEKNUM", "ISOWEEKNUM", "YEARFRAC", "DATEDIF", "DAYS", "NETWORKDAYS", "NETWORKDAYS.INTL",
+  "ISODD", "ISEVEN", "EOMONTH", "EDATE", "YEARFRAC", "DATEDIF", "NETWORKDAYS", "NETWORKDAYS.INTL",
   "WORKDAY", "WORKDAY.INTL", "DATEVALUE", "TIMEVALUE", "BIN2DEC", "BIN2HEX", "BIN2OCT", "DEC2BIN", "DEC2HEX", "DEC2OCT", "HEX2BIN", "HEX2DEC", "HEX2OCT", "OCT2BIN", "OCT2DEC", "OCT2HEX",
   "XIRR", "CUMIPMT", "CUMPRINC", "QUOTIENT", "MULTINOMIAL"]);
 
@@ -201,11 +201,17 @@ const sum = (ns: readonly number[]): number => ns.reduce((s, n) => s + n, 0);
 const blank = (v: Value): boolean => v === null || v === "";
 
 // Rounding away from zero (as spreadsheets do: ROUND(-2.5, 0) is -3), up or
-// down, to `digits` places; toPrecision(15) first so 2.675 * 100 is 267.5.
-function rounder(how: (x: number) => number): Fn {
+// down, to `digits` places; toPrecision(15) first so 2.675 * 100 is 267.5. A digits
+// count too large to scale by (the power of ten overflows, or the scaled number does)
+// leaves the number as it is; one so negative that the power underflows to nothing
+// rounds to 0, and ROUNDUP of a number but 0 to it is #NUM!, as Excel answers.
+function rounder(how: (x: number) => number, up = false): Fn {
   return (args) => {
     const x = num(args, 0), f = 10 ** Math.trunc(num(args, 1, 0));
-    return (Math.sign(x) * how(Number((Math.abs(x) * f).toPrecision(15)))) / f;
+    if (f === 0) return up && x !== 0 ? fail("#NUM!", "ROUNDUP to a power of ten too large for a number") : 0;
+    const scaled = Math.abs(x) * f;
+    if (!Number.isFinite(scaled)) return x;
+    return real((Math.sign(x) * how(Number(scaled.toPrecision(15)))) / f, "the rounded number is too large for a number");
   };
 }
 
@@ -281,8 +287,10 @@ def("AVERAGE", 1, Infinity, (args) => {
   const ns = numbers(args);
   return ns.length ? sum(ns) / ns.length : fail("#DIV/0!", "AVERAGE of no numbers");
 });
-def("MIN", 1, Infinity, (args) => { const ns = numbers(args); return ns.length ? Math.min(...ns) : 0; });
-def("MAX", 1, Infinity, (args) => { const ns = numbers(args); return ns.length ? Math.max(...ns) : 0; });
+// An argument left out (MAX(,-1)) counts as 0.
+const withBlanks = (args: readonly Arg[]): number[] => [...numbers(args), ...args.filter((_, i) => absent(args, i)).map(() => 0)];
+def("MIN", 1, Infinity, (args) => { const ns = withBlanks(args); return ns.length ? Math.min(...ns) : 0; });
+def("MAX", 1, Infinity, (args) => { const ns = withBlanks(args); return ns.length ? Math.max(...ns) : 0; });
 def("MEDIAN", 1, Infinity, (args) => {
   const ns = numbers(args).sort((a, b) => a - b), mid = ns.length >> 1;
   if (!ns.length) return fail("#NUM!", "MEDIAN of no numbers");
@@ -312,7 +320,7 @@ def("ABS", 1, 1, (args) => Math.abs(num(args, 0)));
 def("SIGN", 1, 1, (args) => Math.sign(num(args, 0)));
 def("INT", 1, 1, (args) => Math.floor(num(args, 0)));
 def("ROUND", 1, 2, rounder(Math.round));
-def("ROUNDUP", 1, 2, rounder(Math.ceil));
+def("ROUNDUP", 1, 2, rounder(Math.ceil, true));
 def("ROUNDDOWN", 1, 2, rounder(Math.floor));
 def("MOD", 2, 2, (args) => {
   const a = num(args, 0), b = num(args, 1);
@@ -333,19 +341,23 @@ const multiples = (x: number, sig: number): number => Number((x / sig).toPrecisi
 // Rounding to a multiple of `sig`, by `how` over the count of multiples.
 const toMultiple = (x: number, sig: number, how: (n: number) => number): number => (sig === 0 ? 0 : how(multiples(x, sig)) * sig);
 
-// CEILING(x, sig) and FLOOR(x, sig), the old ones: to a multiple of sig,
-// away from zero (CEILING) or toward it (FLOOR); x and sig of different
-// signs is #NUM!; FLOOR by 0 is #DIV/0!, CEILING by 0 is 0.
+// CEILING(x, sig) and FLOOR(x, sig), the old ones, as Excel has had them since
+// 2010: CEILING rounds up and FLOOR rounds down to a multiple of sig, so a
+// negative x with a positive sig goes away from zero in FLOOR (-2.5 to -4 by 2)
+// and toward it in CEILING (-2); a negative sig rounds the multiples' count the
+// same way, so FLOOR(-2.5, -2) is -2. Only a positive x with a negative sig is
+// #NUM!. CEILING by 0 is 0; FLOOR by 0 is #DIV/0!, but 0 itself is 0. A result
+// too large for a number (a sig of 1E-307) is #NUM!.
 def("CEILING", 2, 2, (args) => {
   const x = num(args, 0), sig = num(args, 1);
-  if (x * sig < 0) return fail("#NUM!", "CEILING's number and significance differ in sign");
-  return toMultiple(x, sig, Math.ceil);
+  if (x > 0 && sig < 0) return fail("#NUM!", "CEILING's number is positive and its significance negative");
+  return real(toMultiple(x, sig, Math.ceil), "CEILING is too large for a number");
 });
 def("FLOOR", 2, 2, (args) => {
   const x = num(args, 0), sig = num(args, 1);
-  if (sig === 0) return fail("#DIV/0!", "FLOOR by a significance of 0");
-  if (x * sig < 0) return fail("#NUM!", "FLOOR's number and significance differ in sign");
-  return toMultiple(x, sig, Math.floor);
+  if (sig === 0) return x === 0 ? 0 : fail("#DIV/0!", "FLOOR by a significance of 0");
+  if (x > 0 && sig < 0) return fail("#NUM!", "FLOOR's number is positive and its significance negative");
+  return real(toMultiple(x, sig, Math.floor), "FLOOR is too large for a number");
 });
 // CEILING.MATH(x, [sig], [mode]) rounds up (toward +infinity); a negative
 // x with a mode other than 0 rounds away from zero instead. FLOOR.MATH
@@ -354,11 +366,11 @@ def("FLOOR", 2, 2, (args) => {
 // same with no mode.
 const ceilingMath = (args: readonly Arg[], mode: boolean): number => {
   const x = num(args, 0), sig = Math.abs(num(args, 1, 1)), away = mode && num(args, 2, 0) !== 0;
-  return toMultiple(x, sig, (n) => (x < 0 && away ? Math.floor(n) : Math.ceil(n)));
+  return real(toMultiple(x, sig, (n) => (x < 0 && away ? Math.floor(n) : Math.ceil(n))), "CEILING.MATH is too large for a number");
 };
 const floorMath = (args: readonly Arg[], mode: boolean): number => {
   const x = num(args, 0), sig = Math.abs(num(args, 1, 1)), toward = mode && num(args, 2, 0) !== 0;
-  return toMultiple(x, sig, (n) => (x < 0 && toward ? Math.ceil(n) : Math.floor(n)));
+  return real(toMultiple(x, sig, (n) => (x < 0 && toward ? Math.ceil(n) : Math.floor(n))), "FLOOR.MATH is too large for a number");
 };
 def("CEILING.MATH", 1, 3, (args) => ceilingMath(args, true));
 def("CEILING.PRECISE", 1, 2, (args) => ceilingMath(args, false));
@@ -367,13 +379,20 @@ def("FLOOR.PRECISE", 1, 2, (args) => floorMath(args, false));
 // TRUNC(x, [digits]): the digits kept, the rest cut off (toward zero).
 def("TRUNC", 1, 2, (args) => {
   const x = num(args, 0), f = 10 ** Math.trunc(num(args, 1, 0));
+  if (f === 0) return 0;
+  if (!Number.isFinite(x * f)) return x;
   return Math.trunc(Number((x * f).toPrecision(15))) / f;
 });
 // MROUND(x, m): to the nearest multiple of m, halves away from zero.
+// An argument left out is #N/A, and TRUE or FALSE in a cell is #VALUE!.
 def("MROUND", 2, 2, (args) => {
+  for (const [i, a] of args.entries()) {
+    if (absent(args, i)) return fail("#N/A", "MROUND with an argument left out");
+    if (!a.typed && typeof scalar(a.values[0] ?? null) === "boolean") return fail("#VALUE!", "MROUND of a logical value in a cell");
+  }
   const x = num(args, 0), m = num(args, 1);
   if (x * m < 0) return fail("#NUM!", "MROUND's number and multiple differ in sign");
-  return toMultiple(Math.abs(x), Math.abs(m), Math.round) * Math.sign(x);
+  return real(toMultiple(Math.abs(x), Math.abs(m), Math.round) * Math.sign(x), "MROUND is too large for a number");
 });
 // EVEN and ODD: to the next even or odd integer away from zero.
 def("EVEN", 1, 1, (args) => {
@@ -393,9 +412,10 @@ def("LOG10", 1, 1, (args) => {
   const x = num(args, 0);
   return x > 0 ? Math.log10(x) : fail("#NUM!", `LOG10 of ${x}: not positive`);
 });
-// LOG(x, [base]): base 10 unless told; a base of 1 or less is #NUM!.
+// LOG(x, [base]): base 10 unless told; a base of 1 or less is #NUM!, and a base left
+// empty (LOG(x,)) is a base of 0.
 def("LOG", 1, 2, (args) => {
-  const x = num(args, 0), b = num(args, 1, 10);
+  const x = num(args, 0), b = args.length > 1 ? num(args, 1, 0) : 10;
   if (x <= 0) return fail("#NUM!", `LOG of ${x}: not positive`);
   if (b <= 0) return fail("#NUM!", `LOG to base ${b}`);
   // The log of the base is 0: a division by zero, as Excel answers.
@@ -406,12 +426,36 @@ def("QUOTIENT", 2, 2, (args) => {
   const n = num(args, 0), d = num(args, 1);
   return d === 0 ? fail("#DIV/0!", "QUOTIENT by zero") : Math.trunc(n / d);
 });
-// GCD and LCM over whole numbers (fractions cut off); a negative is #NUM!.
-const wholes = (args: readonly Arg[], name: string): number[] =>
-  numbers(args).map((n) => (n < 0 ? fail("#NUM!", `${name} of a negative number, ${n}`) : Math.trunc(n)));
+// GCD and LCM over whole numbers (fractions cut off). Excel reads what a cell or an
+// array holds more strictly than SUM does: text that reads as a number is that number
+// ("8", " 10 ", a date's text), other text, "" and TRUE or FALSE are #VALUE!; an empty
+// cell passed on its own is passed over (and no number at all is #VALUE!), but in a
+// range or an array it is 0; an argument left out, f(,2), is #N/A. A negative number, one
+// of 2^53 or more, and an LCM of 2^53 or more are #NUM!.
+const MAX_WHOLE = 2 ** 53;
+const wholes = (args: readonly Arg[], name: string): number[] => {
+  const out: number[] = [];
+  let passedOver = false;
+  for (const [i, a] of args.entries()) {
+    if (absent(args, i)) return fail("#N/A", `${name} with an argument left out`);
+    if (a.typed) { out.push(...numbers([a])); continue; }
+    for (const v of a.values.map(scalar)) {
+      if (v === null) { if (a.values.length > 1) out.push(0); else passedOver = true; continue; }
+      if (typeof v === "number") { out.push(v); continue; }
+      const n = typeof v === "string" ? textNumber(v) : null;
+      if (n === null) return fail("#VALUE!", `${name} of ${typeof v === "string" ? `'${v}'` : "a logical value"}, not a number`);
+      out.push(n);
+    }
+  }
+  if (!out.length && passedOver) return fail("#VALUE!", `${name} of nothing but empty cells`);
+  return out.map((n) => (n < 0 || n >= MAX_WHOLE ? fail("#NUM!", `${name} of ${n}`) : Math.trunc(n)));
+};
 const gcd2 = (a: number, b: number): number => (b === 0 ? a : gcd2(b, a % b));
 def("GCD", 1, Infinity, (args) => wholes(args, "GCD").reduce(gcd2, 0));
-def("LCM", 1, Infinity, (args) => wholes(args, "LCM").reduce((a, b) => (a === 0 || b === 0 ? 0 : (a * b) / gcd2(a, b)), 1));
+def("LCM", 1, Infinity, (args) => {
+  const l = wholes(args, "LCM").reduce((a, b) => (a === 0 || b === 0 ? 0 : (a * b) / gcd2(a, b)), 1);
+  return l >= MAX_WHOLE ? fail("#NUM!", "LCM of 2^53 or more") : l;
+});
 const factorial = (n: number): number => {
   let f = 1;
   for (let i = 2; i <= n; i++) f *= i;
@@ -506,9 +550,15 @@ def("OR", 1, Infinity, (args) => truths("OR", args).some(Boolean));
 def("XOR", 1, Infinity, (args) => truths("XOR", args).filter(Boolean).length % 2 === 1);
 def("TRUE", 0, 0, () => true);
 def("FALSE", 0, 0, () => false);
+// NOT reads text as a logical only when it is TRUE or FALSE as written (any case, no spaces
+// round it): "1", "0", " TRUE " and a date's text are #VALUE!, here and in an array.
 def("NOT", 1, 1, (args) => {
-  const v = scalar(val(args, 0)), t = typeof v === "string" ? truthText(v) : null;
-  return t !== null ? !t : num(args, 0) === 0;
+  const v = scalar(val(args, 0));
+  if (typeof v === "string") {
+    const t = v.toUpperCase();
+    return t === "TRUE" ? false : t === "FALSE" ? true : fail("#VALUE!", `NOT of the text '${v}'`);
+  }
+  return num(args, 0) === 0;
 });
 // IFERROR and IFNA over an array work cell by cell (a function given a range where it takes one
 // value is lifted, as everything is), the fallback broadcast against it.
@@ -1674,12 +1724,16 @@ function date(args: readonly Arg[], i: number): number {
 const LAST_DATE = 2958465;
 const inDates = (s: number, what: string): number => (s >= 0 && s < LAST_DATE + 1 ? s : fail("#NUM!", `${what} is not a date from 1900 to 9999`));
 const dateIn = (args: readonly Arg[], i: number): number => inDates(date(args, i), `argument ${i + 1}`);
+// The holidays: dates, or text that reads as one (any other text is #VALUE!, a negative serial #NUM!).
 const holidays = (args: readonly Arg[], i: number): Set<number> =>
-  new Set(absent(args, i) ? [] : args[i].values.filter((v) => v !== null).map((v) => Math.floor(typeof v === "string" ? parseDate(v) ?? NaN : toNumber(v))));
+  new Set(absent(args, i) ? [] : args[i].values.filter((v) => v !== null).map((v) => {
+    const d = Math.floor(typeof v === "string" ? parseDate(v) ?? fail("#VALUE!", `the holiday '${v}' is not a date`) : toNumber(v));
+    return d < 0 ? fail("#NUM!", `the holiday ${d} is before the first day`) : d;
+  }));
 
 def("DATE", 3, 3, (args) => {
   const y = Math.trunc(num(args, 0));
-  return serial(y < 1900 ? y + 1900 : y, Math.trunc(num(args, 1)), Math.trunc(num(args, 2)));
+  return inDates(serial(y < 1900 ? y + 1900 : y, Math.trunc(num(args, 1)), Math.trunc(num(args, 2))), "the date");
 });
 // DATEVALUE(text): the day a date written as text is (its time, if any, only carries whole days).
 // A number is #VALUE!, as Excel has it.
@@ -1692,13 +1746,19 @@ def("DATEVALUE", 1, 1, (args) => {
 def("YEAR", 1, 1, (args) => parts(dateIn(args, 0)).y);
 def("MONTH", 1, 1, (args) => parts(dateIn(args, 0)).m);
 def("DAY", 1, 1, (args) => parts(dateIn(args, 0)).d);
+// WEEKDAY's return type: 1 (Sunday is 1), 2 (Monday is 1), 3 (Monday is 0), and 11 to 17
+// (the day that is 1: Monday for 11 to Sunday for 17); another is #NUM!. TRUE as the type is 1.
 def("WEEKDAY", 1, 2, (args) => {
-  const w = parts(date(args, 0)).weekday, type = num(args, 1, 1);
-  return type === 2 ? ((w + 6) % 7) + 1 : type === 3 ? (w + 6) % 7 : w + 1;
+  // The type is read before the date is held to its range: WEEKDAY(-1, "abc") is #VALUE!.
+  const serial = date(args, 0), type = Math.trunc(num(args, 1, 1)), w = parts(inDates(serial, "argument 1")).weekday;
+  if (type === 3) return (w + 6) % 7;
+  const first = type === 1 ? 0 : type === 2 ? 1 : type >= 11 && type <= 17 ? type - 10 : -1;
+  if (first < 0) return fail("#NUM!", `WEEKDAY's return type ${type} is 1, 2, 3 or 11 to 17`);
+  return ((w - first + 7) % 7) + 1;
 });
 def("EDATE", 2, 2, (args) => inDates(addMonths(dateIn(args, 0), Math.trunc(num(args, 1))), "the date it comes to"));
 def("EOMONTH", 2, 2, (args) => inDates(endOfMonth(dateIn(args, 0), Math.trunc(num(args, 1))), "the date it comes to"));
-def("DAYS", 2, 2, (args) => Math.floor(date(args, 0)) - Math.floor(date(args, 1)));
+def("DAYS", 2, 2, (args) => Math.floor(dateIn(args, 0)) - Math.floor(dateIn(args, 1)));
 def("DATEDIF", 3, 3, (args) => {
   // Whole days: a start later in the same day is not after the end. A
   // negative serial is no date.
@@ -1707,27 +1767,40 @@ def("DATEDIF", 3, 3, (args) => {
   if (a > b) return fail("#NUM!", "DATEDIF's start is after its end");
   return dateDif(a, b, str(args, 2)) ?? fail("#NUM!", `${str(args, 2)} is not a unit (Y, M, D, YM, MD, YD)`);
 });
-def("NETWORKDAYS", 2, 3, (args) => workdaysBetween(date(args, 0), date(args, 1), holidays(args, 2)));
-def("WORKDAY", 2, 3, (args) => workdayFrom(date(args, 0), Math.trunc(num(args, 1)), holidays(args, 2)));
+def("NETWORKDAYS", 2, 3, (args) => workdaysBetween(dateIn(args, 0), dateIn(args, 1), holidays(args, 2)));
+const workday = (from: number, days: number, hs: Set<number>, which?: Parameters<typeof workdayFrom>[3]): number => {
+  const s = workdayFrom(from, days, hs, which);
+  return s === null ? fail("#VALUE!", "no workday") : inDates(s, "the workday it comes to");
+};
+// The count of days is cut off downward (-0.9999999 is -1), the start held to the dates.
+def("WORKDAY", 2, 3, (args) => workday(dateIn(args, 0), Math.floor(num(args, 1)), holidays(args, 2)));
 // The .INTL pair take which days are the weekend (dates.ts weekendOf):
 // a number, or seven 1s and 0s from Monday; Saturday and Sunday unless told.
-const weekendArg = (args: readonly Arg[], i: number) => {
+// Text that is not seven 1s and 0s is #VALUE!, a number that is no pair is #NUM!; all seven days a weekend is
+// no workday: NETWORKDAYS.INTL counts 0, and WORKDAY.INTL (which would never find one) is #VALUE!.
+const weekendArg = (args: readonly Arg[], i: number, workdays: boolean) => {
   const v = absent(args, i) ? 1 : scalar(val(args, i));
+  if (typeof v === "string" && !/^[01]{7}$/.test(v)) return fail("#VALUE!", `'${v}' is not seven 1s and 0s`);
   const w = weekendOf(typeof v === "string" ? v : toNumber(v));
-  return w ?? fail("#NUM!", `${toText(v)} is not a weekend: 1 to 7, 11 to 17, or seven 1s and 0s`);
+  if (w && workdays && w.every(Boolean)) return fail("#VALUE!", "a weekend of all seven days leaves no workday");
+  return w ?? fail("#NUM!", `${toText(v)} is not a weekend: 1 to 7 or 11 to 17`);
 };
-def("NETWORKDAYS.INTL", 2, 4, (args) => workdaysBetween(date(args, 0), date(args, 1), holidays(args, 3), weekendArg(args, 2)));
-def("WORKDAY.INTL", 2, 4, (args) => workdayFrom(date(args, 0), Math.trunc(num(args, 1)), holidays(args, 3), weekendArg(args, 2)));
+def("NETWORKDAYS.INTL", 2, 4, (args) => workdaysBetween(dateIn(args, 0), dateIn(args, 1), holidays(args, 3), weekendArg(args, 2, false)));
+def("WORKDAY.INTL", 2, 4, (args) => workday(dateIn(args, 0), Math.floor(num(args, 1)), holidays(args, 3), weekendArg(args, 2, true)));
 // WEEKNUM(date, [type]): the week of the year, 1 at the week January 1 is
 // in; type 1 (or 17) has weeks start on Sunday, 2 (or 11) Monday, 12
 // Tuesday ... 16 Saturday; 21 is ISO 8601's week (ISOWEEKNUM).
 def("WEEKNUM", 1, 2, (args) => {
-  const s = date(args, 0), type = Math.trunc(num(args, 1, 1));
+  // TRUE or FALSE as the date or the type is #VALUE!; the date is held to its range before the type is read.
+  if (typeof scalar(val(args, 0)) === "boolean") return fail("#VALUE!", "WEEKNUM of a logical value");
+  const s = dateIn(args, 0);
+  if (!absent(args, 1) && typeof scalar(val(args, 1)) === "boolean") return fail("#VALUE!", "WEEKNUM's type is a logical value");
+  const type = Math.trunc(num(args, 1, 1));
   if (type === 21) return isoWeek(s);
   const start = type === 1 || type === 17 ? 0 : type === 2 || type === 11 ? 1 : type >= 12 && type <= 16 ? type - 10 : -1;
   return start < 0 ? fail("#NUM!", `WEEKNUM's type is 1, 2, 11 to 17 or 21, not ${type}`) : weekOfYear(s, start);
 });
-def("ISOWEEKNUM", 1, 1, (args) => isoWeek(date(args, 0)));
+def("ISOWEEKNUM", 1, 1, (args) => isoWeek(dateIn(args, 0)));
 // YEARFRAC(start, end, [basis]) and DAYS360(start, end, [european]):
 // dates.ts says the conventions.
 def("YEARFRAC", 2, 3, (args) => {
@@ -1735,20 +1808,34 @@ def("YEARFRAC", 2, 3, (args) => {
   if (date(args, 0) < 0 || date(args, 1) < 0) return fail("#NUM!", "YEARFRAC's dates are 0 or more");
   return yearFraction(date(args, 0), date(args, 1), basis) ?? fail("#NUM!", `YEARFRAC's basis is 0 to 4, not ${basis}`);
 });
-def("DAYS360", 2, 3, (args) => days360(date(args, 0), date(args, 1), !absent(args, 2) && toNumber(val(args, 2)) !== 0));
+// DAYS360's method: TRUE or FALSE, a number (0 is the US method), or the text TRUE or FALSE as written;
+// other text, numeric text too, is #VALUE!.
+def("DAYS360", 2, 3, (args) => {
+  const start = dateIn(args, 0), end = dateIn(args, 1);
+  let european = false;
+  if (!absent(args, 2)) {
+    const m = scalar(val(args, 2));
+    if (typeof m === "string") european = m.toUpperCase() === "TRUE" ? true : m.toUpperCase() === "FALSE" ? false : fail("#VALUE!", `DAYS360's method '${m}' is not TRUE or FALSE`);
+    else european = toNumber(m) !== 0;
+  }
+  return days360(start, end, european);
+});
 // TIMEVALUE(text): the time of day as the fraction of a day.
 def("TIMEVALUE", 1, 1, (args) => {
   const s = str(args, 0);
   return timeValue(s) ?? fail("#VALUE!", `'${s}' is not a time`);
 });
+// Each of the hour, minute and second is 0 to 32767 (a count over that is #NUM!, as is a negative total).
 def("TIME", 3, 3, (args) => {
-  const seconds = Math.trunc(num(args, 0)) * 3600 + Math.trunc(num(args, 1)) * 60 + Math.trunc(num(args, 2));
+  const [h, m, sec] = [0, 1, 2].map((i) => Math.trunc(num(args, i)));
+  if (h > 32767 || m > 32767 || sec > 32767) return fail("#NUM!", "TIME takes an hour, minute and second of 32767 at most");
+  const seconds = h * 3600 + m * 60 + sec;
   if (seconds < 0) return fail("#NUM!", `TIME of ${seconds} seconds is before midnight`);
   return (seconds / 86400) % 1;
 });
 const clock = (args: readonly Arg[]): number | ReturnType<typeof fail> => {
   const serial = date(args, 0);
-  return serial < 0 ? fail("#NUM!", `${serial} is before the first day`) : Math.round((serial % 1) * 86400);
+  return serial < 0 || serial >= LAST_DATE + 1 ? fail("#NUM!", `${serial} is not a date from 1900 to 9999`) : Math.round((serial % 1) * 86400);
 };
 def("HOUR", 1, 1, (args) => { const c = clock(args); return typeof c === "number" ? Math.floor(c / 3600) % 24 : c; });
 def("MINUTE", 1, 1, (args) => { const c = clock(args); return typeof c === "number" ? Math.floor(c / 60) % 60 : c; });
@@ -2393,16 +2480,18 @@ for (const [to, r] of Object.entries(RADICES)) {
 }
 // BASE(n, radix, [min length]) and DECIMAL(text, radix): any radix 2 to 36.
 defEng("BASE", 2, 3, (args) => {
-  const n = Math.trunc(num(args, 0)), radix = Math.trunc(num(args, 1)), least = Math.trunc(num(args, 2, 0));
-  if (n < 0 || n >= 2 ** 53) throw new RangeError(`${n} is not 0 to 2^53`);
+  // A negative is #NUM! before its fraction is cut off (-1E-7 too).
+  const given = num(args, 0), n = Math.trunc(given), radix = Math.trunc(num(args, 1)), wanted = num(args, 2, 0), least = Math.trunc(wanted);
+  if (given < 0 || n >= 2 ** 53) throw new RangeError(`${n} is not 0 to 2^53`);
   if (radix < 2 || radix > 36) throw new RangeError(`radix ${radix}: 2 to 36`);
-  if (least < 0 || least > 255) throw new RangeError(`a length of ${least}: 0 to 255`);
+  if (wanted < 0 || least > 255) throw new RangeError(`a length of ${least}: 0 to 255`);
   return n.toString(radix).toUpperCase().padStart(least, "0");
 });
 defEng("DECIMAL", 2, 2, (args) => {
-  const text = str(args, 0).trim(), radix = Math.trunc(num(args, 1));
+  // Spaces before the digits are ignored; spaces after them are not digits.
+  const given = str(args, 0), text = given.trimStart(), radix = Math.trunc(num(args, 1));
+  if (given.length > 255) return fail("#VALUE!", "DECIMAL of text of more than 255 characters");
   if (radix < 2 || radix > 36) throw new RangeError(`radix ${radix}: 2 to 36`);
-  if (text.length > 255) throw new RangeError("text of more than 255 characters");
   let n = 0;
   for (const ch of text.toUpperCase()) {
     const d = parseInt(ch, 36);
@@ -2617,7 +2706,7 @@ def("ARABIC", 1, 1, (args) => {
   }
   return negative ? -total : total;
 });
-def("ISO.CEILING", 1, 2, (args) => call("CEILING.PRECISE", args));
+def("ISO.CEILING", 1, 2, (args) => ceilingMath(args, false));
 
 // The reciprocal trigonometric functions. Excel refuses an angle of 2^27
 // or more (#NUM!), and a zero divisor is #DIV/0!.

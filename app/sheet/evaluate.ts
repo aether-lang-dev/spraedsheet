@@ -351,7 +351,8 @@ class Evaluator {
     try {
       const r = this.result(e);
       if (isArray(r)) return { values: r.values, cols: r.cols };
-      const typed = TYPED.has(e.kind) || (e.kind === "call" && !PASS_REFERENCES.has(e.name) && !(MAY_GIVE_REFERENCES.has(e.name) && this.#reference(e) !== null));
+      // A LET name or LAMBDA parameter that holds a value (not a reference) is as good as typed there.
+      const typed = TYPED.has(e.kind) || (e.kind === "local" && !isHeld(this.#scope.get(e.name)) && this.#scope.get(e.name) !== OMITTED) || (e.kind === "call" && !PASS_REFERENCES.has(e.name) && !(MAY_GIVE_REFERENCES.has(e.name) && this.#reference(e) !== null));
       return typed && !(r instanceof CellError) ? { values: [r], cols: 1, typed: true } : single(r);
     } catch (err) {
       if (err instanceof CellError && e.kind !== "range" && e.kind !== "table") return { ...single(err), raised: true };

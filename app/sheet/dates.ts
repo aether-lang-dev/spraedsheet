@@ -13,11 +13,24 @@ export function setDateSystem(system: DateSystem): void {
   EPOCH = system === 1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30);
 }
 
-export const serial = (y: number, m: number, d: number): number => (Date.UTC(y, m - 1, d) - EPOCH) / DAY;
+// Excel's calendar has a 29 February 1900 that never was (day 60) and a day 0, 0 January 1900: in the
+// 1900 date system a serial under 61 is a day later in the calendar than the real one it
+// numbers (serial 1 is 1 January 1900, the real 31 December 1899), so those are worked out by hand.
+const phantom = (): boolean => EPOCH === Date.UTC(1899, 11, 30);
+export function serial(y: number, m: number, d: number): number {
+  // January and February 1900 count from 0 January: 31 days then the days of February (which has 29).
+  if (phantom() && y === 1900 && (m === 1 || m === 2)) return (m === 1 ? 0 : 31) + d;
+  return (Date.UTC(y, m - 1, d) - EPOCH) / DAY;
+}
 
 // A serial's year, month (1-12), day and weekday (0 Sunday).
 export function parts(s: number): { y: number; m: number; d: number; weekday: number } {
-  const t = new Date(EPOCH + Math.floor(s) * DAY);
+  const f = Math.floor(s);
+  if (phantom() && f >= 0 && f < 61) {
+    const real = new Date(EPOCH + f * DAY);
+    return f === 0 ? { y: 1900, m: 1, d: 0, weekday: real.getUTCDay() } : f < 32 ? { y: 1900, m: 1, d: f, weekday: real.getUTCDay() } : { y: 1900, m: 2, d: f - 31, weekday: real.getUTCDay() };
+  }
+  const t = new Date(EPOCH + f * DAY);
   return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate(), weekday: t.getUTCDay() };
 }
 
@@ -37,7 +50,9 @@ const yearOf = (digits: string): number => (digits.length === 2 ? (Number(digits
 export function parseDate(text: string): number | null {
   const t = text.trim().replace(/\s*([/-])\s*/g, "$1");
   // A month of 1 to 12 and a day that month has: 30/2/2010 is no date.
-  const real = (y: number, mo: number, d: number): number | null => mo >= 1 && mo <= 12 && d >= 1 && d <= parts(serial(y, mo + 1, 0)).d ? serial(y, mo, d) : null;
+  // Before 1900 is no date (and Excel's 29 February 1900, which never was, is: serial() and parts() count it).
+  const real = (y: number, mo: number, d: number): number | null =>
+    y < 1900 ? null : mo >= 1 && mo <= 12 && d >= 1 && d <= parts(serial(y, mo + 1, 0)).d ? serial(y, mo, d) : null;
   let m = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/.exec(t);
   if (m) return real(Number(m[1]), Number(m[2]), Number(m[3]));
   m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(t);
@@ -135,7 +150,7 @@ export const SATURDAY_SUNDAY: Weekend = [false, false, false, false, false, true
 // and 0s from Monday; null when it is none of those (or every day).
 export function weekendOf(spec: number | string): Weekend | null {
   if (typeof spec === "string") {
-    if (!/^[01]{7}$/.test(spec) || spec === "1111111") return null;
+    if (!/^[01]{7}$/.test(spec)) return null;
     return [...spec].map((c) => c === "1");
   }
   const days: boolean[] = [false, false, false, false, false, false, false];
@@ -153,19 +168,33 @@ const weekend = (s: number, which: Weekend): boolean => which[(parts(s).weekday 
 
 // Weekdays from start to end, both counted, holidays not (either order: negative).
 export function workdaysBetween(start: number, end: number, holidays: ReadonlySet<number>, which: Weekend = SATURDAY_SUNDAY): number {
-  const [a, b] = start <= end ? [start, end] : [end, start];
+  const [from, to] = [Math.floor(start), Math.floor(end)];
+  const [a, b] = from <= to ? [from, to] : [to, from];
   let n = 0;
-  for (let s = Math.floor(a); s <= Math.floor(b); s++) if (!weekend(s, which) && !holidays.has(s)) n++;
-  return start <= end ? n : -n;
+  for (let s = a; s <= b; s++) if (!weekend(s, which) && !holidays.has(s)) n++;
+  return from <= to ? n : -n;
 }
 
-// The workday `days` workdays from start (back, when negative).
-export function workdayFrom(start: number, days: number, holidays: ReadonlySet<number>, which: Weekend = SATURDAY_SUNDAY): number {
-  let s = Math.floor(start);
+// The workday `days` workdays from start (back, when negative). Whole weeks are jumped, so a
+// count of a billion is no longer than a count of ten; a holiday on the way (a workday that is
+// one) is one more workday to go. A weekend of all seven days has no workday: null.
+export function workdayFrom(start: number, days: number, holidays: ReadonlySet<number>, which: Weekend = SATURDAY_SUNDAY): number | null {
+  const per = which.filter((w) => !w).length;
+  if (per === 0) return null;
   const step = Math.sign(days);
-  for (let left = Math.abs(days); left > 0;) {
-    s += step;
-    if (!weekend(s, which) && !holidays.has(s)) left--;
+  let s = Math.floor(start), left = Math.abs(days);
+  const sorted = [...holidays].filter((h) => !weekend(h, which)).sort((x, y) => x - y);
+  while (left > 0) {
+    const from = s;
+    const weeks = Math.floor((left - 1) / per);
+    s += step * 7 * weeks;
+    left -= weeks * per;
+    while (left > 0) {
+      s += step;
+      if (!weekend(s, which)) left--;
+    }
+    // The holidays this stretch passed over (from, s] (or [s, from)) are workdays not walked.
+    left = sorted.filter((h) => (step > 0 ? h > from && h <= s : h < from && h >= s)).length;
   }
   return s;
 }
@@ -194,13 +223,14 @@ const lastOfFebruary = (p: { y: number; m: number; d: number }): boolean => p.m 
 // 31st is the 30th when the start is the 30th or later, else the 1st of
 // the next month. European: a 31st is the 30th, either end.
 export function days360(start: number, end: number, european: boolean): number {
-  const a = parts(start), b = parts(end);
+  // A serial within 1E-5 of the next day is that day (45658.9999999 is 45659, as Excel reads it here).
+  const near = (s: number): number => Math.floor(Number(s.toFixed(5)));
+  const a = parts(near(start)), b = parts(near(end));
   let sd = a.d, ed = b.d, em = b.m, ey = b.y;
   if (european) {
     if (sd === 31) sd = 30;
     if (ed === 31) ed = 30;
   } else {
-    if (lastOfFebruary(a) && lastOfFebruary(b)) ed = 30;
     if (sd === 31 || lastOfFebruary(a)) sd = 30;
     if (ed === 31) {
       if (sd >= 30) ed = 30;

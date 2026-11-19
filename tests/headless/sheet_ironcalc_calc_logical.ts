@@ -34,5 +34,6 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 // expect: ok LOGICAL/LET.xlsx
 // expect: ok LOGICAL/MAKEARRAY.xlsx
 // expect: ok LOGICAL/MAP_REDUCE.xlsx
+// expect: ok LOGICAL/NOT.xlsx
 // expect: ok LOGICAL/SCAN.xlsx
 // expect: ok every workbook was opened and its formulas compared

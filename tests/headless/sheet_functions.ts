@@ -427,7 +427,9 @@ eq("YEARFRAC on each basis", ev(`ROUND(YEARFRAC("2012-01-01", "2012-07-30"), 8)`
   ["0.58055556", "0.57650273", "0.58611111", "0.57808219", "0.58055556", "1.7080292", "0.5861111111"]);
 eq("YEARFRAC's basis", why(`YEARFRAC("2012-01-01", "2012-07-30", 5)`), ["#NUM! YEARFRAC's basis is 0 to 4, not 5"]);
 eq("DAYS360, US and European", ev(`DAYS360("2011-01-30", "2011-02-01")`, `DAYS360("2011-01-01", "2011-12-31")`, `DAYS360("2011-01-01", "2011-12-31", TRUE)`, `DAYS360("2011-01-31", "2011-03-31")`, `DAYS360("2011-01-31", "2011-03-31", TRUE)`, `DAYS360("2012-02-29", "2012-03-31")`, `DAYS360("2011-02-28", "2012-02-29")`, `DAYS360("2011-03-31", "2011-01-31")`),
-  ["1", "360", "359", "60", "60", "30", "360", "-60"]);
+  // The end on the last day of February stays the 28th or 29th in the US method (the DAYS360 workbook of IronCalc,
+  // as Excel stored it: 2024-02-29 to 2025-02-28 is 358, and a day to itself on 2025-02-28 is -2).
+  ["1", "360", "359", "60", "60", "30", "359", "-60"]);
 eq("TIMEVALUE: the fraction of a day, a date in front ignored", ev(`TIMEVALUE("2:24 AM")`, `TIMEVALUE("22:48:00")`, `TIMEVALUE("6:45 PM")`, `TIMEVALUE("12:00 am")`, `TIMEVALUE("12:00 pm")`, `TIMEVALUE("2011-07-18 12:00")`, `TIMEVALUE("1/15/2024 6:00:30 pm")`, `HOUR(TIMEVALUE("6:45 PM"))`),
   ["0.1", "0.95", "0.78125", "0", "0.5", "0.5", "0.7503472222", "18"]);
 eq("TIMEVALUE of what is no time", why(`TIMEVALUE("noon")`, `TIMEVALUE("25:00")`, `TIMEVALUE("13:00 pm")`), ["#VALUE! 'noon' is not a time", "#VALUE! '25:00' is not a time", "#VALUE! '13:00 pm' is not a time"]);
@@ -436,7 +438,7 @@ eq("NETWORKDAYS.INTL: the weekend as a number or seven 1s and 0s, with holidays"
 eq("WORKDAY.INTL: that many workdays on, the weekend as told", ev(`WORKDAY.INTL("2012-01-01", 30)`, `WORKDAY.INTL("2012-01-01", 90, 11)`, `WORKDAY.INTL("2012-01-01", 30, 17)`, `WORKDAY.INTL("2012-01-01", -5, 1, "2011-12-26")`, `WORKDAY.INTL("2012-01-01", 5, "1111110")`),
   ["40949", "41013", "40944", "40900", "40944"]);
 eq("a weekend that is none", why(`NETWORKDAYS.INTL("2006-01-01", "2006-01-31", 8)`, `WORKDAY.INTL("2012-01-01", 1, "1111111")`, `WORKDAY.INTL("2012-01-01", 1, "01")`), [
-  "#NUM! 8 is not a weekend: 1 to 7, 11 to 17, or seven 1s and 0s", "#NUM! 1111111 is not a weekend: 1 to 7, 11 to 17, or seven 1s and 0s", "#NUM! 01 is not a weekend: 1 to 7, 11 to 17, or seven 1s and 0s",
+  "#NUM! 8 is not a weekend: 1 to 7 or 11 to 17", "#VALUE! a weekend of all seven days leaves no workday", "#VALUE! '01' is not seven 1s and 0s",
 ]);
 
 // The text batch (2.4).
@@ -470,7 +472,8 @@ eq("REGEX errors: a pattern that does not compile, no match, a bad mode", why(`R
 // The maths batch (2.2).
 eq("CEILING and FLOOR to a multiple, away from zero and toward it", ev("CEILING(2.5, 1)", "CEILING(-2.5, -2)", "CEILING(1.5, 0.1)", "CEILING(0.234, 0.01)", "FLOOR(3.7, 2)", "FLOOR(-2.5, -2)", "FLOOR(1.58, 0.1)", "FLOOR(0.234, 0.01)", "CEILING(5, 0)"),
   ["3", "-4", "1.5", "0.24", "2", "-2", "1.5", "0.23", "0"]);
-eq("their errors", why("CEILING(-2.5, 2)", "FLOOR(2.5, -2)", "FLOOR(2, 0)"), ["#NUM! CEILING's number and significance differ in sign", "#NUM! FLOOR's number and significance differ in sign", "#DIV/0! FLOOR by a significance of 0"]);
+// A negative number with a positive significance is not an error (-2 toward zero, -4 away); a positive number with a negative one is.
+eq("their errors", why("CEILING(-2.5, 2)", "FLOOR(2.5, -2)", "FLOOR(2, 0)", "CEILING(2.5, -2)"), ["not an error: -2", "#NUM! FLOOR's number is positive and its significance negative", "#DIV/0! FLOOR by a significance of 0", "#NUM! CEILING's number is positive and its significance negative"]);
 eq("CEILING.MATH: up, or away from zero with a mode; FLOOR.MATH: down, or toward zero", ev("CEILING.MATH(24.3, 5)", "CEILING.MATH(6.7)", "CEILING.MATH(-8.1, 2)", "CEILING.MATH(-5.5, 2, -1)", "CEILING.MATH(-5.5, -2)", "FLOOR.MATH(24.3, 5)", "FLOOR.MATH(6.7)", "FLOOR.MATH(-8.1, 2)", "FLOOR.MATH(-5.5, 2, -1)"),
   ["25", "7", "-8", "-6", "-4", "20", "6", "-10", "-4"]);
 eq("the .PRECISE pair: up and down, the significance's sign ignored", ev("CEILING.PRECISE(4.3)", "CEILING.PRECISE(-4.3)", "CEILING.PRECISE(4.3, 2)", "CEILING.PRECISE(-4.3, -2)", "FLOOR.PRECISE(-3.2, -1)", "FLOOR.PRECISE(3.2, 1)", "FLOOR.PRECISE(-3.2, 1)"),
@@ -484,7 +487,7 @@ eq("their errors", why("LN(0)", "LN(-1)", "LOG(8, 1)", "LOG(-8)", "LOG10(0)", "E
   ["#NUM! LN of 0: not positive", "#NUM! LN of -1: not positive", "#DIV/0! LOG to base 1", "#NUM! LOG of -8: not positive", "#NUM! LOG10 of 0: not positive", "#NUM! EXP overflows"]);
 eq("QUOTIENT, GCD, LCM", ev("QUOTIENT(5, 2)", "QUOTIENT(4.5, 3.1)", "QUOTIENT(-10, 3)", "GCD(5, 2)", "GCD(24, 36)", "GCD(7, 1)", "GCD(5, 0)", "GCD(A1:A6)", "LCM(5, 2)", "LCM(24, 36)", "LCM(6, 4, 10)", "LCM(0, 5)"),
   ["2", "1", "-3", "1", "12", "1", "5", "1", "10", "72", "60", "0"]);
-eq("their errors", why("QUOTIENT(1, 0)", "GCD(-2, 4)", "LCM(3, -1)"), ["#DIV/0! QUOTIENT by zero", "#NUM! GCD of a negative number, -2", "#NUM! LCM of a negative number, -1"]);
+eq("their errors", why("QUOTIENT(1, 0)", "GCD(-2, 4)", "LCM(3, -1)"), ["#DIV/0! QUOTIENT by zero", "#NUM! GCD of -2", "#NUM! LCM of -1"]);
 eq("FACT, COMBIN, PERMUT, SUMSQ", ev("FACT(5)", "FACT(1.9)", "FACT(0)", "COMBIN(8, 2)", "COMBIN(5, 5)", "COMBIN(49, 6)", "PERMUT(3, 2)", "PERMUT(100, 3)", "SUMSQ(3, 4)", "SUMSQ(A1:A3)"),
   ["120", "1", "1", "28", "1", "13983816", "6", "970200", "25", "26"]);
 eq("their errors", why("FACT(-1)", "FACT(200)", "COMBIN(2, 3)", "PERMUT(-1, 0)"), ["#NUM! FACT of -1: negative", "#NUM! FACT of 200 overflows", "#NUM! COMBIN of 3 from 2", "#NUM! PERMUT of 0 from -1"]);

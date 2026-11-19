@@ -95,20 +95,23 @@ Formula compatibility workbooks (docs/comparisons/IRONCALC.md action 2):
 
 | Upstream path | Local destination | What was adapted |
 |---|---|---|
-| `xlsx/tests/calc_tests/**/*.xlsx` (173 of the 221; the list is `tests/headless/lib/ironcalc_calc_<group>.ts`, one group per folder) | `third_party/ironcalc/fixtures/calc_tests/` (same relative paths) | nothing (byte for byte); read by the headless tests as base64 in `tests/headless/lib/ironcalc_calc_<group>.ts`, which `tests/headless/lib/mkironcalc_calc.py` generates from the copies, with the `sheet_ironcalc_calc_<group>.ts` test of each |
+| `xlsx/tests/calc_tests/**/*.xlsx` (190 of the 228 at 1567c3b7 from 2026-11-19, 173 of the 221 at 297553d before; the list is `tests/headless/lib/ironcalc_calc_<group>.ts`, one group per folder) | `third_party/ironcalc/fixtures/calc_tests/` (same relative paths) | nothing (byte for byte); read by the headless tests as base64 in `tests/headless/lib/ironcalc_calc_<group>.ts`, which `tests/headless/lib/mkironcalc_calc.py` generates from the copies, with the `sheet_ironcalc_calc_<group>.ts` test of each |
 
 Each workbook was saved by Excel (`docProps/app.xml` says Microsoft Excel) with
 the value it worked out stored beside each formula; the assertions are ours:
 `lib/ironcalc_cached.ts` reads those stored values and compares what this app
 works out, cell by cell. They are placeholder numbers, short strings and
-function names; no third-party notice is in the repository for them. The 48 not
-copied differ from Excel in more than twelve cells each (the largest are the
+function names; no third-party notice is in the repository for them. The ones not
+copied differed from Excel in more than twelve cells each (the largest are the
 date, financial and statistical edge cases); they come in as their functions
-are fixed. The 389 cells that still differ in the 173 are listed in
-`lib/ironcalc_calc_known.ts`, each with how it differs (a listed cell that comes
-right fails the test, so the list only shrinks). `NOW_TODAY`, `REPT` (it
-exhausts memory) and the `WORKDAY` pair (it does not finish) are left out until
-those are fixed.
+are fixed, a batch at a time (2026-11-19: 18 more, from IronCalc's 1567c3b7,
+where `BASE.xlsx` was folded into `BASE_DECIMAL.xlsx` and `LOG_LOG10_LN.xlsx`
+changed; the 38 not yet in are COMPATIBILITY.md's next work). The cells that still differ in those
+taken in are listed in `lib/ironcalc_calc_known.ts`, each with how it differs (a listed cell
+that comes right fails the test, so the list only shrinks), and why they stay is in
+COMPATIBILITY.md. `NOW_TODAY` (it is the day the file was saved) and `REPT` (it
+exhausts memory) are left out; the `WORKDAY` pair was left out for not finishing and is in
+since 2026-11-19.
 
 What the workbooks found, fixed here (our own code, written from how Excel
 behaves): the `_xlfn.`/`_xlpm.`/ANCHORARRAY storage of newer functions and cells

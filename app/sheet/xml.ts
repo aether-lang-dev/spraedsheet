@@ -11,9 +11,12 @@ export interface El {
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 export const unescapeXml = (s: string): string =>
   s.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (m, e: string) => (e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENT[e] ?? m));
-export const escapeXml = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export const escapeXml = (s: string): string => s.replace(/&/g, "&amp;").replace(/\r/g, "&#13;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function parseXml(text: string): El {
+export function parseXml(source: string): El {
+  // A parser reads a line break as one LF, whether the file has CR LF or a lone CR (a character
+  // reference, &#13;, is kept): Excel's stored value of CHAR(10) is a CR LF in the file.
+  const text = source.includes("\r") ? source.replace(/\r\n?/g, "\n") : source;
   const root: El = { name: "#root", attrs: {}, children: [] };
   const stack: El[] = [root];
   let i = 0;

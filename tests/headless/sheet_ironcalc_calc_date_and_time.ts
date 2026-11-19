@@ -24,14 +24,23 @@ for (const [name, b64] of FIXTURES) {
 }
 eq("every workbook was opened and its formulas compared", total > 0, true);
 
+// expect: ok DATE_AND_TIME/DATE.xlsx
+// expect: ok DATE_AND_TIME/DATEVALUE.xlsx
 // expect: ok DATE_AND_TIME/DATEVALUE_issue_1379.xlsx
 // expect: ok DATE_AND_TIME/DATEVALUE_issue_1380.xlsx
 // expect: ok DATE_AND_TIME/DATE_DAY_MONTH_YEAR.xlsx
+// expect: ok DATE_AND_TIME/DAYS_DAYS360.xlsx
+// expect: ok DATE_AND_TIME/DAY_MONTH_YEAR.xlsx
 // expect: ok DATE_AND_TIME/EDATE.xlsx
 // expect: ok DATE_AND_TIME/EOMONTH.xlsx
 // expect: ok DATE_AND_TIME/EOMONTH_issue_1388.xlsx
+// expect: ok DATE_AND_TIME/NETWORKDAYS_NETWORKDAYS.INTL.xlsx
 // expect: ok DATE_AND_TIME/TIMEVALUE.xlsx
 // expect: ok DATE_AND_TIME/TIMEVALUE_issue_1402.xlsx
+// expect: ok DATE_AND_TIME/TIME_HOUR_MINUTE_SECOND.xlsx
+// expect: ok DATE_AND_TIME/TIME_HOUR_MINUTE_SECOND_issue_1362.xlsx
+// expect: ok DATE_AND_TIME/WEEKDAY_WEEKNUM_ISOWEEKNUM.xlsx
 // expect: ok DATE_AND_TIME/WEEKDAY_WEEKNUM_ISOWEEKNUM_issue_1502.xlsx
+// expect: ok DATE_AND_TIME/WORKDAY_WORKDAY.INTL.xlsx
 // expect: ok DATE_AND_TIME/YEARFRAC_DATEDIF.xlsx
 // expect: ok every workbook was opened and its formulas compared

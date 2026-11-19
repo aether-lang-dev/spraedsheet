@@ -26,21 +26,27 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 
 // expect: ok MATH_AND_TRIGONOMETRY/ABS.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/ATAN2_POWER.xlsx
-// expect: ok MATH_AND_TRIGONOMETRY/BASE.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/BASE_DECIMAL.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/COMBIN_COMBINA.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/DEGREES_RADIANS.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/EVEN_ODD.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/EXP_SIGN.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/FACT_DOUBLEFACT.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/FLOOR_CEILING.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/GCD_LCM.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/LCM_GCD.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/LOG_LOG10_LN.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/MAX_MIN.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/MIN_MAX_extras.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/MMULT.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/MOD_QUOTIENT.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/MROUND_TRUNC_INT.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/MULTINOMIAL.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/MUNIT_MDETERM_MINVERSE.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/POWER.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/PRODUCT.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/PRODUCT_SUM.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/ROUND_ROUNDUP_ROUNDDOWN.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SEQUENCE.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SERIESSUM.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SQRT_SQRTPI.xlsx
@@ -49,4 +55,5 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 // expect: ok MATH_AND_TRIGONOMETRY/SUMPRODUCT.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SUMSQ.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/SUMX2MY2_SUMX2PY2_SUMXMY2.xlsx
+// expect: ok MATH_AND_TRIGONOMETRY/TRIGONOMETRIC.xlsx
 // expect: ok every workbook was opened and its formulas compared

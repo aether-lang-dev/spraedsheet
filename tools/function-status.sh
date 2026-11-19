@@ -9,8 +9,11 @@ OUT=$ROOT/target/function-status
 rm -rf "$OUT"; mkdir -p "$OUT"
 # The page has no "// expect:" lines, so the harness calls it a failure; what
 # it printed is the page.
-SAE_LOWER_OUT=$OUT SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/status" >"$OUT/harness.log" 2>&1
-PAGE=$OUT/mod_function_status.actual
+# The harness works in a directory of its own under SAE_LOWER_OUT and removes it on exit unless
+# SAE_LOWER_KEEP is set: keep it, and read the page from the directory it says it kept.
+SAE_LOWER_KEEP=1 SAE_LOWER_OUT=$OUT SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/status" >"$OUT/harness.log" 2>&1
+KEPT=$(sed -n 's/^lower: output kept in //p' "$OUT/harness.log" | head -1)
+PAGE=$KEPT/mod_function_status.actual
 if ! [ -s "$PAGE" ] || ! head -1 "$PAGE" | grep -q '^# Function status$' || grep -q '^Error\|^Uncaught\|^    at ' "$PAGE"; then
     echo "function-status.sh: the generator did not print the page (see $OUT)" >&2
     cat "$PAGE" "$OUT/harness.log" >&2 2>/dev/null | tail -20

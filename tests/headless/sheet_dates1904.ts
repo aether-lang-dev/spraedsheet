@@ -16,7 +16,7 @@ await cmds.run('cell.format cell=A1 format="yyyy-mm-dd"');
 await set("B1", "=DATE(2024, 1, 15)");
 await set("C1", "=YEAR(A1)");
 await set("D1", '=TEXT(0, "yyyy-mm-dd")');
-eq("1900: serial 45306 is 2024-01-15", [wb.textOf("A1"), show(wb.sheet.value("B1")), show(wb.sheet.value("C1")), show(wb.sheet.value("D1"))], ["2024-01-15", "45306", "2024", "1899-12-30"]);
+eq("1900: serial 45306 is 2024-01-15", [wb.textOf("A1"), show(wb.sheet.value("B1")), show(wb.sheet.value("C1")), show(wb.sheet.value("D1"))], ["2024-01-15", "45306", "2024", "1900-01-00"]);  // Excel shows serial 0 as 0 January 1900
 eq("1904", (await cmds.execute("workbook.dateSystem", { system: "1904" })).message, "the 1904 date system");
 eq("the same serial four years and a day on; DATE gives 1,462 less; 0 is 1904-01-01", [wb.textOf("A1"), show(wb.sheet.value("B1")), show(wb.sheet.value("C1")), show(wb.sheet.value("D1"))], ["2028-01-16", "43844", "2028", "1904-01-01"]);
 eq("saved with the file", (writeSheetFile(wb) as { dateSystem?: number }).dateSystem, 1904);

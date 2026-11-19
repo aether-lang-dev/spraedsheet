@@ -7,6 +7,17 @@
 //   value         both give a value, and they differ
 // A cell leaves this list when it comes out right (the test says so).
 export const KNOWN: Record<string, Record<string, string>> = {
+  "DATE_AND_TIME/DATEVALUE.xlsx": {
+    "DATEVALUE!B48": "we-error",
+  },
+  "DATE_AND_TIME/DAYS_DAYS360.xlsx": {
+    "Sheet1!C71": "excel-error",
+    "Sheet1!D71": "excel-error",
+  },
+  "DATE_AND_TIME/NETWORKDAYS_NETWORKDAYS.INTL.xlsx": {
+    "Sheet1!C60": "excel-error",
+    "Sheet1!D60": "excel-error",
+  },
   "FINANCIAL/ACCRINT.xlsx": {
     "Sheet1!B5": "value",
     "Sheet1!B32": "value",
@@ -30,6 +41,14 @@ export const KNOWN: Record<string, Record<string, string>> = {
   "TEXT/T_VALUE_VALUETOTEXT.xlsx": {
     "Sheet1!I5": "value",
     "Sheet1!C15": "value",
+  },
+  "MATH_AND_TRIGONOMETRY/TRIGONOMETRIC.xlsx": {
+    "SIN_COS_TAN!D45": "value",
+    "SIN_COS_TAN!D46": "value",
+    "COT_CSC_SEC!B44": "value",
+    "COT_CSC_SEC!C44": "value",
+    "COT_CSC_SEC!D45": "value",
+    "COT_CSC_SEC!D46": "value",
   },
   "spill_operator.xlsx": {
     "Sheet1!G2": "we-error",

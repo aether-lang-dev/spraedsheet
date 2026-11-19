@@ -107,6 +107,20 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
   (`richErrorsOf` took the first value, not `errorType`'s): `ISREF.xlsx` D9 is `#SPILL!`, as Excel stored. IronCalc ledger
   64 cells to 15 (47 `legacy` to none, the 15 each examined and kept in COMPATIBILITY.md).
 
+**Done 2026-11-19 (IronCalc ledger, batch 1: the workbooks not yet taken in, from IronCalc's 228 at 1567c3b7; each test first):** the
+function-compatibility work goes on by taking in the workbooks IronCalc has that this ledger did not, and fixing or looking at
+what differs, as the earlier batches did (COMPATIBILITY.md, "2026-11-19, batch 1", has each). 18 workbooks in (FLOOR_CEILING,
+GCD_LCM, LCM_GCD, MROUND_TRUNC_INT, BASE_DECIMAL, TRIGONOMETRIC, ROUND_ROUNDUP_ROUNDDOWN, MAX_MIN, NOT, and the dates: DATE, DATEVALUE,
+DAYS_DAYS360, DAY_MONTH_YEAR, NETWORKDAYS, TIME_HOUR_MINUTE_SECOND and its issue_1362, WEEKDAY_WEEKNUM_ISOWEEKNUM, WORKDAY), two replaced by
+IronCalc's newer copies; 693 of their cells differed from Excel's stored value, 11 still do, kept with their reasons (the
+tangent near a pole, a day-first date, an unread English month name). The fixes: CEILING and FLOOR as Excel 2010 has
+them, GCD and LCM's reading of cells, MROUND, MAX and MIN with an argument left out, ROUND and TRUNC with huge digits, NOT's
+text, BASE and DECIMAL, Excel's 29 February 1900 and 0 January 1900 in the calendar, DATE, TIME, HOUR, WEEKDAY's types,
+WEEKNUM, DAYS, DAYS360 (no end-of-February rule), NETWORKDAYS and WORKDAY (the weekend text, the holidays, whole weeks
+jumped: a count of a billion was endless), and a parser reading CR LF as one LF. Ledger 15 cells to 26 in 10 of the 190 workbooks
+taken in; `tools/function-status.sh` read the harness's output from a place sae's `lower/run-tests.sh` stopped using (it keeps
+one directory per run and removes it), so `function_status` failed on a clean clone: it keeps the run's directory now.
+
 - `sheet_large`'s timing budgets follow the host: a fixed workload that is none of the app's code (a map, strings, a sort,
   in the same engine; best of 3, 96 ms on the development Mac) is timed first, and the stated times (8000, 1000, 6000, 4000,
   8000, 300 ms) are multiplied by its ratio to the Mac's, never by less than 1. cachyos measured recalculate 7465, save 5895,

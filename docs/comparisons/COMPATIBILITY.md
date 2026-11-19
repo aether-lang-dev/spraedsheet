@@ -48,12 +48,18 @@ with the count of its still-different cells (`app/sheet/funcinfo.ts`; headless
 
 | Kind | Cells | Means |
 |---|---|---|
-| `we-error` | 1 | this app gives an error where Excel stored a value |
-| `excel-error` | 2 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
-| `value` | 12 | both give a value, and they differ |
+| `we-error` | 2 | this app gives an error where Excel stored a value |
+| `excel-error` | 6 | Excel stored an error (`#NUM!`, `#VALUE!`) where this app gives a value |
+| `value` | 18 | both give a value, and they differ |
 
-Counted 2026-11-19 (15 cells in 6 workbooks: 12 `value`, 2 `excel-error`, 1 `we-error`, no `legacy`; 64 with the 47 `legacy` on 2026-11-11, in 22 workbooks; 66 with 38 on 2026-11-10; 199 on 2026-11-06, 379 on 2026-10-24); the
+Counted 2026-11-19, after batch 1 (26 cells in 10 workbooks, of the 190 now taken from IronCalc's 228; 15 cells in 6 workbooks before it; 64 with the 47 `legacy` on 2026-11-11, in 22 workbooks; 66 with 38 on 2026-11-10; 199 on 2026-11-06, 379 on 2026-10-24); the
 list by workbook is the ledger file itself. `docs/function_status.md` gives the count per function.
+
+The 173 workbooks were most of the 221 IronCalc had at the commit first read. IronCalc has 228 now
+(1567c3b7). The ones not yet taken in are the ledger's next work: each comes in when its cells are
+fixed or looked at and kept (a workbook enters `tests/headless/lib/ironcalc_calc_<group>.ts` only so,
+never with a loosened comparison), which makes the count below go up by what is kept and down by
+what is fixed.
 
 ## Taken off the ledger (fixed, each with the case that failed first)
 
@@ -264,6 +270,70 @@ meets the formula's row or column as `@A1:A3` does (it took the first value). LO
 stays `value`, and is not a legacy cell: E26 is Excel's own 0.49999999999915673 for a sigma of 10^12 and F26
 inverts it, which multiplies the input's digits by 10^12; Excel's 3.99977 and this app's 4.00047 are both far
 from the 4 that went in, so the last digits are each one's approximation, not a rule.
+
+2026-11-19, batch 1 (18 workbooks come in, and a 19th, LOG_LOG10_LN, is replaced by IronCalc's newer copy; BASE.xlsx, which
+IronCalc folded into BASE_DECIMAL.xlsx, goes out. 693 cells of them differed from Excel's stored value, 11 still do, kept below:
+FLOOR_CEILING 295, WEEKDAY_WEEKNUM_ISOWEEKNUM 166, GCD_LCM 70, LCM_GCD 32, DAYS_DAYS360 31, NETWORKDAYS 20, ...; the workbooks
+are IronCalc's, saved by Excel for Mac, byte for byte):
+
+- `CEILING` and `FLOOR` (the old pair) are Excel 2010's: a negative number with a positive significance is not an error
+  (`FLOOR(-2.5, 2)` is -4, away from zero; `CEILING(-2.5, 2)` is -2, toward it); only a positive number with a negative
+  significance is `#NUM!`; `FLOOR(0, 0)` is 0, `FLOOR(x, 0)` is `#DIV/0!`; a result too large for a number
+  (`CEILING(9999999999999, 1E-307)`, and the same in `CEILING.MATH` and `FLOOR.MATH`) is `#NUM!`; and `ISO.CEILING` of a
+  range takes one value (it was written as a call of `CEILING.PRECISE`, which hid that from the importer's `@`).
+  FLOOR_CEILING.xlsx, 295 cells.
+- `GCD` and `LCM` read what a cell holds as Excel does: text that reads as a number is that number (`"8"`, `" 10 "`, a
+  date's text), other text, `""`, and TRUE or FALSE in a cell or array are `#VALUE!`; an empty cell passed on its own is
+  passed over (all of them empty is `#VALUE!`) but in a range it is 0; an argument left out (`GCD(,2)`) is `#N/A`; a
+  number of 2^53 or more, and an `LCM` of 2^53 or more, are `#NUM!`. GCD_LCM.xlsx, LCM_GCD.xlsx, 102 cells.
+- `MROUND`: an argument left out is `#N/A`, TRUE or FALSE in a cell `#VALUE!`. `MAX(,-1)` and `MIN(5,)` count an
+  argument left out as 0, and a LAMBDA parameter or LET name that holds a value (not a reference) is typed as a value
+  is (`LAMBDA(x, MAX(x))("h")` is `#VALUE!`). `ROUND`, `ROUNDUP`, `ROUNDDOWN` and `TRUNC` of a digits count past what a
+  power of ten holds leave the number (or give 0 when the power underflows; `ROUNDUP` of a non-zero number to such a
+  power is `#NUM!`); they were `NaN`. `LOG(x, )` (the base left empty) is `#NUM!`. `NOT` reads only the text TRUE or
+  FALSE as written (`NOT("1")`, `NOT(" TRUE ")` and a date's text are `#VALUE!`). `BASE` of a negative number
+  (`-1E-7` too) or a negative minimum length is `#NUM!`; `DECIMAL` ignores spaces before the digits, not after them, and
+  text of over 255 characters is `#VALUE!`, not `#NUM!`. MROUND_TRUNC_INT, ROUND_ROUNDUP_ROUNDDOWN, MAX_MIN, NOT,
+  BASE_DECIMAL, LOG_LOG10_LN (the newer copy: 1 cell), 41 cells in all.
+- Line breaks in a file: an XML parser reads CR LF as one LF, and this one kept the CR (Excel stores `CHAR(10)` as CR LF
+  in the file), so `NOT.xlsx` A17 differed; `parseXml` reads a line break as LF now, and `escapeXml` writes a CR as `&#13;`
+  so a CR in a cell survives a save.
+- Dates, as Excel counts them. Excel's calendar has a 29 February 1900 (serial 60) and a 0 January 1900 (serial 0):
+  `DATE(1900, 1, 1)` is 1 (it was 2), `DATE(1900, 2, 29)` is 60, `YEAR(1)` is 1900 (it was 1899), `DAY(0)` is 0, `TEXT(0,
+  "yyyy-mm-dd")` is `1900-01-00`; the real calendar is used from 1 March 1900 (61), where the two agree.
+  `DATEVALUE("29-Feb-1900")` is 60, and a date before 1900 as text is `#VALUE!`. `DATE` is `#NUM!` before 0 and
+  after 31 December 9999. `TIME` of an hour, minute or second over 32767 is `#NUM!`; `HOUR`, `MINUTE`, `SECOND` of a
+  serial past 9999 are `#NUM!`. `WEEKDAY`'s type is 1, 2, 3 or 11 to 17 (it took 1, 2 and 3), another is `#NUM!`; TRUE is 1;
+  its serial is read as a date (negative is `#NUM!`) after its type is read (`WEEKDAY(-1, "abc")` is `#VALUE!`);
+  TRUE as the date is serial 1, in `WEEKDAY` and `ISOWEEKNUM` (not in `WEEKNUM`, which refuses TRUE as the date or the
+  type, after the date's range). `DAYS` reads TRUE and FALSE as 1 and 0 and holds its dates to 0 .. 9999-12-31 (`#NUM!`);
+  `DAYS360` holds its dates so, takes TRUE or FALSE or the text TRUE or FALSE as the method (other text, numeric text
+  too, is `#VALUE!`), does not count the end on the last day of February as the 30th in the US method (2024-02-29 to
+  2025-02-28 is 358, a day to itself on 2025-02-28 is -2, as Excel stored them; the old rule of "the end as the 30th
+  when both are the last of February" was the documentation's, not Excel's), and reads a serial within 1E-5 of the next
+  day as that day. `NETWORKDAYS` and `NETWORKDAYS.INTL` hold their dates to the range, count whole days (a start of
+  45658.9999999 and an end of 45658 are one day), take only dates for holidays (other text is `#VALUE!`, a negative serial
+  `#NUM!`); the weekend text of other than seven 1s and 0s is `#VALUE!`, a number that is no pair `#NUM!`, seven 1s
+  leave no workday (0 for `NETWORKDAYS.INTL`, `#VALUE!` for `WORKDAY.INTL`). `WORKDAY` and `WORKDAY.INTL` jump whole weeks
+  (a count of a billion took forever), cut the count off downward (`-1E-9` is -1), and hold the start and the result to
+  the dates. DATE, DATEVALUE, DAYS_DAYS360, DAY_MONTH_YEAR, NETWORKDAYS, TIME_HOUR_MINUTE_SECOND (two files),
+  WEEKDAY_WEEKNUM_ISOWEEKNUM, WORKDAY.
+- Not taken in: `NOW_TODAY.xlsx` (its three cells are the day the file was saved; nothing to compare).
+
+Kept in batch 1, each looked at (kind `value` unless said):
+
+- `TRIGONOMETRIC.xlsx` `SIN_COS_TAN!D45`, `D46`, `COT_CSC_SEC!B44`, `C44`, `D45`, `D46`: the tangent, secant, cotangent
+  and cosecant of `PI()/2 - 1E-12` and the like, where Excel stored 999849864538.95 and this app gives 999849889600. The
+  argument has a double's 53 bits, so cos of it is 1.0001501E-12 to 17 digits whatever the library; Excel's differs in the
+  eighth digit, an argument reduction done with a fixed 66-bit pi (the old x87 instruction's), which is not worth copying:
+  this app's answers are the correctly rounded ones of what a double holds.
+- `DATEVALUE.xlsx` `DATEVALUE!B48` (`DATEVALUE("26-01-01")`, 36917 in Excel, a 26 January 2001): the workbook was saved where
+  dates are written day first (as the `VALUE("2/3/2023")` cells above); this app reads month first and `26` is no month.
+  Kind `we-error`.
+- `DAYS_DAYS360.xlsx` `Sheet1!C71`, `D71`, `NETWORKDAYS_NETWORKDAYS.INTL.xlsx` `Sheet1!C60`, `D60` (`"July 1, 2026"` as the date
+  in a cell): `#VALUE!` in this Excel, which was not reading English month names (the ISO text next to it, and `"1/1/29"`,
+  are read); this app reads `Month d, yyyy` as en-US does, and `VALUE("Jan 15, 2026")` in this ledger's own cases says so.
+  Kind `excel-error`.
 
 ## Intended (found while looking)
 
