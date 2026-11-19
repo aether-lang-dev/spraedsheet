@@ -107,6 +107,12 @@ whose aeb shim points at Mini2's `tc841b` and whose `ae` cannot read the 0.889 s
   (`richErrorsOf` took the first value, not `errorType`'s): `ISREF.xlsx` D9 is `#SPILL!`, as Excel stored. IronCalc ledger
   64 cells to 15 (47 `legacy` to none, the 15 each examined and kept in COMPATIBILITY.md).
 
+- `sheet_large`'s timing budgets follow the host: a fixed workload that is none of the app's code (a map, strings, a sort,
+  in the same engine; best of 3, 96 ms on the development Mac) is timed first, and the stated times (8000, 1000, 6000, 4000,
+  8000, 300 ms) are multiplied by its ratio to the Mac's, never by less than 1. cachyos measured recalculate 7465, save 5895,
+  open 8077 against the old fixed 6000, 4000, 8000. A deliberate 2 ms in `Workbook.textOf` fails the scroll case on the Mac
+  (400 ms over 303), which the workload does not feel.
+
 **Done 2026-11-12:**
 - XLSX writer: LET and LAMBDA names are written as Excel keeps them, `_xlpm.name` wherever the name is used inside the call
   (an optional LAMBDA parameter's declaration as `_xlop.name`, `[b]` in the sheet), in a cell's formula and in a defined name's
