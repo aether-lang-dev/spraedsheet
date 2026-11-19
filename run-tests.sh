@@ -26,6 +26,10 @@
 # (--attach), with node. cli: tests/cli/test_*.sh, a shell test per
 # subcommand of cli/sheet.js, each starting the app headless itself on its
 # control channel (target/build/bin/sae), with node.
+# server: sheet-server (server/sheetserver.ae, docs/design/teamware-over-http.md),
+# built into target/sheet-server with ae, driven headless over real HTTP on
+# real files (tests/server/server.test.js, node --test; SHEET_TEST_PORT, default
+# 18393, the first of the ports it takes).
 # function_status: docs/function_status.md is what tools/function-status.sh
 # generates now (the functions' records, examples and ledger counts).
 # On Linux with no display it reruns itself under xvfb-run (a 1920 x 1200 screen).
@@ -72,6 +76,7 @@ rm -rf "$LOGS" "$T/sheet-files-appdata" "$T/sheet-shell.log" "$T/sheet-storage" 
 # it gets 64 MB, and its last case asserts the peak and the callbacks held.
 TABLE="
 headless||headless
+server||server
 function_status||status
 spec_sheet|AETHER_UI_TEST_CLIPBOARD=1 SAE_STORAGE_DIR=$T/sheet-storage SAE_PAGE_MEM=67108864 SAE_PAGE_TIME_MS=5000|spec spec_sheet
 spec_app_sheet_bus|SAE_TEST_FLAGS=--control-bus SAE_APPDATA_DIR=$T/sheet-bus-appdata AETHER_UI_HEADLESS=1 SAE_TEST_APP=$ROOT/app|spec spec_app_sheet_bus
@@ -102,7 +107,7 @@ for line in $TABLE; do
 '; continue
     fi
     # The MCP server runs on node.
-    case "$label" in mcp|mcp_channel|spec_app_sheet_mcp|cli)
+    case "$label" in mcp|mcp_channel|spec_app_sheet_mcp|cli|server)
         if ! command -v node >/dev/null 2>&1; then
             echo "FAIL $label (needs node)"
             fail=$((fail + 1)); failed="$failed $label"; IFS='
@@ -120,6 +125,7 @@ for line in $TABLE; do
         headless) set -- env SAE_LOWER_OUT="$T/lower-tests" SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/headless" ;;
         status) set -- sh "$ROOT/tools/function-status.sh" --check ;;
         mcp) set -- node --test "$ROOT/tests/mcp/server.test.js" ;;
+        server) set -- sh -c 'ae build "$0/server/sheetserver.ae" -o "$0/target/sheet-server" && node --test --test-timeout=60000 "$0/tests/server/server.test.js"' "$ROOT" ;;
         mcp_channel) set -- env SAE_DIR="$SAE" node --test "$ROOT/tests/mcp/channel.test.js" ;;
         cli) set -- sh -c 'r=0; for t in "$0"/tests/cli/test_*.sh; do echo "== $t"; SAE_DIR="$1" sh "$t" || r=1; done; exit $r' "$ROOT" "$SAE" ;;
         spec) set -- env SAE_TEST_LIB_DIR="$ROOT/tests/lib" \

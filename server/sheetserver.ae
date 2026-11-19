@@ -1,0 +1,1059 @@
+// sheet-server: one workbook, a small team, one in-house server
+// (docs/design/teamware-over-http.md). It serves the spreadsheet's own pages
+// (app/sheet.ts and its modules) and the workbook API from one origin, so
+// each person opens http://<server>:<port>/sheet?book=<name> in their sae.
+// The model runs in each sae; the server keeps the order of the operations,
+// refuses the ones that come too late, and keeps every workbook on disk:
+//
+//   <data>/people                       name, tab, SHA-256 of their token
+//   <data>/books/<book>/ops.log         one op per line (JSON), append-only
+//   <data>/books/<book>/head.sheet.txt  the workbook's text now
+//   <data>/books/<book>/snapshots/      its text every SNAP_EVERY revisions
+//   <data>/books/<book>/checkpoints/    its text at a revision, by name
+//
+// An op is written and fsynced before it is acknowledged; at open, a torn
+// last line (no newline, or not JSON) is cut off. The keys an op changes and
+// the text the server writes are app/sheet/teamtext.ts's.
+//
+//   sheet-server serve <data> <app-dir> [port]
+//   sheet-server add-person <data> <name>      prints the person's token, once
+//
+// State: a Library (the data folder and its open Books), each Book its own
+// revision, lines and log. Handlers run on several threads, so the Library is
+// owned by one actor and every handler asks it; nothing is module state.
+
+import std.http
+import std.fs
+import std.dir
+import std.os
+import std.string
+import std.strarr
+import std.map
+import std.json
+import std.sort
+import std.strbuilder
+import std.cryptography
+import std.url
+
+const SNAP_EVERY = 500
+const MAX_WAIT_S = 10
+const PRESENT_MS = 30000
+const TEXT_HEADER = "# rexxsheet text 1"
+const SHEETS = "\t@sheet"
+
+// ---- A workbook ------------------------------------------------------------
+
+struct Book {
+    name: string
+    dir: string
+    rev: int
+    lines: ptr      // map: key -> its line(s)
+    lastw: ptr      // map: key -> the revision that last changed it ("41")
+    touched: ptr    // map: sheet -> the last revision that changed anything on it
+    shaped: ptr     // map: sheet -> the last revision that changed its shape
+    ids: ptr        // map: op id -> its revision
+    ops: ptr        // strarr: each op's log line, ops[rev - 1]
+    seen: ptr       // map: person -> "<ms>\t<cell>"
+    log: ptr        // the log, open for appending
+    log_size: long
+}
+
+struct Library {
+    dir: string
+    books: ptr      // map: book name -> *Book
+}
+
+// What a handler needs: the Library's actor, and where the pages and people are.
+struct Site {
+    lib: ptr
+    data: string
+    app: string
+}
+
+// A string held in a map as the revision it says.
+rev_in_(m: ptr, key: string) -> int {
+    v, _ = map.get_string(m, key)
+    if v == null { return 0 }
+    n, err = string.to_int(v)
+    if err != "" { return 0 }
+    return n
+}
+
+// The sheet part of a key ("" for the workbook's own).
+sheet_of_(key: string) -> string {
+    t = string.index_of(key, "\t")
+    if t < 0 { return "" }
+    return string.string_substring(key, 0, t)
+}
+
+// A cell's row and column as a sort key ("0000012.00002"), or "" for a part.
+cell_sort_key_(name: string) -> string {
+    n = string.length(name)
+    if n < 2 { return "" }
+    i = 0
+    long col = 0
+    while i < n {
+        c = string.char_at(name, i)
+        if c < 65 || c > 90 { break }
+        col = col * 26 + (c - 64)
+        i = i + 1
+    }
+    if i == 0 || i > 3 || i == n { return "" }
+    j = i
+    while j < n {
+        c = string.char_at(name, j)
+        if c < 48 || c > 57 { return "" }
+        j = j + 1
+    }
+    if n - i > 7 { return "" }
+    row = string.string_substring(name, i, n)
+    return "${string.string_pad_start(row, 8, 48)}.${string.string_pad_start("${col}", 6, 48)}"
+}
+
+// The text the lines are (teamtext.ts textOfLines, the same bytes).
+text_of_(lines: ptr, rev: int) -> string {
+    sb = strbuilder.new(256)
+    strbuilder.append(sb, TEXT_HEADER)
+    strbuilder.append(sb, "\n")
+    if rev >= 0 { strbuilder.append(sb, "# revision ${rev}\n") }
+    ks, _ = map.keys(lines)
+    nk = map.keys_size(ks)
+    book = strarr.new()
+    i = 0
+    while i < nk {
+        k = map.keys_get(ks, i)
+        if k != SHEETS && sheet_of_(k) == "" { strarr.push_copy(book, k) }
+        i = i + 1
+    }
+    sort.strings(strarr.array(book))
+    i = 0
+    while i < strarr.size(book) {
+        v, _ = map.get_string(lines, strarr.get(book, i))
+        strbuilder.append(sb, v)
+        strbuilder.append(sb, "\n")
+        i = i + 1
+    }
+    strarr.free(book)
+    order, _ = map.get_string(lines, SHEETS)
+    if order != null {
+        sheets = string.string_split(order, "\n")
+        ns = string.string_array_size(sheets)
+        s = 0
+        while s < ns {
+            sline = string.string_array_get(sheets, s)
+            t = string.index_of(sline, "\t")
+            if t > 0 {
+                name = string.string_substring(sline, t + 1, string.length(sline))
+                strbuilder.append(sb, sline)
+                strbuilder.append(sb, "\n")
+                prefix = "${name}\t"
+                cells = strarr.new()
+                parts = strarr.new()
+                i = 0
+                while i < nk {
+                    k = map.keys_get(ks, i)
+                    if string.string_starts_with(k, prefix) == 1 && sheet_of_(k) == name {
+                        rest = string.string_substring(k, string.length(prefix), string.length(k))
+                        ck = cell_sort_key_(rest)
+                        if ck != "" { strarr.push_copy(cells, "${ck}\t${k}") } else { strarr.push_copy(parts, k) }
+                    }
+                    i = i + 1
+                }
+                sort.strings(strarr.array(cells))
+                sort.strings(strarr.array(parts))
+                i = 0
+                while i < strarr.size(cells) {
+                    ent = strarr.get(cells, i)
+                    key = string.string_substring(ent, string.index_of(ent, "\t") + 1, string.length(ent))
+                    v, _ = map.get_string(lines, key)
+                    strbuilder.append(sb, v)
+                    strbuilder.append(sb, "\n")
+                    i = i + 1
+                }
+                i = 0
+                while i < strarr.size(parts) {
+                    v, _ = map.get_string(lines, strarr.get(parts, i))
+                    strbuilder.append(sb, v)
+                    strbuilder.append(sb, "\n")
+                    i = i + 1
+                }
+                strarr.free(cells)
+                strarr.free(parts)
+            }
+            s = s + 1
+        }
+        string.string_array_free(sheets)
+    }
+    map.keys_free(ks)
+    return strbuilder.finish(sb)
+}
+
+// A JSON string node's text, or "" for anything else.
+jstr_(node: ptr) -> string {
+    if node == null { return "" }
+    s, err = json.get_string(node)
+    if err != "" { return "" }
+    return s
+}
+
+jfield_(obj: ptr, key: string) -> ptr {
+    v, _ = json.object_get(obj, key)
+    return v
+}
+
+// An op's changes made to `lines`: each [key, was, now] with now "" for gone.
+apply_changes_(lines: ptr, changes: ptr) {
+    n = json.json_array_size(changes)
+    i = 0
+    while i < n {
+        c, _ = json.array_get(changes, i)
+        k0, _ = json.array_get(c, 0)
+        k2, _ = json.array_get(c, 2)
+        key = jstr_(k0)
+        now = jstr_(k2)
+        if now == "" { map.map_remove(lines, key) } else { map.put(lines, key, now) }
+        i = i + 1
+    }
+}
+
+// Book bookkeeping for an op accepted at `rev` (its log line `line`).
+note_op_(b: *Book, rev: int, op: ptr, line: string) {
+    changes = jfield_(op, "changes")
+    apply_changes_(b.lines, changes)
+    n = json.json_array_size(changes)
+    i = 0
+    while i < n {
+        c, _ = json.array_get(changes, i)
+        k0, _ = json.array_get(c, 0)
+        key = jstr_(k0)
+        map.put(b.lastw, key, "${rev}")
+        map.put(b.touched, sheet_of_(key), "${rev}")
+        i = i + 1
+    }
+    st = jfield_(op, "structure")
+    if st != null {
+        m = json.json_array_size(st)
+        j = 0
+        while j < m {
+            s, _ = json.array_get(st, j)
+            map.put(b.shaped, jstr_(s), "${rev}")
+            map.put(b.touched, jstr_(s), "${rev}")
+            j = j + 1
+        }
+    }
+    id = jstr_(jfield_(op, "id"))
+    if id != "" { map.put(b.ids, id, "${rev}") }
+    strarr.push_copy(b.ops, line)
+    b.rev = rev
+}
+
+book_new_(name: string, dir: string) -> *Book {
+    b = heap.new(Book)
+    b.name = string.concat(name, "")
+    b.dir = string.concat(dir, "")
+    b.rev = 0
+    b.lines = map.map_new()
+    b.lastw = map.map_new()
+    b.touched = map.map_new()
+    b.shaped = map.map_new()
+    b.ids = map.map_new()
+    b.ops = strarr.new()
+    b.seen = map.map_new()
+    b.log = null
+    b.log_size = 0
+    return b
+}
+
+// A book read from its folder: every op in its log, in order, a torn last
+// line cut off. "" or why it could not be.
+book_open_(b: *Book) -> string {
+    path = "${b.dir}/ops.log"
+    if fs.exists(path) == 0 {
+        werr = fs.write(path, "")
+        if werr != "" { return "cannot create ${path}: ${werr}" }
+    }
+    text, rerr = fs.read(path)
+    if rerr != "" { return "cannot read ${path}: ${rerr}" }
+    long good = 0
+    total = string.length(text)
+    at = 0
+    while at < total {
+        nl = string.index_of_from(text, "\n", at)
+        if nl < 0 {
+            println("sheet-server: ${b.name}: the log's last line has no end (a write cut short): cut off, ${total - at} bytes")
+            break
+        }
+        line = string.string_substring(text, at, nl)
+        op, perr = json.parse(line)
+        if perr != "" || op == null {
+            println("sheet-server: ${b.name}: line ${b.rev + 1} of the log is not an op (${perr}): it and what follows cut off")
+            break
+        }
+        rev = json.json_get_int(jfield_(op, "rev"))
+        if rev != b.rev + 1 {
+            json.json_free(op)
+            println("sheet-server: ${b.name}: the log jumps from revision ${b.rev} to ${rev}: cut off there")
+            break
+        }
+        note_op_(b, rev, op, line)
+        json.json_free(op)
+        at = nl + 1
+        good = at
+    }
+    h, oerr = fs.open(path, "r+")
+    if oerr != "" { return "cannot open ${path}: ${oerr}" }
+    if good < total {
+        terr = fs.ftruncate(h, good)
+        if terr != "" { return "cannot cut ${path}: ${terr}" }
+        _ = fs.fsync(h)
+    }
+    b.log = h
+    b.log_size = good
+    return ""
+}
+
+// A file written whole or not at all.
+write_whole_(path: string, text: string) -> string {
+    return fs.write_atomic(path, string.bytes(text))
+}
+
+snapshot_(b: *Book) {
+    text = text_of_(b.lines, b.rev)
+    _m = fs.mkdir_p("${b.dir}/snapshots")
+    _a = write_whole_("${b.dir}/snapshots/r${string.string_pad_start("${b.rev}", 8, 48)}.sheet.txt", text)
+    _b = write_whole_("${b.dir}/head.sheet.txt", text)
+}
+
+// ---- The library -------------------------------------------------------------
+
+valid_name_(name: string) -> int {
+    n = string.length(name)
+    if n < 1 || n > 64 { return 0 }
+    i = 0
+    while i < n {
+        c = string.char_at(name, i)
+        ok = 0
+        if c >= 97 && c <= 122 { ok = 1 }
+        if c >= 65 && c <= 90 { ok = 1 }
+        if c >= 48 && c <= 57 { ok = 1 }
+        if c == 45 || c == 95 { ok = 1 }
+        if ok == 0 { return 0 }
+        i = i + 1
+    }
+    return 1
+}
+
+lib_open_(dir: string) -> *Library {
+    lib = heap.new(Library)
+    lib.dir = string.concat(dir, "")
+    lib.books = map.map_new()
+    _m = fs.mkdir_p("${dir}/books")
+    l, lerr = dir.list("${dir}/books")
+    if lerr == "" {
+        n = dir.list_count(l)
+        i = 0
+        while i < n {
+            name = dir.list_get(l, i)
+            if valid_name_(name) == 1 {
+                b = book_new_(name, "${dir}/books/${name}")
+                why = book_open_(b)
+                if why != "" {
+                    println("sheet-server: ${name}: ${why}")
+                } else {
+                    map.put(lib.books, name, b as ptr)
+                    println("sheet-server: ${name}: revision ${b.rev}")
+                }
+            }
+            i = i + 1
+        }
+    }
+    return lib
+}
+
+book_of_(lib: *Library, name: string) -> *Book {
+    v, _ = map.get(lib.books, name)
+    if v == null { return null }
+    return v as *Book
+}
+
+// "<status>\n<body>": what the actor answers a handler.
+answer_(status: int, body: string) -> string {
+    return "${status}\n${body}"
+}
+
+jquote_(s: string) -> string {
+    n = json.str(s)
+    out, _ = json.encode(n)
+    json.json_free(n)
+    return out
+}
+
+// A conflict's answer: which key, and the op that last changed it.
+conflict_(b: *Book, key: string, rev: int, why: string) -> string {
+    who = ""
+    at = "0"
+    cmd = ""
+    if rev > 0 && rev <= strarr.size(b.ops) {
+        op, perr = json.parse(strarr.get(b.ops, rev - 1))
+        if perr == "" && op != null {
+            who = jstr_(jfield_(op, "who"))
+            at = "${json.json_get_long(jfield_(op, "at"))}"
+            cmd = jstr_(jfield_(op, "cmd"))
+            json.json_free(op)
+        }
+    }
+    return answer_(409, "{\"conflict\":{\"key\":${jquote_(key)},\"why\":${jquote_(why)},\"rev\":${rev},\"who\":${jquote_(who)},\"at\":${at},\"cmd\":${jquote_(cmd)}},\"rev\":${b.rev}}")
+}
+
+// An op from `who`, made against revision `base`: kept as the next revision,
+// durable before the answer, or refused saying why.
+lib_append_(lib: *Library, name: string, who: string, body: string, now: long) -> string {
+    b = book_of_(lib, name)
+    if b == null { return answer_(404, "{\"error\":\"no workbook ${name}\"}") }
+    op, perr = json.parse(body)
+    if perr != "" || op == null { return answer_(400, "{\"error\":${jquote_("not an op: ${perr}")}}") }
+    out = lib_append_op_(b, who, op, now)
+    json.json_free(op)
+    return out
+}
+
+lib_append_op_(b: *Book, who: string, op: ptr, now: long) -> string {
+    id = jstr_(jfield_(op, "id"))
+    if id == "" { return answer_(400, "{\"error\":\"an op needs an id\"}") }
+    had = rev_in_(b.ids, id)
+    if had > 0 { return answer_(200, "{\"rev\":${had},\"again\":true}") }
+    bn = jfield_(op, "base")
+    if bn == null { return answer_(400, "{\"error\":\"an op needs the revision it was made against (base)\"}") }
+    base = json.json_get_int(bn)
+    if base < 0 || base > b.rev { return answer_(400, "{\"error\":\"base ${base} is not a revision of this workbook (it is at ${b.rev})\"}") }
+    changes = jfield_(op, "changes")
+    if changes == null || json.json_type(changes) != json.JSON_ARRAY { return answer_(400, "{\"error\":\"an op needs its changes\"}") }
+    st = jfield_(op, "structure")
+    n = json.json_array_size(changes)
+    if n == 0 { return answer_(400, "{\"error\":\"an op changes something\"}") }
+    // Compare and set: every line as the op says it was.
+    i = 0
+    while i < n {
+        c, _ = json.array_get(changes, i)
+        if json.json_type(c) != json.JSON_ARRAY || json.json_array_size(c) != 3 { return answer_(400, "{\"error\":\"a change is [key, was, now]\"}") }
+        k0, _ = json.array_get(c, 0)
+        k1, _ = json.array_get(c, 1)
+        key = jstr_(k0)
+        was = jstr_(k1)
+        cur, _ = map.get_string(b.lines, key)
+        if cur == null { cur = "" }
+        if cur != was { return conflict_(b, key, rev_in_(b.lastw, key), "changed") }
+        // A sheet whose shape changed since the op's base: its addresses moved.
+        sh = rev_in_(b.shaped, sheet_of_(key))
+        if sh > base { return conflict_(b, key, sh, "reshaped") }
+        i = i + 1
+    }
+    // A change of shape after anything else on that sheet since the base.
+    if st != null {
+        m = json.json_array_size(st)
+        j = 0
+        while j < m {
+            s, _ = json.array_get(st, j)
+            sname = jstr_(s)
+            tr = rev_in_(b.touched, sname)
+            if tr > base { return conflict_(b, "${sname}\t", tr, "edited") }
+            j = j + 1
+        }
+    }
+    rev = b.rev + 1
+    // The log line: the op as the server keeps it.
+    rec = json.obj()
+    _1 = json.set(rec, "rev", json.from_int(rev))
+    _2 = json.set(rec, "base", json.from_int(base))
+    _3 = json.set(rec, "id", json.str(id))
+    _4 = json.set(rec, "who", json.str(who))
+    _5 = json.set(rec, "at", json.from_int(now))
+    _6 = json.set(rec, "cmd", json.str(jstr_(jfield_(op, "cmd"))))
+    sa = json.arr()
+    if st != null {
+        m = json.json_array_size(st)
+        j = 0
+        while j < m {
+            s, _ = json.array_get(st, j)
+            _p = json.push(sa, json.str(jstr_(s)))
+            j = j + 1
+        }
+    }
+    _7 = json.set(rec, "structure", sa)
+    ca = json.arr()
+    i = 0
+    while i < n {
+        c, _ = json.array_get(changes, i)
+        trip = json.arr()
+        k = 0
+        while k < 3 {
+            e, _ = json.array_get(c, k)
+            _q = json.push(trip, json.str(jstr_(e)))
+            k = k + 1
+        }
+        _r = json.push(ca, trip)
+        i = i + 1
+    }
+    _8 = json.set(rec, "changes", ca)
+    line, eerr = json.encode(rec)
+    if eerr != "" {
+        json.json_free(rec)
+        return answer_(500, "{\"error\":${jquote_(eerr)}}")
+    }
+    // Durable before it is acknowledged: written whole, then fsynced.
+    whole = "${line}\n"
+    wrote, werr = fs.pwrite(b.log, string.bytes(whole), b.log_size)
+    if werr != "" {
+        json.json_free(rec)
+        return answer_(500, "{\"error\":${jquote_("the log could not be written: ${werr}")}}")
+    }
+    serr = fs.fsync(b.log)
+    if serr != "" {
+        json.json_free(rec)
+        return answer_(500, "{\"error\":${jquote_("the log could not be synced: ${serr}")}}")
+    }
+    b.log_size = b.log_size + wrote
+    note_op_(b, rev, rec, line)
+    json.json_free(rec)
+    if rev % SNAP_EVERY == 0 { snapshot_(b) }
+    return answer_(200, "{\"rev\":${rev}}")
+}
+
+// A new workbook, its first op the lines it starts with.
+lib_create_(lib: *Library, name: string, who: string, body: string, now: long) -> string {
+    if valid_name_(name) == 0 { return answer_(400, "{\"error\":\"a workbook's name is 1 to 64 letters, digits, '-' or '_'\"}") }
+    if book_of_(lib, name) != null { return answer_(409, "{\"error\":\"there is already a workbook ${name}\"}") }
+    op, perr = json.parse(body)
+    if perr != "" || op == null { return answer_(400, "{\"error\":${jquote_("not an op: ${perr}")}}") }
+    dir = "${lib.dir}/books/${name}"
+    merr = fs.mkdir_p(dir)
+    if merr != "" {
+        json.json_free(op)
+        return answer_(500, "{\"error\":${jquote_("cannot make ${dir}: ${merr}")}}")
+    }
+    b = book_new_(name, dir)
+    why = book_open_(b)
+    if why != "" {
+        json.json_free(op)
+        return answer_(500, "{\"error\":${jquote_(why)}}")
+    }
+    out = lib_append_op_(b, who, op, now)
+    json.json_free(op)
+    if string.string_starts_with(out, "200") == 1 {
+        map.put(lib.books, name, b as ptr)
+        snapshot_(b)
+    }
+    return out
+}
+
+lib_list_(lib: *Library) -> string {
+    ks, _ = map.keys(lib.books)
+    n = map.keys_size(ks)
+    names = strarr.new()
+    i = 0
+    while i < n {
+        strarr.push_copy(names, map.keys_get(ks, i))
+        i = i + 1
+    }
+    map.keys_free(ks)
+    sort.strings(strarr.array(names))
+    sb = strbuilder.new(256)
+    strbuilder.append(sb, "[")
+    i = 0
+    while i < strarr.size(names) {
+        b = book_of_(lib, strarr.get(names, i))
+        if i > 0 { strbuilder.append(sb, ",") }
+        strbuilder.append(sb, "{\"name\":${jquote_(b.name)},\"rev\":${b.rev}}")
+        i = i + 1
+    }
+    strbuilder.append(sb, "]")
+    strarr.free(names)
+    return answer_(200, strbuilder.finish(sb))
+}
+
+lib_get_(lib: *Library, name: string) -> string {
+    b = book_of_(lib, name)
+    if b == null { return answer_(404, "{\"error\":\"no workbook ${name}\"}") }
+    return answer_(200, "{\"rev\":${b.rev},\"text\":${jquote_(text_of_(b.lines, -1))}}")
+}
+
+// Who has the workbook open: polled in the last PRESENT_MS, and where.
+people_json_(b: *Book, now: long) -> string {
+    ks, _ = map.keys(b.seen)
+    n = map.keys_size(ks)
+    sb = strbuilder.new(256)
+    strbuilder.append(sb, "[")
+    first = 1
+    i = 0
+    while i < n {
+        who = map.keys_get(ks, i)
+        v, _ = map.get_string(b.seen, who)
+        t = string.index_of(v, "\t")
+        seen_at, _ = string.to_long(string.string_substring(v, 0, t))
+        if now - seen_at <= PRESENT_MS {
+            if first == 0 { strbuilder.append(sb, ",") }
+            first = 0
+            strbuilder.append(sb, "{\"name\":${jquote_(who)},\"cell\":${jquote_(string.string_substring(v, t + 1, string.length(v)))}}")
+        }
+        i = i + 1
+    }
+    map.keys_free(ks)
+    strbuilder.append(sb, "]")
+    return strbuilder.finish(sb)
+}
+
+// The ops after `since` (204 when there are none yet), with who is here.
+lib_since_(lib: *Library, name: string, who: string, since: int, cell: string, now: long) -> string {
+    b = book_of_(lib, name)
+    if b == null { return answer_(404, "{\"error\":\"no workbook ${name}\"}") }
+    map.put(b.seen, who, "${now}\t${cell}")
+    if since < 0 || since > b.rev { return answer_(400, "{\"error\":\"since ${since} is not a revision of this workbook (it is at ${b.rev})\"}") }
+    sb = strbuilder.new(256)
+    strbuilder.append(sb, "{\"rev\":${b.rev},\"ops\":[")
+    i = since
+    while i < b.rev {
+        if i > since { strbuilder.append(sb, ",") }
+        strbuilder.append(sb, strarr.get(b.ops, i))
+        i = i + 1
+    }
+    strbuilder.append(sb, "],\"people\":${people_json_(b, now)}}")
+    status = 200
+    if since == b.rev { status = 204 }
+    return answer_(status, strbuilder.finish(sb))
+}
+
+// The workbook's text at revision `rev`: its ops 1 to rev folded.
+lib_text_at_(lib: *Library, name: string, rev: int) -> string {
+    b = book_of_(lib, name)
+    if b == null { return answer_(404, "no workbook ${name}") }
+    if rev < 1 || rev > b.rev { return answer_(400, "revision ${rev} is not one of this workbook's (1 to ${b.rev})") }
+    lines = map.map_new()
+    i = 0
+    while i < rev {
+        op, perr = json.parse(strarr.get(b.ops, i))
+        if perr == "" && op != null {
+            apply_changes_(lines, jfield_(op, "changes"))
+            json.json_free(op)
+        }
+        i = i + 1
+    }
+    text = text_of_(lines, rev)
+    map.map_free(lines)
+    return answer_(200, text)
+}
+
+// Every op that changed `key`, oldest first: who, when, the command, and the
+// line as it was and became.
+lib_history_(lib: *Library, name: string, key: string) -> string {
+    b = book_of_(lib, name)
+    if b == null { return answer_(404, "{\"error\":\"no workbook ${name}\"}") }
+    needle = jquote_(key)
+    sb = strbuilder.new(256)
+    strbuilder.append(sb, "[")
+    first = 1
+    i = 0
+    while i < b.rev {
+        line = strarr.get(b.ops, i)
+        if string.contains(line, needle) == 1 {
+            op, perr = json.parse(line)
+            if perr == "" && op != null {
+                changes = jfield_(op, "changes")
+                n = json.json_array_size(changes)
+                k = 0
+                while k < n {
+                    c, _ = json.array_get(changes, k)
+                    k0, _ = json.array_get(c, 0)
+                    if jstr_(k0) == key {
+                        k1, _ = json.array_get(c, 1)
+                        k2, _ = json.array_get(c, 2)
+                        if first == 0 { strbuilder.append(sb, ",") }
+                        first = 0
+                        strbuilder.append(sb, "{\"rev\":${i + 1},\"who\":${jquote_(jstr_(jfield_(op, "who")))},\"at\":${json.json_get_long(jfield_(op, "at"))},\"cmd\":${jquote_(jstr_(jfield_(op, "cmd")))},\"was\":${jquote_(jstr_(k1))},\"now\":${jquote_(jstr_(k2))}}")
+                    }
+                    k = k + 1
+                }
+                json.json_free(op)
+            }
+        }
+        i = i + 1
+    }
+    strbuilder.append(sb, "]")
+    return answer_(200, strbuilder.finish(sb))
+}
+
+lib_checkpoint_(lib: *Library, name: string, label: string) -> string {
+    b = book_of_(lib, name)
+    if b == null { return answer_(404, "{\"error\":\"no workbook ${name}\"}") }
+    if valid_name_(label) == 0 { return answer_(400, "{\"error\":\"a checkpoint's name is 1 to 64 letters, digits, '-' or '_'\"}") }
+    _m = fs.mkdir_p("${b.dir}/checkpoints")
+    err = write_whole_("${b.dir}/checkpoints/${label}.sheet.txt", text_of_(b.lines, b.rev))
+    if err != "" { return answer_(500, "{\"error\":${jquote_(err)}}") }
+    return answer_(200, "{\"rev\":${b.rev}}")
+}
+
+lib_close_(lib: *Library) {
+    ks, _ = map.keys(lib.books)
+    n = map.keys_size(ks)
+    i = 0
+    while i < n {
+        b = book_of_(lib, map.keys_get(ks, i))
+        snapshot_(b)
+        i = i + 1
+    }
+    map.keys_free(ks)
+}
+
+// ---- The actor that owns the library ------------------------------------------
+
+message Open { dir: string }
+message Create { book: string, who: string, body: string, now: long }
+message Append { book: string, who: string, body: string, now: long }
+message List {}
+message Get { book: string }
+message Since { book: string, who: string, since: int, cell: string, now: long }
+message TextAt { book: string, rev: int }
+message History { book: string, key: string }
+message Checkpoint { book: string, label: string }
+message Close {}
+
+actor LibraryActor {
+    state lib: ptr = null
+    receive {
+        Open(dir) -> {
+            lib = lib_open_(dir) as ptr
+            reply "ok"
+        }
+        Create(book, who, body, now) -> { reply lib_create_(lib as *Library, book, who, body, now) }
+        Append(book, who, body, now) -> { reply lib_append_(lib as *Library, book, who, body, now) }
+        List() -> { reply lib_list_(lib as *Library) }
+        Get(book) -> { reply lib_get_(lib as *Library, book) }
+        Since(book, who, since, cell, now) -> { reply lib_since_(lib as *Library, book, who, since, cell, now) }
+        TextAt(book, rev) -> { reply lib_text_at_(lib as *Library, book, rev) }
+        History(book, key) -> { reply lib_history_(lib as *Library, book, key) }
+        Checkpoint(book, label) -> { reply lib_checkpoint_(lib as *Library, book, label) }
+        Close() -> {
+            lib_close_(lib as *Library)
+            reply "ok"
+        }
+    }
+}
+
+// ---- People --------------------------------------------------------------------
+
+// The person a request's bearer token is, or "".
+person_of_(site: *Site, req: ptr) -> string {
+    a = http.http_get_header(req, "Authorization")
+    if a == null { return "" }
+    if string.string_starts_with(a, "Bearer ") == 0 { return "" }
+    token = string.trim(string.string_substring(a, 7, string.length(a)))
+    if token == "" { return "" }
+    hash, _ = cryptography.sha256_hex(string.bytes(token))
+    text, err = fs.read("${site.data}/people")
+    if err != "" { return "" }
+    lines = string.string_split(text, "\n")
+    n = string.string_array_size(lines)
+    who = ""
+    i = 0
+    while i < n {
+        line = string.string_array_get(lines, i)
+        t = string.index_of(line, "\t")
+        if t > 0 && string.string_substring(line, t + 1, string.length(line)) == hash {
+            who = string.string_substring(line, 0, t)
+        }
+        i = i + 1
+    }
+    string.string_array_free(lines)
+    return who
+}
+
+add_person_(data: string, name: string) -> int {
+    if valid_name_(name) == 0 {
+        println("a person's name is 1 to 64 letters, digits, '-' or '_'")
+        return 2
+    }
+    _m = fs.mkdir_p(data)
+    path = "${data}/people"
+    old = ""
+    if fs.exists(path) == 1 {
+        t, rerr = fs.read(path)
+        if rerr != "" {
+            println("cannot read ${path}: ${rerr}")
+            return 1
+        }
+        old = t
+    }
+    if string.contains("\n${old}", "\n${name}\t") == 1 {
+        println("${name} is already in ${path}; take their line out first to give them a new token")
+        return 1
+    }
+    token, terr = cryptography.random_hex(24)
+    if terr != "" {
+        println("no random token: ${terr}")
+        return 1
+    }
+    hash, _ = cryptography.sha256_hex(string.bytes(token))
+    err = write_whole_(path, "${old}${name}\t${hash}\n")
+    if err != "" {
+        println("cannot write ${path}: ${err}")
+        return 1
+    }
+    println(token)
+    return 0
+}
+
+// ---- HTTP ------------------------------------------------------------------------
+
+respond_(res: ptr, answer: string) {
+    nl = string.index_of(answer, "\n")
+    status, _ = string.to_int(string.string_substring(answer, 0, nl))
+    body = string.string_substring(answer, nl + 1, string.length(answer))
+    if status == 204 { status = 200 }
+    http.response_set_status(res, status)
+    if string.string_starts_with(body, "{") == 1 || string.string_starts_with(body, "[") == 1 {
+        http.response_set_header(res, "Content-Type", "application/json")
+    } else {
+        http.response_set_header(res, "Content-Type", "text/plain; charset=utf-8")
+    }
+    http.response_set_header(res, "Cache-Control", "no-store")
+    http.response_set_body(res, body)
+}
+
+// The person, or a 401 answered.
+signed_in_(site: *Site, req: ptr, res: ptr) -> string {
+    who = person_of_(site, req)
+    if who == "" {
+        respond_(res, answer_(401, "{\"error\":\"sign in: this server needs a person's token (Authorization: Bearer <token>)\"}"))
+    }
+    return who
+}
+
+now_ms_() -> long {
+    return os.now_unix_ms()
+}
+
+ask_(site: *Site, msg_answer: string, err: string) -> string {
+    if err != "" { return answer_(503, "{\"error\":${jquote_("the workbook library did not answer: ${err}")}}") }
+    return msg_answer
+}
+
+api_info_(req: ptr, res: ptr, ud: ptr) {
+    respond_(res, answer_(200, "{\"server\":\"sheet-server\",\"api\":1}"))
+}
+
+api_me_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    who = signed_in_(site, req, res)
+    if who == "" { return }
+    respond_(res, answer_(200, "{\"name\":${jquote_(who)}}"))
+}
+
+api_books_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    if signed_in_(site, req, res) == "" { return }
+    lib = site.lib
+    a, err = lib ? List {}
+    respond_(res, ask_(site, a, err))
+}
+
+param_(req: ptr, name: string) -> string {
+    v = http.http_get_path_param(req, name)
+    if v == null { return "" }
+    return v
+}
+
+// A query parameter, percent-decoded (std.http hands it over as sent).
+query_(req: ptr, name: string) -> string {
+    v = http.http_get_query_param(req, name)
+    if v == null { return "" }
+    d, err = url.decode(v)
+    if err != "" { return "" }
+    return d
+}
+
+query_int_(req: ptr, name: string, fallback: int) -> int {
+    q = query_(req, name)
+    if q == "" { return fallback }
+    n, err = string.to_int(q)
+    if err != "" { return fallback }
+    return n
+}
+
+api_book_get_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    if signed_in_(site, req, res) == "" { return }
+    lib = site.lib
+    a, err = lib ? Get { book: param_(req, "book") }
+    respond_(res, ask_(site, a, err))
+}
+
+api_book_create_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    who = signed_in_(site, req, res)
+    if who == "" { return }
+    lib = site.lib
+    a, err = lib ? Create { book: param_(req, "book"), who: who, body: http.request_body(req), now: now_ms_() }
+    respond_(res, ask_(site, a, err))
+}
+
+api_ops_post_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    who = signed_in_(site, req, res)
+    if who == "" { return }
+    lib = site.lib
+    a, err = lib ? Append { book: param_(req, "book"), who: who, body: http.request_body(req), now: now_ms_() }
+    respond_(res, ask_(site, a, err))
+}
+
+// The ops after `since`, at once when there are some, else held until one
+// comes or `wait` seconds pass (at most MAX_WAIT_S), asking every 100 ms.
+api_ops_get_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    who = signed_in_(site, req, res)
+    if who == "" { return }
+    lib = site.lib
+    book = param_(req, "book")
+    since = query_int_(req, "since", 0)
+    cell = query_(req, "cell")
+    wait = query_int_(req, "wait", 0)
+    if wait > MAX_WAIT_S { wait = MAX_WAIT_S }
+    if wait < 0 { wait = 0 }
+    deadline = now_ms_() + wait * 1000
+    while 1 == 1 {
+        a, err = lib ? Since { book: book, who: who, since: since, cell: cell, now: now_ms_() }
+        if err != "" || string.string_starts_with(a, "204") == 0 || now_ms_() >= deadline {
+            respond_(res, ask_(site, a, err))
+            return
+        }
+        sleep(100)
+    }
+}
+
+api_text_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    if signed_in_(site, req, res) == "" { return }
+    lib = site.lib
+    a, err = lib ? TextAt { book: param_(req, "book"), rev: query_int_(req, "rev", 0) }
+    respond_(res, ask_(site, a, err))
+}
+
+api_history_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    if signed_in_(site, req, res) == "" { return }
+    lib = site.lib
+    a, err = lib ? History { book: param_(req, "book"), key: query_(req, "key") }
+    respond_(res, ask_(site, a, err))
+}
+
+api_checkpoint_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    if signed_in_(site, req, res) == "" { return }
+    lib = site.lib
+    a, err = lib ? Checkpoint { book: param_(req, "book"), label: param_(req, "label") }
+    respond_(res, ask_(site, a, err))
+}
+
+// ---- The pages -------------------------------------------------------------------
+
+// A page is <name>.ts; a path ending in .ts or .js (a module) is that file.
+serve_page_(req: ptr, res: ptr, ud: ptr) {
+    site = ud as *Site
+    path = http.request_path(req)
+    f = "${site.app}${path}"
+    if string.string_ends_with(path, ".ts") == 0 && string.string_ends_with(path, ".js") == 0 { f = "${f}.ts" }
+    body, err = fs.read(f)
+    if err != "" {
+        http.response_set_status(res, 404)
+        http.response_set_header(res, "Content-Type", "text/plain")
+        http.response_set_body(res, "no page ${path}")
+        return
+    }
+    http.response_set_status(res, 200)
+    http.response_set_header(res, "Content-Type", "text/javascript")
+    http.response_set_body(res, body)
+}
+
+redirect_sheet_(req: ptr, res: ptr, ud: ptr) {
+    http.response_set_status(res, 302)
+    http.response_set_header(res, "Location", "/sheet")
+    http.response_set_body(res, "")
+}
+
+// Routes for the app's pages and modules (exact paths: the router has no
+// wildcard), folders four deep.
+route_dir_(server: ptr, site: *Site, sub: string, depth: int) {
+    l, lerr = dir.list("${site.app}/${sub}")
+    if lerr != "" { return }
+    n = dir.list_count(l)
+    i = 0
+    while i < n {
+        name = dir.list_get(l, i)
+        if string.string_ends_with(name, ".ts") == 1 || string.string_ends_with(name, ".js") == 1 {
+            http.server_get(server, "/${sub}${name}", serve_page_, site)
+            if string.string_ends_with(name, ".ts") == 1 {
+                http.server_get(server, "/${sub}${string.string_substring(name, 0, string.length(name) - 3)}", serve_page_, site)
+            }
+        } else if string.contains(name, ".") == 0 && depth < 4 {
+            route_dir_(server, site, "${sub}${name}/", depth + 1)
+        }
+        i = i + 1
+    }
+}
+
+serve_(data: string, app: string, port: int) -> int {
+    if fs.exists("${app}/sheet.ts") == 0 {
+        println("sheet-server: no ${app}/sheet.ts: give the spreadsheet's app folder")
+        return 2
+    }
+    lib = spawn(LibraryActor())
+    _o, oerr = lib ? Open { dir: data }
+    if oerr != "" {
+        println("sheet-server: the library did not open: ${oerr}")
+        return 1
+    }
+    site = heap.new(Site)
+    site.lib = lib
+    site.data = string.concat(data, "")
+    site.app = string.concat(app, "")
+    server = http.server_create(port)
+    if server == 0 {
+        println("sheet-server: could not bind ${port}")
+        return 1
+    }
+    http.server_get(server, "/", redirect_sheet_, site)
+    route_dir_(server, site, "", 0)
+    http.server_get(server, "/api/info", api_info_, site)
+    http.server_get(server, "/api/me", api_me_, site)
+    http.server_get(server, "/api/books", api_books_, site)
+    http.server_get(server, "/api/books/:book", api_book_get_, site)
+    http.server_post(server, "/api/books/:book", api_book_create_, site)
+    http.server_get(server, "/api/books/:book/ops", api_ops_get_, site)
+    http.server_post(server, "/api/books/:book/ops", api_ops_post_, site)
+    http.server_get(server, "/api/books/:book/text", api_text_, site)
+    http.server_get(server, "/api/books/:book/history", api_history_, site)
+    http.server_post(server, "/api/books/:book/checkpoints/:label", api_checkpoint_, site)
+    println("sheet-server: ${data} on http://127.0.0.1:${port}/sheet?book=<name>")
+    err = http.server_start(server)
+    if err != "" {
+        println("sheet-server: cannot serve: ${err}")
+        return 1
+    }
+    return 0
+}
+
+main() {
+    n = os.args_count()
+    if n >= 3 && os.args_get(1) == "add-person" && n == 4 {
+        exit(add_person_(os.args_get(2), os.args_get(3)))
+    }
+    if n >= 4 && os.args_get(1) == "serve" {
+        port = 8390
+        if n > 4 {
+            p, perr = string.to_int(os.args_get(4))
+            if perr == "" { port = p }
+        }
+        exit(serve_(os.args_get(2), os.args_get(3), port))
+    }
+    println("usage: sheet-server serve <data> <app-dir> [port]")
+    println("       sheet-server add-person <data> <name>")
+    exit(2)
+}
