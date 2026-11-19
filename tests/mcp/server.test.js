@@ -370,12 +370,21 @@ test('spreadsheet_inspect: the workbook at a glance, from INSPECTWORKBOOK(), as 
 
 const FAKE_SAE = path.join(__dirname, 'fake-sae.js');
 
+// The lines of a log file once it has `n` (or `ms` have passed: then what it has).
+async function logLines(file, n, ms = 10000) {
+  const read = () => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter((l) => l) : []);
+  for (const end = Date.now() + ms; read().length < n && Date.now() < end;) await new Promise((r) => setTimeout(r, 20));
+  return read();
+}
+
 test('by default the server starts the app itself at the first call, on its stdin and stdout (--control-stdio), with a window, and leaves it open when the client goes', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-mcp-launch-'));
   const appLog = path.join(dir, 'app.log');
-  const { replies, calls } = await talk([INIT, LIST, call(3, 'spreadsheet_inspect', {})], { SPREADSHEET_MCP_ATTACH: '', SAE_BIN: FAKE_SAE, FAKE_SAE_LOG: appLog });
+  const { replies, calls } = await talk([INIT, LIST, call(3, 'spreadsheet_inspect', {})], { SPREADSHEET_MCP_ATTACH: '', SAE_BIN: FAKE_SAE, FAKE_SAE_LOG: appLog, FAKE_SAE_STOP_DELAY_MS: '400' });
   assert.equal(replies[2].result.isError, false);
-  const lines = fs.readFileSync(appLog, 'utf8').split('\n').filter((l) => l);
+  // The server does not wait for a sae with a window, so it can be gone before the sae has seen its
+  // channel close and logged that: wait for the line (the stand-in's delay makes any host as slow).
+  const lines = await logLines(appLog, 2);
   const started = JSON.parse(lines[0]);
   assert.deepEqual(started.args.slice(-1), ['--control-stdio']);
   assert.equal(started.args[1], path.join(__dirname, '..', '..', 'app'), 'the app beside the server');

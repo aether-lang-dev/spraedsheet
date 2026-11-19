@@ -5,7 +5,8 @@
 // request frame on its stdin with fake-sae-bus.js's canned answer for that
 // command (so every request is in $FAKE_BUS_LOG as on the bus), on its
 // stdout, as frames. When its stdin ends it logs "stopped" and exits, as a
-// headless sae does. With FAKE_SAE_DEAF=1 it says a page serves and then
+// headless sae does (FAKE_SAE_STOP_DELAY_MS=n: n ms later, as a slow host's sae is
+// late to notice; the server does not wait for a sae with a window). With FAKE_SAE_DEAF=1 it says a page serves and then
 // never reads its stdin, nor exits: a sae that has stopped reading.
 'use strict';
 const fs = require('fs');
@@ -46,6 +47,8 @@ process.stdin.on('data', (d) => {
   }
 });
 process.stdin.on('end', () => {
-  log('stopped');
-  process.exit(0);
+  setTimeout(() => {
+    log('stopped');
+    process.exit(0);
+  }, Number(process.env.FAKE_SAE_STOP_DELAY_MS || 0));
 });
