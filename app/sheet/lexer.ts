@@ -3,7 +3,7 @@
 // "at 8" of what the person typed. A reference's $ (fixing its column or
 // row when the formula is copied) is in the token; its name is the cell, or
 // SHEET!CELL on another sheet.
-import { COLS, ROWS, colOf } from "./address.ts";
+import { COLS, ROWS, addrOf, colOf } from "./address.ts";
 import type { ErrorCode } from "./values.ts";
 
 export type Op = "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=";
@@ -98,8 +98,9 @@ export function* tokens(formula: string, from = 2): Generator<Token, void, undef
     }
     // A reference, unless a '(' follows: LOG10( is a call, not cell LOG10.
     const ref = REF.exec(rest);
-    // (More than three letters is no column, so no cell: named1 is a name.)
-    if (ref && ref[4].length <= 3 && rest[ref[0].length] !== "(") {
+    // (More than three letters is no column, so no cell: named1 is a name. Nor is a column past XFD,
+    // or a row past 1,048,576 or 0: XFE1, A1048577, A0 and ZZZ9 are names, as Excel has them.)
+    if (ref && ref[4].length <= 3 && addrOf(ref[4] + ref[6]) !== null && rest[ref[0].length] !== "(") {
       const [text, bare, quoted, fixCol, col, fixRow, row, spill] = ref;
       const sheet = bare ?? quoted?.replace(/''/g, "'");
       const cell = col.toUpperCase() + row;

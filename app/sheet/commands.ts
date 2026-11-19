@@ -8,7 +8,7 @@
 // script.ts), and the specs, headless and in the browser (the page's
 // command bar). The commands that change the workbook are journaled as
 // command lines, which replay.
-import { cellAddr, colName, colOf, COLS, keyOf, order, parseRange, range, ROWS, setExtent, sheetPrefix, splitKey, usedExtent, within } from "./address.ts";
+import { addrOf, cellAddr, colName, colOf, COLS, keyOf, order, parseRange, range, ROWS, setExtent, sheetPrefix, splitKey, usedExtent, within } from "./address.ts";
 import { evaluationSteps } from "./audit.ts";
 import type { Addr } from "./address.ts";
 import { copied, filled, pasted } from "./copy.ts";
@@ -991,7 +991,7 @@ function formulaOf(wb: Workbook, name: string, text: string): string {
 }
 
 const nameOf = (s: string): string => {
-  if (/^[A-Za-z]{1,3}\d+$/.test(s)) refuse(`${s} is a cell, not a name`);
+  if (addrOf(s)) refuse(`${s} is a cell, not a name`);
   if (!/^[A-Za-z_]\w*$/.test(s) || /^(TRUE|FALSE)$/i.test(s)) refuse(`${s} is not a name: a letter first, then letters, digits or _`);
   return s.toUpperCase();
 };

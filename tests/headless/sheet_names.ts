@@ -40,6 +40,11 @@ eq("names are journaled, and replay", cmds.journal().filter((l) => l.startsWith(
   ["names.define name=qty range=B2:B4", "names.define name=Rate range=C2", "names.define name=qty range=B2:B3", "names.delete name=rate", "names.define name=rate range=C3"]);
 // More than three letters before the digits is no column: named1 is a name, not a cell.
 eq("a name that is not a cell's address", [await message("names.define name=named1 range=B3"), await message("cell.set cell=G1 input==named1+1"), value("G1")], ["NAMED1 is Sheet1!B3", "G1 = 12", "12"]);
+// A name shaped like a cell beyond the sheet's edge (column XFE, past the 16,384; row 1,048,577; row 0) is no cell: a name, as in Excel.
+eq("a name shaped like a cell past the sheet's edge", [await message("names.define name=XFE1 range=B3"), await message("cell.set cell=G2 input==XFE1+1"), value("G2"),
+  await message("names.define name=A1048577 range=B3"), await message("names.define name=ZZZ9 range=B3"), await message("names.define name=A0 range=B3"), await message("cell.set cell=G3 input==A0+ZZZ9"), value("G3"),
+  await message("names.define name=XFD1048576 range=B3")],
+  ["XFE1 is Sheet1!B3", "G2 = 12", "12", "A1048577 is Sheet1!B3", "ZZZ9 is Sheet1!B3", "A0 is Sheet1!B3", "G3 = 22", "22", "XFD1048576 is a cell, not a name"]);
 
 // expect: ok names.define: a range, and a cell
 // expect: ok names are any case, kept upper; the workbook's, by their sheet
@@ -54,3 +59,4 @@ eq("a name that is not a cell's address", [await message("names.define name=name
 // expect: ok and follows it
 // expect: ok names are journaled, and replay
 // expect: ok a name that is not a cell's address
+// expect: ok a name shaped like a cell past the sheet's edge
