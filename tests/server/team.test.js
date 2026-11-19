@@ -211,3 +211,23 @@ test("many edits from both, interleaved: they converge on the server's text", as
     assert.equal(String(bob.wb.sheet.value("Z1")), String(20 * 21 / 2 * 11));
   } finally { ann.team.close(); bob.team.close(); await s.stop(); }
 });
+
+test("history: who changed a cell, oldest first; the workbook at an earlier revision, read back as a workbook", async () => {
+  const s = await server("history");
+  const ann = await person(s, "ann", "b", ["cell.set cell=B2 input=1"]);
+  const bob = await person(s, "bob", "b");
+  try {
+    await ann.run("cell.set cell=B2 input=2");
+    await until("Bob hears", () => bob.wb.sheet.input("B2") === "2");
+    await bob.run("cell.set cell=B2 input=3");
+    await until("Ann hears", () => ann.wb.sheet.input("B2") === "3");
+    const h = await ann.team.history("Sheet1\tB2");
+    assert.deepEqual(h.map((e) => [e.rev, e.who, e.was, e.now]), [[1, "ann", "", "B2\t1"], [2, "ann", "B2\t1", "B2\t2"], [3, "bob", "B2\t2", "B2\t3"]]);
+    const text = await ann.team.textAt(2);
+    const past = new Workbook(), pc = new Commands(past);
+    assert.equal((await pc.execute("file.importText", { text })).ok, true);
+    assert.equal(past.sheet.input("B2"), "2", "revision 2 as it was");
+    assert.equal(await ann.team.textAt(99), null);
+    assert.match(ann.team.status, /^no revision 99: revision 99 is not one of this workbook's \(1 to 3\)/);
+  } finally { ann.team.close(); bob.team.close(); await s.stop(); }
+});

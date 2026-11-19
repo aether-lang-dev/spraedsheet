@@ -173,6 +173,28 @@ main() {
             shot(ann, "4-inserted")
             shot(bob, "4-inserted")
         }
+        spec.it("history: who changed the selected cell; an earlier revision as a workbook of its own, in the read view") callback {
+            as_(ann)
+            // History is by address: B2's lists what each person put at B2,
+            // and the row insert that moved B1's 5 down into it.
+            g.goto("B2")
+            b.click("Who changed this cell")
+            spec.assert_true(b.wait_for_console("sheet: history of B2: 3 changes"), "asked")
+            spec.assert_true(wait_part("B2, oldest first:", 10), "listed")
+            spec.assert_true(wait_part(", ann, ", 5) == 1 && wait_part(": 100 (was ", 5) == 1, "Ann's 100 is there")
+            spec.assert_true(wait_part(", bob, ", 5) == 1 && wait_part(": 200 (was 100)", 5) == 1, "and Bob's 200 after it")
+            shot(ann, "5-history")
+            b.set_field_by("revision", "4")
+            b.click("Look at revision")
+            spec.assert_true(b.wait_for_console("sheet: budget at revision 4: "), "opened beside")
+            spec.assert_true(g.wait_cell("B", 1, "3"), "B1 as it was at revision 4, before Bob's 5")
+            spec.assert_true(g.wait_cell("C", 1, "6"), "worked out as it was then")
+            shot(ann, "5-revision4")
+            g.command("cell.set cell=B1 input=7")
+            spec.assert_true(b.wait_for_console("sheet: refused: read view: switch edit mode on to change the workbook"), "the past is read only")
+            g.command("book.activate name=budget")
+            spec.assert_true(g.wait_cell("B", 2, "5"), "back on the team workbook, as it is now")
+        }
         spec.it("the server's text is what both show: the workbook on disk, in the log and the head snapshot") callback {
             data = env_("SHEET_TEAM_DATA")
             log, lerr = fs.read("${data}/books/budget/ops.log")

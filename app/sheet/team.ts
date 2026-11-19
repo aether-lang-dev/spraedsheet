@@ -184,6 +184,21 @@ export class TeamBook implements TeamHook {
     this.#pump();
   }
 
+  // Every kept change to `key`, oldest first, as the server's log has them;
+  // or why not.
+  async history(key: string): Promise<{ rev: number; who: string; at: number; cmd: string; was: string; now: string }[] | string> {
+    const a = await this.#send("GET", `/api/books/${this.name}/history?key=${encodeURIComponent(key)}`);
+    return a.status === 200 ? JSON.parse(a.text) : this.#why(a);
+  }
+
+  // The workbook's text at revision `rev`, or null (with why in the team line).
+  async textAt(rev: number): Promise<string | null> {
+    const a = await this.#send("GET", `/api/books/${this.name}/text?rev=${rev}`);
+    if (a.status === 200) return a.text;
+    this.#say(`no revision ${rev}: ${a.text || this.#why(a)}`);
+    return null;
+  }
+
   // How many edits are on their way.
   get waiting(): number { return this.#pending.length; }
 

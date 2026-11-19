@@ -32,6 +32,38 @@ export function teamBar(v: SheetView, book: string): void {
   // A refusal, in words, on a line of its own until this person's next edit.
   const told = bind(ui.text(""), notice);
   ui.set_visible(told, false);
+  // History: who changed the selected cell, and any revision as a workbook of
+  // its own beside this one, in the read view.
+  const changes = state<string[]>([]);
+  let revField = 0;
+  const past = ui.hstack(6, () => {
+    v.btn("Who changed this cell", async () => {
+      const team = v.team;
+      if (!team) return;
+      const cell = v.here(), got = await team.history(`${field(v.wb.active)}\t${cell}`);
+      if (typeof got === "string") { changes.set([`History of ${cell}: ${got}`]); return; }
+      const shown = (line: string) => (line === "" ? "(empty)" : line.split("\t")[1] ?? "");
+      changes.set(got.length ? [`${cell}, oldest first:`, ...got.map((h) => `revision ${h.rev}, ${h.who}, ${new Date(h.at).toTimeString().slice(0, 5)}: ${shown(h.now)}${h.was === "" ? "" : ` (was ${shown(h.was)})`}`)]
+        : [`${cell} has not been changed since the workbook was made`]);
+      print(`sheet: history of ${cell}: ${got.length} change${got.length === 1 ? "" : "s"}`);
+    });
+    revField = ui.textfield("revision", () => {});
+    ui.a11y_label(revField, "revision to look at");
+    v.btn("Look at revision", async () => {
+      const team = v.team, rev = Number(ui.get_text(revField).trim());
+      if (!team || !Number.isInteger(rev) || rev < 1) return;
+      const text = await team.textAt(rev);
+      if (text === null) return;
+      // A workbook of its own, beside the team one, in the read view.
+      await v.run("book.new", { name: `${book} at revision ${rev}` });
+      const o = await v.cmds.execute("file.importText", { text });
+      v.wb.name = `${book} at revision ${rev}`;
+      await v.run("view.editMode", { on: "0" });
+      print(`sheet: ${book} at revision ${rev}: ${o.message}, read view`);
+    });
+  });
+  ui.set_visible(past, false);
+  each(changes, (l: string) => l, (l: string) => ui.text(l));
   const row = ui.hstack(6, () => {
     field_ = ui.textfield("your team token (from whoever runs the server)", () => {});
     ui.a11y_label(field_, "your team token");
@@ -70,6 +102,7 @@ export function teamBar(v: SheetView, book: string): void {
     shown = true;
     v.cmds.team = team;
     v.team = team;
+    ui.set_visible(past, true);
     v.refresh();
     if (v.grid) ui.datagrid_refresh(v.grid);
     print(`sheet: team workbook ${book} open as ${name}, revision ${team.rev}`);
