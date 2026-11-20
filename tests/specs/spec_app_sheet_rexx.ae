@@ -16,12 +16,14 @@ import griddriver as g
 import uidriver
 
 // A script's whole output (stdout and stderr) and its exit status. `env`
-// is prepended to the command ("" for none).
+// is prepended to the command ("" for none). The launcher is run by bash
+// from PATH, not by its #!/bin/bash: FreeBSD's bash is /usr/local/bin/bash,
+// and there the script itself was "not found".
 rexx_(script: string, env: string) -> (string, int) {
     root = os_getenv("SHEET_ROOT")
     argv = list.new()
     list.add(argv, "-c")
-    list.add(argv, "cd \"$0\" && ${env} RexxJS/core/rexx \"rexx/$1\" 2>&1")
+    list.add(argv, "cd \"$0\" && ${env} bash RexxJS/core/rexx \"rexx/$1\" 2>&1")
     list.add(argv, root)
     list.add(argv, script)
     out, status, _err = os.run_capture("sh", argv, null)

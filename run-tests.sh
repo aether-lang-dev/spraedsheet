@@ -44,12 +44,38 @@ SAE=$(cd "${SAE_DIR:-$ROOT/sae}" 2>/dev/null && pwd -P) || {
     exit 2
 }
 FILTER=${1:-}
-if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] \
-   && [ -z "${SHEET_RUN_XVFB:-}" ] && command -v xvfb-run >/dev/null 2>&1; then
-    # A screen wide enough for the specs' windows (up to 1600): GTK keeps a
-    # window to its screen, and xvfb-run's default (1280 wide) gave "a window
-    # 1600 wide" 1280, so a formula bar that grows with the window could not.
-    SHEET_RUN_XVFB=1 exec xvfb-run -a -s "-screen 0 1920x1200x24" sh "$0" "$@"
+# A screen wide enough for the specs' windows (up to 1600): GTK keeps a
+# window to its screen, and xvfb-run's default (1280 wide) gave "a window
+# 1600 wide" 1280, so a formula bar that grows with the window could not.
+XVFB_SCREEN="-screen 0 1920x1200x24"
+if [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && [ -z "${SHEET_RUN_XVFB:-}" ]; then
+    if [ "$(uname -s)" = Linux ] && command -v xvfb-run >/dev/null 2>&1; then
+        SHEET_RUN_XVFB=1 exec xvfb-run -a -s "$XVFB_SCREEN" sh "$0" "$@"
+    elif [ "$(uname -s)" != Darwin ] && command -v Xvfb >/dev/null 2>&1; then
+        # No xvfb-run (FreeBSD and the other BSDs): an Xvfb of our own, as
+        # sae's tests/run_all.sh starts one. -displayfd lets the server pick a
+        # free display and write its number once it listens; stopped on exit.
+        XVFB_FILE=$(mktemp "${TMPDIR:-/tmp}/sheet-xvfb.XXXXXX") || exit 2
+        # shellcheck disable=SC2086 -- XVFB_SCREEN is a list of words
+        Xvfb -nolisten tcp $XVFB_SCREEN -displayfd 3 3>"$XVFB_FILE" >/dev/null 2>&1 &
+        XVFB_PID=$!
+        trap 'kill "$XVFB_PID" 2>/dev/null; wait "$XVFB_PID" 2>/dev/null; rm -f "$XVFB_FILE"' EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM HUP
+        # A shell killed by a signal it does not trap never runs the EXIT
+        # trap: a watchdog stops Xvfb once this shell is gone.
+        ( while kill -0 $$ 2>/dev/null; do sleep 1; done; kill "$XVFB_PID" 2>/dev/null ) \
+            </dev/null >/dev/null 2>&1 &
+        n=0
+        while [ ! -s "$XVFB_FILE" ]; do
+            n=$((n + 1))
+            if [ "$n" -gt 100 ] || ! kill -0 "$XVFB_PID" 2>/dev/null; then
+                echo "run-tests.sh: Xvfb did not start" >&2; exit 2
+            fi
+            sleep 0.1
+        done
+        DISPLAY=:$(head -n 1 "$XVFB_FILE"); export DISPLAY
+    fi
 fi
 # A sae built before its sources were last changed (a pull, ./build.sh not
 # run since) runs this checkout's app on an older API: refused, rather than
@@ -120,9 +146,10 @@ for line in $TABLE; do
         fi ;;
     esac
     set -- $cmd
-    # Real X11 key events (xdotool) need an X server: Linux only.
-    if [ "$1" = xkeys ] && { [ "$(uname -s)" != Linux ] || ! command -v xdotool >/dev/null 2>&1; }; then
-        echo "SKIP $label (Linux with xdotool only)"; IFS='
+    # Real X11 key events (xdotool) need an X server and the GTK X11 backend:
+    # Linux and the BSDs, not macOS (AppKit) or Windows.
+    if [ "$1" = xkeys ] && { [ -z "${DISPLAY:-}" ] || [ "$(uname -s)" = Darwin ] || ! command -v xdotool >/dev/null 2>&1; }; then
+        echo "SKIP $label (an X server and xdotool only)"; IFS='
 '; continue
     fi
     case "$1" in
