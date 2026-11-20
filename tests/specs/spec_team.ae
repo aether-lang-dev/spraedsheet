@@ -121,17 +121,24 @@ main() {
             spec.assert_true(g.wait_cell("A", 2, "Milk"), "and Bob has her A2")
         }
         spec.it("a true conflict: both change B2 before hearing of the other; one is kept, the other told whose change won and shown it") callback {
-            // Both type, then both press Return a moment apart.
+            // Both type, then both press Return a moment apart: a few
+            // milliseconds, less than an edit takes to reach the other sae
+            // (the server answers a poll within 100 ms of an op), so neither
+            // has heard of the other's when it sends its own. Each window's
+            // formula field is looked up first: reading the widget tree takes
+            // longer than that on the lab host.
             as_(ann)
             b.set_field_by("cell", "B2")
             b.set_field_by("formula", "100")
+            ann_field = g.formula_field()
             as_(bob)
             b.set_field_by("cell", "B2")
             b.set_field_by("formula", "200")
+            bob_field = g.formula_field()
             as_(ann)
-            uidriver.post_ok("/widget/${g.formula_field()}/submit", "Ann presses Return")
+            uidriver.post_ok("/widget/${ann_field}/submit", "Ann presses Return")
             as_(bob)
-            uidriver.post_ok("/widget/${g.formula_field()}/submit", "Bob presses Return")
+            uidriver.post_ok("/widget/${bob_field}/submit", "Bob presses Return")
             // Bob's came second: refused, in words, and his grid shows Ann's.
             spec.assert_true(wait_part("Not kept: your B2 = 200. ann changed Sheet1!B2 (B2 = 100) at ", 15), "Bob is told plainly")
             spec.assert_true(wait_part("the sheet shows theirs now. Make your change again to replace it.", 5), "and what to do")
@@ -181,7 +188,7 @@ main() {
             b.click("Who changed this cell")
             spec.assert_true(b.wait_for_console("sheet: history of B2: 3 changes"), "asked")
             spec.assert_true(wait_part("B2, oldest first:", 10), "listed")
-            spec.assert_true(wait_part(", ann, ", 5) == 1 && wait_part(": 100 (was ", 5) == 1, "Ann's 100 is there")
+            spec.assert_true(wait_part(", ann, ", 5) == 1 && wait_part(": 100\n", 5) == 1, "Ann's 100 is there (B2 was empty before it)")
             spec.assert_true(wait_part(", bob, ", 5) == 1 && wait_part(": 200 (was 100)", 5) == 1, "and Bob's 200 after it")
             shot(ann, "5-history")
             b.set_field_by("revision", "4")
