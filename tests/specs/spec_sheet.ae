@@ -1050,6 +1050,14 @@ main() {
             b.click("Rotate text up")
             spec.assert_true(b.wait_for_console("sheet: D3: turned 90"), "rotated")
             spec.assert_eq(g.cell_has("D", 3, "r90"), 1, "reported r90")
+            // A word whose run is far longer than its height says which way
+            // it is turned. "Hi" turned is barely taller than wide (a run of
+            // about 12 px, a cap of 10), and its "i" turned is a one-pixel
+            // stem the toolkit may antialias below the measure's mid-grey:
+            // GTK 4.20 on FreeBSD did, and "Hi" measured 10 x 10.
+            g.enter("D3", "Hello")
+            spec.assert_true(g.wait_cell("D", 3, "Hello"), "a longer word in the turned cell")
+            spec.assert_eq(g.cell_has("D", 3, "r90"), 1, "still turned")
             g.pick("D", 5)
             rot = ink_at("faces-rotated", "D", 3)
             spec.assert_true(ink_num(rot, 1) - ink_num(rot, 0) > ink_num(rot, 3) - ink_num(rot, 2), "taller than wide (${rot})")
