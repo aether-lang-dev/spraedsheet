@@ -18,6 +18,18 @@ tmp_dir() -> string {
     return t
 }
 
+// 1 once the shell log (SAE_SHELL_LOG) holds `url`, within five seconds.
+shell_logged(url: string) -> int {
+    i = 0
+    while i < 100 {
+        lg, _e = fs.read(os_getenv("SAE_SHELL_LOG"))
+        if string.contains(lg, url) == 1 { return 1 }
+        sleep(50)
+        i = i + 1
+    }
+    return 0
+}
+
 main() {
     fw = spec.init()
     uidriver.wait_server()
@@ -279,8 +291,10 @@ main() {
             spec.assert_true(g.wait_cell("H", 2, "Example"), "its text")
             b.click("Open link")
             spec.assert_true(b.wait_for_console("sheet: opened https://example.org/sheet"), "opened")
-            lg, _e = fs.read(os_getenv("SAE_SHELL_LOG"))
-            spec.assert_true(string.contains(lg, "https://example.org/sheet") == 1, "handed to the system (the shell log)")
+            // sae hands the URL over after the page's handler returns (a kernel
+            // tick, not inside the entry), so the log is written a moment after
+            // the page says it opened it: waited for, not read at once.
+            spec.assert_true(shell_logged("https://example.org/sheet"), "handed to the system (the shell log)")
             g.command("cell.hyperlink range=H3 target=ftp://example.org/")
             g.goto("H3")
             b.click("Open link")
