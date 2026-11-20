@@ -13,7 +13,28 @@ What came before (demo 18's To do 1 to 15) is in
 `docs/spreadsheet_demo_done_and_todo.md`.
 
 
-## Resumed 2026-11-05
+## Teamware over HTTP (2026-11-19)
+
+Paul: "Getting something like Spreadsheet to work over http would be great ... for in-house teamware". Built in four
+slices (docs/design/teamware-over-http.md, section 8 for what was measured): `server/sheetserver.ae` (sheet-server: the
+app's pages and a workbook API from one origin, an append-only JSON-lines op log per workbook, fsync before the answer,
+compare-and-set per text-form line, structural conflicts, long-poll, presence, history, time travel, checkpoints, people
+as token hashes), the page in browser mode (`app/sheet/team.ts`, `teamtext.ts`, `view/teambar.ts`, `Commands.team`),
+two sae on one workbook (`tests/specs/spec_team.ae`), and history in the page. sae: each page request on a thread of its own (a held long-poll no longer holds up a scheduler core).
+
+To do, in rough order:
+- Paul's decisions P1 to P6 (design doc section 7): a bigger heap for a team page, TLS, undo semantics, conservative
+  structural conflicts, exports by a headless sae, tokens in a file.
+- Exports on the server: `.xlsx` and a values CSV per sheet, by a headless sae the server drives over its control channel.
+- Opening from the latest snapshot plus the log's tail (the server reads the whole log at open now).
+- Another person's plain cell edits applied to the cells, not by re-reading the workbook (46 ms at 2,000 cells now).
+- A row insert or sort that composes with a concurrent edit further down (shift it, as `shift.ts` does), instead of
+  refusing it.
+- History that follows a cell through inserts and sorts (by address now).
+- Full sync on macOS (`F_FULLFSYNC`) once Aether's `std.fs` offers it.
+- The team line on a narrow window: it is one text, cut off at 800 px.
+
+
 
 The pause of 2026-10-25 (below) is merged. On origin main: aether-ui bd6d1819 (7566ca4d, the driver's
 `POST /focus/move` and `set_focusable` on canvases, cherry-picked onto main's newer commits; its CHANGELOG

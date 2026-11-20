@@ -1,7 +1,8 @@
 # Teamware over HTTP: one workbook, a small team, one in-house server
 
-Status: design, 2026-11-19. Written before the build; the sections marked
-"As built" are updated as each slice lands.
+Status: built, 2026-11-19 (slices 1 to 4). Written before the build as the
+design; section 8 says what was built, what was measured and where it
+differs.
 
 Paul's brief: "Getting something like Spreadsheet to work over http would be
 great. Sure it's not a google-sheets but for in-house teamware it could be
@@ -53,7 +54,7 @@ sae 9c70240, 2026-11-19: it loads and runs, 0.41 s, within the 32 MB heap):
 
 Every one of these is already declared `"seeks ..., reduced functionality
 without"` at the top of `app/sheet.ts`, so the page loads without them. The
-one addition is `"seeks outgoing-http GET,POST /api/*, reduced functionality
+one addition is `"seeks outgoing-http GET,POST /api/**, reduced functionality
 without"`: in the browser that is its own origin's API; in an installed app
 without a `capabilities.http` grant it is absent and the team code stays off.
 
@@ -158,15 +159,15 @@ that include other people's edits, so it is not used in team mode.)
 
 **Hearing others' edits: long-poll.** `GET /api/books/<b>/ops?since=N&wait=10`
 answers at once with every op after N, or holds the request until one
-arrives or ten seconds pass. Measured before choosing (section 7, "As
-built"): Aether's HTTP server runs each request on a worker thread (cores ×
+arrives or ten seconds pass. Measured before choosing (section 8 has the
+numbers): Aether's HTTP server runs each request on a worker thread (cores ×
 2, `AETHER_HTTP_WORKERS` to raise it), so a held poll costs a thread and
 nothing else, and SSE would cost the same; sae's page `http` delivers a
 response whole, so SSE would need a new streaming page API, while a
 long-poll is an ordinary request. sae ran each request on one of four fetcher
-actors chosen in turn, so a held poll delayed every fourth request behind it
-for up to its wait; sae is changed to hand a request to an idle fetcher
-(section 7).
+actors, and a blocking call on an actor holds its scheduler core, so a held
+poll delayed other requests for up to its wait; sae is changed to give each
+request's call a thread of its own (section 8).
 
 A remote op is applied to the person's workbook by patching its text and
 reading the workbook back from the text (`file.importText`'s path: 46 ms at
@@ -299,3 +300,88 @@ API (JSON; every `/api` request but `GET /api/info` needs the bearer token):
   drives, rather than any second implementation; a later slice.
 - **P6. Tokens per person in a file**, no passwords, no accounts service.
   Enough for in-house; a directory (LDAP, OIDC) is a later question.
+
+## 8. As built (2026-11-19)
+
+Slices, each committed with its tests:
+
+1. **The server** (`server/sheetserver.ae`, about 1,000 lines of Aether): the
+   directory layout of section 4, the API of section 6, compare-and-set and
+   the shape check of section 3, ops kept once by id, presence from the polls.
+   `tests/server/server.test.js` runs the real binary over real HTTP on real
+   files; each guard (compare-and-set, the torn-line cut, de-duplication,
+   the shape check) was taken out in turn and its test failed.
+2. **The page** (`app/sheet/team.ts`, `teamtext.ts`, `view/teambar.ts`, and
+   `Commands.team` in `commands.ts`): browser mode, as section 1 chose; no
+   page or model forked. `tests/server/team.test.js` runs two people's real
+   Workbook and Commands on node through the real server. sae grew one thing
+   (below).
+3. **Two sae on one workbook** (`tests/specs/spec_team.ae`, run by
+   `spec_team.sh`): two sae-drivers on cachyos (Xvfb), signing in, edits
+   both ways, presence, a true conflict and what the person sees, undo, a row
+   insert, history and an earlier revision; screenshots of both windows at
+   each step under `target/spec-team/shots/`.
+4. **History in the page**: "Who changed this cell" (every kept change to the
+   selected address, oldest first) and "Look at revision" (the workbook at any
+   revision, opened beside the team one in the read view).
+
+Measured:
+
+- Long-poll: an op reached the other person's poll 12 to 26 ms after it was
+  kept (Mac, server tests), and the other person's workbook 105 to 128 ms
+  after the edit (node, two models through the server: the poll, the
+  re-read of the workbook from its text, the recalculation).
+- Writing the workbook's text, which each local edit costs: 8 ms at 500
+  cells, 44 ms at 2,000, 120 ms at 5,000 (Mac, sae's QuickJS); reading it
+  back, which each of someone else's edits costs: 10, 46, 124 ms.
+- Durability under SIGKILL: 5,751 to 7,054 ops acknowledged in 0.7 s by two
+  writers, every one of them in the log after a restart (Mac). macOS's
+  `fsync` does not force the drive's cache (that needs `F_FULLFSYNC`); on
+  Linux it does. A power cut on a Mac server could lose the last
+  acknowledged ops; Aether's `std.fs` offers no full sync today.
+- sae ran each page request's blocking call on one of four fetcher actors.
+  A blocking call on an actor holds its scheduler core, and every actor
+  sharing it: on cachyos (4 cores), eight actors each fetching once beside a
+  3 s request, one quick request took the full 3001 ms; sae's own spec
+  ("a request held open does not hold up the next ones", five quick requests
+  beside a 3 s one) showed one taking 3012 ms, and choosing an idle fetcher
+  did not help (3013 ms: the core, not the fetcher, was the queue). In
+  spec_team, Ann's long-poll answers came only after her own next edit. sae
+  now runs each request's call on a thread of its own (std.worker's
+  `run_detached`): the spec passes on cachyos (49 of 49 in spec_nav; the
+  build without the change fails that one, 3012 ms), and spec_team passes.
+
+Differences from the design:
+
+- **A refusal drops only the refused op.** The design dropped the person's
+  later waiting edits with it; that lost a burst of typing for one conflict.
+  The later ones are sent as they are, and the server refuses any whose
+  lines the refused one had changed.
+- **The server re-reads the whole log at open** (the snapshots are for people,
+  tools and time travel, not yet for opening). Fine for a team's workbooks;
+  a log of millions of ops would want the snapshot plus its tail.
+- **History is by address.** A row insert or a sort moves cells, and the
+  history of B2 lists what was put at B2, whichever cell that was then.
+- **The team line is two lines**: the workbook and its revision (and who is
+  here) on one, a refusal on its own line until the person's next edit.
+- **Another person's edit re-reads the workbook from its text** (about as long
+  as writing it); the plain-cell fast path of section 3 is not built.
+- **A command's commands**: a script or macro is one op (the outermost
+  command's line, everything it changed).
+- **Exports** (P5), **TLS** (P2) and **a bigger heap** (P1) are not built.
+
+Verified on cachyos (Linux, GTK4 under Xvfb, 4 cores): spec_team 8 of 8, on
+sae before and after rebasing on main; spraedsheet's whole run-tests.sh with
+it (spec_sheet, the app-mode specs, the MCP and CLI tests). With the
+long-poll answered promptly, the conflict step had to press both Returns
+within a few milliseconds: Bob otherwise heard Ann's B2 before sending his,
+and his was rightly kept as a later edit.
+
+Found on the way:
+
+- Aether: `std.http`'s `http_get_query_param` hands a value over as sent,
+  still percent-encoded; the server decodes it with `std.url`.
+- Aether: `string.string_pad_start(s, 8, "0")` type-checks (the pad is an
+  `int` in the extern) and fails in the C compiler.
+- macOS kills (SIGKILL) a new run of a binary rewritten in place while an
+  older copy of it runs; the build scripts build aside and move it in.

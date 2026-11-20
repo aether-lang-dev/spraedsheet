@@ -19,6 +19,15 @@ the plan: what is done, what is next, and how the code is laid out.
   itself (`../RexxJS`, with its tests), then re-vendor with
   `node tools/bundle-rexxjs.mjs ../RexxJS`. No sae or app code goes into
   RexxJS.
+- **`server/` is sheet-server** (teamware over HTTP,
+  `docs/design/teamware-over-http.md`): an Aether program serving `app/`'s
+  pages and a workbook API from one origin; the page's side is
+  `app/sheet/team.ts` (ops), `teamtext.ts` (the keyed text both share) and
+  `view/teambar.ts`. A team workbook's edits reach the server through
+  `Commands.team` (commands.ts), told once per outermost command. Its tests:
+  `./run-tests.sh server` (the binary over real HTTP, and two people's model
+  on node through it) and `spec_team` (two sae-drivers, ports
+  `SAE_TEST_SITE_PORT` and `AETHER_UI_TEST_PORT` and the one after it).
 - **Tests:** `./run-tests.sh`, all green before a push. Every command is
   tested headless (`tests/headless/`, one file per area, `// expect:` lines
   as verdicts); what only the ui shows is tested in `tests/specs/`.
