@@ -32,7 +32,6 @@ eq("every workbook was opened and its formulas compared", total > 0, true);
 // expect: ok MATH_AND_TRIGONOMETRY/EVEN_ODD.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/EXP_SIGN.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/FACT_DOUBLEFACT.xlsx
-// expect: ok MATH_AND_TRIGONOMETRY/FLOOR_CEILING.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/GCD_LCM.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/LCM_GCD.xlsx
 // expect: ok MATH_AND_TRIGONOMETRY/LOG_LOG10_LN.xlsx

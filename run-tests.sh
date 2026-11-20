@@ -11,7 +11,7 @@
 #
 #   SAE_DIR=/elsewhere/sae ./run-tests.sh    another sae checkout
 #
-# headless: tests/headless/*.ts, the model and the commands with no ui, run
+# headless (a slow host: SAE_TIME_LIMIT=ms lifts the 60 s a test has, as sae's AGENTS.md says of its specs): tests/headless/*.ts, the model and the commands with no ui, run
 # by sae's lowerer harness (sae/lower/run-tests.sh --mod) on sae's QuickJS.
 # The specs (tests/specs/) drive the app in sae-driver through sae's
 # tests/run_spec.sh, with this repo's tests/lib first on the module path;
@@ -127,7 +127,7 @@ for line in $TABLE; do
     fi
     case "$1" in
         xkeys) set -- sh "$ROOT/tests/specs/real_keys_x11.sh" ;;
-        headless) set -- env SAE_LOWER_OUT="$T/lower-tests" SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=60000 "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/headless" ;;
+        headless) set -- env SAE_LOWER_OUT="$T/lower-tests" SAE_PAGE_MEM=536870912 SAE_TIME_LIMIT=${SAE_TIME_LIMIT:-60000} "$SAE/lower/run-tests.sh" --mod "$ROOT/tests/headless" ;;
         status) set -- sh "$ROOT/tools/function-status.sh" --check ;;
         mcp) set -- node --test "$ROOT/tests/mcp/server.test.js" ;;
         server) set -- sh -c 'ae build "$0/server/sheetserver.ae" -o "$0/target/sheet-server.new" && mv -f "$0/target/sheet-server.new" "$0/target/sheet-server" && node --test --test-timeout=60000 "$0/tests/server/server.test.js" "$0/tests/server/team.test.js"' "$ROOT" ;;
