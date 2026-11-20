@@ -64,7 +64,7 @@ const sheet = new SheetView();
 const teamBook = teamBookOf(browserContext.currentUrl);
 
 // The page in one column with the window's own padding round it.
-ui.vstack(() => {
+ui.vstack {
 ui.margin(8, 12, 8, 12);
 ui.text("Spreadsheet");
 if (lacking.length) ui.text(`This sae is older than the spreadsheet: it lacks ui.${lacking.join(", ui.")}. Rebuild it (../sae, its ./build.sh).`);
@@ -100,7 +100,7 @@ sheet.panel("chart", () => chartPanel(sheet));
 sheet.panel("file", () => { fileBar(sheet); booksBar(sheet); versionsBar(sheet); });
 sheet.panel("script", () => { languageBar(sheet); commandBar(sheet); macroBar(sheet); setupScript(sheet); });
 sheet.panel("lists", () => { functionList(sheet); problemList(sheet); });
-});
+};
 // The menus run the panels' actions: made once the panels are.
 menuBar(sheet);
 sheet.refresh();

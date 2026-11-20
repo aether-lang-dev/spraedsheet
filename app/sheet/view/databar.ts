@@ -22,9 +22,9 @@ function tableHere(v: SheetView): string {
 export function dataBar(v: SheetView): void {
   const goal = state(""), by = state(""), rowInput = state(""), columnInput = state(""), delimiter = state("");
   const given = (o: Record<string, string>) => Object.fromEntries(Object.entries(o).filter(([, x]) => x.trim() !== ""));
-  ui.wrap(() => {
-    bind(ui.textfield("goal", () => {}), goal);
-    bind(ui.textfield("by changing", () => {}), by);
+  ui.wrap {
+    bind(ui.textfield("goal"), goal);
+    bind(ui.textfield("by changing"), by);
     v.btn("Goal seek", () => v.run("data.goalSeek", { set: v.here(), to: goal.value, by: by.value }));
     // Scenario Manager: the selection's values kept under the goal field's
     // text as a name; shown again; a summary of the selected result cell.
@@ -49,28 +49,28 @@ export function dataBar(v: SheetView): void {
     // The same by GRG Nonlinear and by Evolutionary (bounds in the criteria).
     v.btn("Solver GRG", () => v.run("solver.solve", { objective: v.here(), changing: by.value, ...(criteria.value.trim() ? { constraints: criteria.value } : {}), report: "1", method: "grg" }));
     v.btn("Solver Evolutionary", () => v.run("solver.solve", { objective: v.here(), changing: by.value, ...(criteria.value.trim() ? { constraints: criteria.value } : {}), report: "1", method: "evolutionary" }));
-  });
+  };
   // What-if tables and the column tools, a row of their own (one row would
   // be wider than the window, its fields squeezed).
-  ui.wrap(() => {
-    bind(ui.textfield("row input", () => {}), rowInput);
-    bind(ui.textfield("column input", () => {}), columnInput);
+  ui.wrap {
+    bind(ui.textfield("row input"), rowInput);
+    bind(ui.textfield("column input"), columnInput);
     v.btn("Data table", () => v.run("data.table", { range: v.range(), ...given({ row: rowInput.value, column: columnInput.value }) }));
     v.btn("Remove duplicates", () => v.run("data.removeDuplicates", { range: v.range() }));
-    bind(ui.textfield("delimiter", () => {}), delimiter);
+    bind(ui.textfield("delimiter"), delimiter);
     v.btn("Flash fill", () => v.run("data.flashFill", { range: v.range() }));
     v.btn("Text to columns", () => v.run("data.textToColumns", { range: v.range(), ...given({ delimiter: delimiter.value }) }));
-  });
+  }
   const keys = state(""), criteria = state(""), sources = state("");
-  ui.wrap(() => {
-    bind(ui.textfield("sort keys", () => {}), keys);
+  ui.wrap {
+    bind(ui.textfield("sort keys"), keys);
     v.btn("Custom sort", () => v.run("data.sort", { range: v.range(), keys: keys.value, headers: "1" }));
-    bind(ui.textfield("criteria range", () => {}), criteria);
+    bind(ui.textfield("criteria range"), criteria);
     v.btn("Advanced filter", () => v.run("data.advancedFilter", { range: v.range(), criteria: criteria.value }));
-    bind(ui.textfield("sources", () => {}), sources);
+    bind(ui.textfield("sources"), sources);
     v.btn("Consolidate", () => v.run("data.consolidate", { to: v.here(), sources: sources.value, labels: "both" }));
-  });
-  ui.wrap(() => {
+  }
+  ui.wrap {
     v.btn("Group rows", () => v.run("outline.group", { range: v.range(), axis: "rows" }));
     v.btn("Ungroup rows", () => v.run("outline.ungroup", { range: v.range(), axis: "rows" }));
     v.btn("Group columns", () => v.run("outline.group", { range: v.range(), axis: "columns" }));
@@ -84,8 +84,8 @@ export function dataBar(v: SheetView): void {
       if (!s) return;
       return v.run("data.subtotal", { range: v.range(), by: colName(Math.min(s[0].col, s[1].col)), columns: colName(Math.max(s[0].col, s[1].col)) });
     });
-  });
-  ui.wrap(() => {
+  }
+  ui.wrap {
     v.btn("Total row", () => v.run("table.totals", { name: tableHere(v), ...(v.wb.sheet.table(tableHere(v))?.totals ? { on: "0" } : {}) }));
     v.btn("Banded rows", () => v.run("table.banding", { name: tableHere(v), rows: v.wb.sheet.table(tableHere(v))?.banded ? "0" : "1" }));
     v.btn("Convert to range", () => v.run("table.toRange", { name: tableHere(v) }));
@@ -97,14 +97,14 @@ export function dataBar(v: SheetView): void {
       const header = t.headers ? keyOf({ col: at.col, row: Math.min(t.range[0].row, t.range[1].row) }) : "";
       return v.run("slicer.add", { table: t.name, column: header ? v.wb.textOf(header) : colName(at.col) });
     });
-  });
+  };
   // The sheet's slicers: each a row of tiles, a click picking one alone (a
   // picked one ✓), and Clear.
   each(v.slicers, (sl: SlicerView) => `${sl.name}|${sl.tiles.map((t) => `${t.value}${t.picked ? "+" : ""}`).join(",")}`, (sl: SlicerView) => {
-    ui.wrap(() => {
+    ui.wrap {
       ui.text(sl.caption);
       for (const t of sl.tiles) ui.btn(`${sl.name}: ${t.picked ? "✓ " : ""}${t.value}`, () => v.run("slicer.select", { name: sl.name, values: t.value, toggle: "1" }));
       ui.btn(`Clear ${sl.name}`, () => v.run("slicer.clear", { name: sl.name }));
-    });
+    }
   });
 }

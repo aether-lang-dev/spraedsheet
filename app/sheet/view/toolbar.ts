@@ -74,9 +74,9 @@ export function toolBar(v: SheetView): void {
   });
   // Each group its own row, close set; the groups set apart.
   const groups = GROUPS.map((first, i) => TOOLS.slice(TOOLS.findIndex(([l]) => l === first), i + 1 < GROUPS.length ? TOOLS.findIndex(([l]) => l === GROUPS[i + 1]) : TOOLS.length));
-  const bar = ui.hstack(14, () => {
+  const bar = ui.hstack(14) {
     for (const group of groups) {
-      ui.hstack(2, () => {
+      ui.hstack(2) {
         for (const [label, tip, action] of group) {
           const run = () => {
             if (v.actions.has(action)) return v.perform(action);
@@ -84,9 +84,9 @@ export function toolBar(v: SheetView): void {
           };
           tool(label, tip, run);
         }
-      });
+      }
     }
-  });
+  };
   // The toolbar is one stop of Tab (the ARIA toolbar pattern, "a roving tabindex"): the tool the focus
   // last rested on takes it, the arrows move it to the next tool (which becomes the stop, the old one not),
   // Return or Space presses the one that has it, and a ring is drawn round it. No other tool takes the
@@ -142,34 +142,34 @@ function tool(label: string, tip: string, run: () => unknown): number {
   const icon = ICONS[label] ?? { text: label };
   const ink = INK.light;
   let ringShape = 0;
-  const scene: number = vg.scene("0 0 24 24", 26, 26, () => {
-    if (icon.strokes) inked.push({ h: vg.path(icon.strokes, () => { vg.fill("none"); vg.stroke(ink, 1.8); vg.linecap("round"); vg.linejoin("round"); }), stroke: 1.8 });
-    if (icon.fills) inked.push({ h: vg.path(icon.fills, () => vg.fill(ink)), fill: true });
+  const scene: number = vg.scene("0 0 24 24", 26, 26) {
+    if (icon.strokes) inked.push({ h: vg.path(icon.strokes) { vg.fill("none"); vg.stroke(ink, 1.8); vg.linecap("round"); vg.linejoin("round"); }, stroke: 1.8 });
+    if (icon.fills) inked.push({ h: vg.path(icon.fills) { vg.fill(ink) }, fill: true });
     if (icon.text) {
       const size = icon.size ?? (icon.text.length > 1 ? 9 : 15);
-      inked.push({ h: vg.text_anchored(12, icon.text.length > 1 ? 15 : 17, size, "middle", icon.text, () => {
+      inked.push({ h: vg.text_anchored(12, icon.text.length > 1 ? 15 : 17, size, "middle", icon.text) {
         vg.fill(ink);
         if (icon.weight === "bold") vg.stroke(ink, 0.9);
         if (icon.weight === "italic") vg.transform("skewX(-14) translate(4 0)");
-      }), fill: true, ...(icon.weight === "bold" ? { stroke: 0.9 } : {}) });
-      if (icon.weight === "underline") inked.push({ h: vg.line(7, 20, 17, 20, () => vg.stroke(ink, 1.6)), stroke: 1.6 });
+      }, fill: true, ...(icon.weight === "bold" ? { stroke: 0.9 } : {}) });
+      if (icon.weight === "underline") inked.push({ h: vg.line(7, 20, 17, 20) { vg.stroke(ink, 1.6) }, stroke: 1.6 });
       if (icon.weight === "double") {
-        inked.push({ h: vg.line(7, 19, 17, 19, () => vg.stroke(ink, 1.4)), stroke: 1.4 });
-        inked.push({ h: vg.line(7, 22, 17, 22, () => vg.stroke(ink, 1.4)), stroke: 1.4 });
+        inked.push({ h: vg.line(7, 19, 17, 19) { vg.stroke(ink, 1.4) }, stroke: 1.4 });
+        inked.push({ h: vg.line(7, 22, 17, 22) { vg.stroke(ink, 1.4) }, stroke: 1.4 });
       }
     }
-    if (icon.bar) vg.rect(3, 20.5, 18, 3, () => vg.fill(icon.bar!));
+    if (icon.bar) vg.rect(3, 20.5, 18, 3) { vg.fill(icon.bar!) };
     // The focus ring, unseen until the toolbar has the focus and the arrows bring it here.
-    ringShape = vg.rrect(0.8, 0.8, 22.4, 22.4, 3, () => { vg.fill("none"); vg.stroke("#1060d0", 1.6); vg.opacity(0); });
+    ringShape = vg.rrect(0.8, 0.8, 22.4, 22.4, 3) { vg.fill("none"); vg.stroke("#1060d0", 1.6); vg.opacity(0); };
     // Over the glyph, unseen: what the pointer clicks and rests on.
-    vg.rrect(0, 0, 24, 24, 3, () => {
+    vg.rrect(0, 0, 24, 24, 3) {
       vg.fill("#ffffff");
       vg.opacity(0);
       vg.tooltip(tip);
       vg.cursor("pointer");
       vg.on_click(() => run());
-    });
-  });
+    }
+  };
   // Its 26 px: a scene's canvas otherwise takes the row's spare width.
   ui.set_width(scene, 26);
   ui.a11y_role(scene, "button");

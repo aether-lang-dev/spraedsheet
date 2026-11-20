@@ -40,16 +40,16 @@ export const ROWS_WHEN_SPLIT = 16;
 // is made then (buildPane) and dropped when the split goes, so one grid's
 // cells are all a page has the rest of the time.
 export function splitPane(v: SheetView): void {
-  v.paneBox = ui.vstack(() => {});
+  v.paneBox = ui.vstack {}
 }
 
 export function buildPane(v: SheetView): void {
   const { cells, headers, edit_text, cell_style, on_cell_select, on_cell_edit, column_width } = ui;
   const keyAt = (row: number, modelCol: number): string | null =>
     modelCol >= 1 && modelCol <= COLS && row >= 0 && row < ROWS ? keyOf({ col: modelCol - 1, row }) : null;
-  ui.into(v.paneBox, () => {
+  ui.into(v.paneBox) {
     ui.divider();
-    v.pane = ui.datagrid(ROWS, COLS + 1, SPLIT_ROWS, SHOWN_COLS, 1, () => {
+    v.pane = ui.datagrid(ROWS, COLS + 1, SPLIT_ROWS, SHOWN_COLS, 1) {
       column_width(COLUMN_WIDTH);
       cells((r: number, c: number) => {
         const key = keyAt(r, c);
@@ -72,9 +72,9 @@ export function buildPane(v: SheetView): void {
         const key = keyAt(r, c);
         if (key) v.run("cell.set", { cell: key, input: v.wb.enteredInput(key, t.trim()) });
       });
-    });
+    }
     ui.datagrid_set_col_width(v.pane, 0, 34);
-  });
+  }
 }
 
 // View > Gridlines: each cell's right and bottom edge in Excel's light grey,
@@ -107,7 +107,7 @@ export function sheetGrid(v: SheetView): void {
     ui.datagrid_refresh(v.grid);
   };
 
-  v.grid = ui.datagrid(ROWS, COLS + 1, SHOWN_ROWS, SHOWN_COLS, 1, () => {
+  v.grid = ui.datagrid(ROWS, COLS + 1, SHOWN_ROWS, SHOWN_COLS, 1) {
     column_width(COLUMN_WIDTH);
     cells((r: number, c: number) => {
       const key = keyAt(r, c);
@@ -193,7 +193,7 @@ export function sheetGrid(v: SheetView): void {
       // Kept in the model, so it is saved and undone with the rest.
       if (v.wb.colWidths().find(([col]) => col === m - 1)?.[1] !== w) v.run("columns.width", { range: `${colName(m - 1)}1`, width: String(w) });
     });
-  });
+  }
   ui.datagrid_set_col_width(v.grid, 0, 34);     // the row numbers
   ui.datagrid_on_edit_change(v.grid, (text: string, caret: number) => {
     pointing = pointable(text, caret);

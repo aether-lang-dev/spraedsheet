@@ -11,12 +11,12 @@ import type { SheetView } from "./view.ts";
 
 export function draw(s: Shape): void {
   switch (s.kind) {
-    case "rect": vg.rect(s.x, s.y, s.w, s.h, () => vg.fill(s.fill)); return;
-    case "line": vg.line(s.x1, s.y1, s.x2, s.y2, () => vg.stroke(s.stroke, s.width)); return;
-    case "polyline": vg.polyline([...s.points], () => { vg.fill("none"); vg.stroke(s.stroke, s.width); vg.linejoin("round"); }); return;
-    case "circle": vg.circle(s.cx, s.cy, s.r, () => vg.fill(s.fill)); return;
-    case "path": vg.path(s.d, () => { vg.fill(s.fill); vg.stroke(s.stroke, 1); }); return;
-    case "text": vg.text_anchored(s.x, s.y, s.size, s.anchor, s.text, () => vg.fill(s.fill)); return;
+    case "rect": vg.rect(s.x, s.y, s.w, s.h) { vg.fill(s.fill) }; return;
+    case "line": vg.line(s.x1, s.y1, s.x2, s.y2) { vg.stroke(s.stroke, s.width) }; return;
+    case "polyline": vg.polyline([...s.points]) { vg.fill("none"); vg.stroke(s.stroke, s.width); vg.linejoin("round"); }; return;
+    case "circle": vg.circle(s.cx, s.cy, s.r) { vg.fill(s.fill) }; return;
+    case "path": vg.path(s.d) { vg.fill(s.fill); vg.stroke(s.stroke, 1); }; return;
+    case "text": vg.text_anchored(s.x, s.y, s.size, s.anchor, s.text) { vg.fill(s.fill) }; return;
   }
 }
 
@@ -37,22 +37,22 @@ export function syncFloats(v: SheetView): void {
   v.charts.value.forEach((c) => {
     const sig = `${z}|${c.title}|${JSON.stringify(c.shapes)}`;
     want.push({ key: `chart ${c.n}`, sig, row: c.at.row, col: c.at.col + 1, w: px(CHART_W), h: px(CHART_H), paint: () => {
-      vg.scene(`0 0 ${CHART_W} ${CHART_H}`, px(CHART_W), px(CHART_H), () => {
-        vg.rect(0, 0, CHART_W, CHART_H, () => vg.fill("#ffffff"));
+      vg.scene(`0 0 ${CHART_W} ${CHART_H}`, px(CHART_W), px(CHART_H)) {
+        vg.rect(0, 0, CHART_W, CHART_H) { vg.fill("#ffffff") }
         c.shapes.forEach(draw);
-      });
+      }
     } });
   });
   for (const d of v.drawings.value) {
     const sig = `${z}|${d.kind}|${d.shape ?? ""}|${d.w}x${d.h}|${d.fill ?? ""}|${d.line ?? ""}|${d.text ?? ""}|${d.picture?.length ?? 0}|${d.shapes.length}`;
     want.push({ key: `drawing ${d.name}`, sig, row: d.at.row, col: d.at.col + 1, w: px(d.w), h: px(d.h), paint: () => {
-      vg.scene(`0 0 ${d.w} ${d.h}`, px(d.w), px(d.h), () => {
+      vg.scene(`0 0 ${d.w} ${d.h}`, px(d.w), px(d.h)) {
         if (d.kind === "picture" && d.picture) {
-          vg.image(fromBase64(d.picture), () => { vg.box(0, 0, d.w, d.h); vg.fit("contain"); });
+          vg.image(fromBase64(d.picture)) { vg.box(0, 0, d.w, d.h); vg.fit("contain"); }
           return;
         }
         d.shapes.forEach(draw);
-      });
+      }
     } });
   }
   const have = live.get(v.grid) ?? [];

@@ -7,11 +7,11 @@ import { t } from "../locale.ts";
 import type { SheetView } from "./view.ts";
 
 export function panelTabs(v: SheetView): void {
-  ui.hstack(() => {
-    bind(ui.text(""), computed(() => t(v.locale.value, "Panels:"), v.locale));
+  ui.hstack {
+    bind(ui.text(""), computed(v.locale, () => t(v.locale.value, "Panels:")));
     for (const p of PANELS) {
       const tab = ui.tooltip(ui.btn(p.label, () => v.run("view.panel", { name: v.wb.panel === p.name ? "none" : p.name })), `The ${p.label} panel: open, or closed when open`);
-      bind(tab, computed(() => t(v.locale.value, p.label), v.locale));
+      bind(tab, computed(v.locale, () => t(v.locale.value, p.label)));
     }
-  });
+  }
 }

@@ -17,8 +17,8 @@ export function validationBar(v: SheetView): void {
   let warn = false;
   const rule = (kind: string, extra: Record<string, string>) =>
     v.run("validation.set", { range: v.range(), kind, mode: warn ? "warn" : "stop", ...(prompt.value.trim() ? { prompt: prompt.value } : {}), ...extra });
-  ui.wrap(() => {
-    bind(ui.textfield("allowed", () => {}), allowed);
+  ui.wrap {
+    bind(ui.textfield("allowed"), allowed);
     v.btn("Allow list", () => rule("list", { values: allowed.value }));
     v.btn("Allow whole numbers", () => rule("whole", limitsOf(allowed.value)));
     v.btn("Allow decimals", () => rule("decimal", limitsOf(allowed.value)));
@@ -28,8 +28,8 @@ export function validationBar(v: SheetView): void {
     v.btn("Allow custom", () => rule("custom", { formula: allowed.value }));
     v.btn("Allow pattern", () => rule("pattern", { pattern: allowed.value }));
     ui.toggle("Warn only", (on: boolean) => { warn = !!on; });
-    bind(ui.textfield("input prompt", () => {}), prompt);
+    bind(ui.textfield("input prompt"), prompt);
     v.btn("Clear rule", () => v.run("validation.clear", { range: v.range() }));
     v.btn("Circle invalid", () => v.run("validation.circle"));
-  });
+  }
 }

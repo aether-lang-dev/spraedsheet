@@ -20,7 +20,7 @@ export function editBar(v: SheetView): void {
     }
     v.run(id, { range: v.range(), by: colName(addrOf(v.here())!.col) });
   };
-  ui.wrap(() => {
+  ui.wrap {
     v.btn("Undo", () => v.run("edit.undo"));
     v.btn("Redo", () => v.run("edit.redo"));
     bind(ui.text(""), v.history);
@@ -30,9 +30,9 @@ export function editBar(v: SheetView): void {
     v.btn("Delete row", () => v.run("rows.delete", span("row")));
     v.btn("Insert column", () => v.run("columns.insert", span("col")));
     v.btn("Delete column", () => v.run("columns.delete", span("col")));
-  });
+  }
   const at = () => v.range().split(":")[0];
-  ui.wrap(() => {
+  ui.wrap {
     v.btn("Fill series", () => v.run("edit.fillSeries", { range: v.range() }));
     v.btn("AutoSum", () => v.run("formulas.autoSum", { cell: v.here() }));
     v.btn("Paste values", () => v.run("edit.pasteSpecial", { at: at(), what: "values" }));
@@ -45,7 +45,7 @@ export function editBar(v: SheetView): void {
     v.btn("Clear formats", () => v.run("range.clearFormats", { range: v.range() }));
     v.btn("Clear comments", () => v.run("range.clearComments", { range: v.range() }));
     v.btn("Clear cells", () => v.run("range.clearAll", { range: v.range() }));
-  });
+  }
 }
 
 // Review's protection: the selection locked or unlocked, the sheet
@@ -56,7 +56,7 @@ export function protectBar(v: SheetView): void {
   const password = state(""), said = state("");
   const told = async () => { const o = await v.run("protect.state"); said.set(o.message); };
   const pw = () => (password.value ? { password: password.value } : {});
-  ui.wrap(() => {
+  ui.wrap {
     bind(ui.securefield("protection password", () => {}), password);
     v.btn("Lock cells", async () => { await v.run("protect.lock", { range: v.range() }); await told(); });
     v.btn("Unlock cells", async () => { await v.run("protect.lock", { range: v.range(), locked: "0" }); await told(); });
@@ -65,6 +65,6 @@ export function protectBar(v: SheetView): void {
     v.btn("Protect workbook", async () => { await v.run("protect.workbook", pw()); await told(); });
     v.btn("Unprotect workbook", async () => { await v.run("protect.workbook", { off: "1", ...pw() }); await told(); });
     v.btn("Allow edit range", async () => { await v.run("protect.allowRange", { title: `Range${v.wb.page(v.wb.active)!.editRanges.length + 1}`, range: v.range(), ...pw() }); await told(); });
-  });
+  }
   bind(ui.text(""), said);
 }

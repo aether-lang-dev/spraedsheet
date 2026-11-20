@@ -16,8 +16,8 @@ export function rulesBar(v: SheetView): void {
     listed.set((await v.cmds.execute("format.rules")).message);
   };
   const highlight = (op: string) => () => added(v.run("format.highlight", { range: v.range(), op, value: value.value }));
-  ui.wrap(() => {
-    bind(ui.textfield("rule value", () => {}), value);
+  ui.wrap {
+    bind(ui.textfield("rule value"), value);
     v.btn("Greater than", highlight("greater"));
     v.btn("Less than", highlight("less"));
     v.btn("Equal to", highlight("equal"));
@@ -29,8 +29,8 @@ export function rulesBar(v: SheetView): void {
     v.btn("Icon set", () => added(v.run("format.iconSet", { range: v.range() })));
     v.btn("Data bars", () => added(v.run("format.dataBar", { range: v.range() })));
     v.btn("Clear rules", () => added(v.run("format.clearRules", { range: v.range() })));
-  });
-  ui.wrap(() => {
+  }
+  ui.wrap {
     v.btn("Begins with", highlight("beginsWith"));
     v.btn("Ends with", highlight("endsWith"));
     v.btn("Formula rule", () => added(v.run("format.formulaRule", { range: v.range(), formula: value.value })));
@@ -41,6 +41,6 @@ export function rulesBar(v: SheetView): void {
     v.btn("Stop if true", () => added(v.run("format.stopIfTrue", { index: value.value })));
     v.btn("Solid bars only", () => added(v.run("format.dataBar", { range: v.range(), fill: "solid", showValue: "0" })));
     v.btn("Icons reversed", () => added(v.run("format.iconSet", { range: v.range(), reverse: "1" })));
-  });
+  }
   bind(ui.text_wrapped("", 720), listed);
 }

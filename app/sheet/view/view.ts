@@ -273,14 +273,14 @@ export class SheetView {
     if (this.zoomLabel) ui.set_text(this.zoomLabel, `${this.wb.zoom}%`);
     if (this.#extras) ui.set_visible(this.#extras, this.wb.extraControls);
     if (this.extraToggle && (ui.get_toggle(this.extraToggle) ? true : false) !== this.wb.extraControls) ui.set_toggle(this.extraToggle, this.wb.extraControls ? 1 : 0);
-    batch(() => {
+    batch {
       this.figures.set(bar.filter((x) => x).join("  ·  "));
       this.input.set(this.wb.shownInput(key));
       this.status.set(this.wb.describe(key));
       this.comment.set(note.comment ?? "");
       this.format.set(note.format ?? "");
       this.editor.set(note.editor ?? null);
-    });
+    }
   }
 
   // A command run, its outcome printed, the workbook shown again.
@@ -354,7 +354,7 @@ export class SheetView {
       ui.datagrid_edit_cancel(this.grid);
       this.wb.typing(null);
     }
-    batch(() => {
+    batch {
       this.problems.set(this.wb.sheet.problems());
       this.sheets.set(this.wb.sheetNames());
       this.tabs.set(this.wb.pages().filter((p) => !p.hiddenSheet).map((p) => ({ name: p.name, color: p.tabColor })));
@@ -373,7 +373,7 @@ export class SheetView {
       // Edit mode (B.7): off, the grids open no editor and draw no cursor.
       for (const g of [this.grid, this.pane]) if (g && ui.datagrid_view_only(g) === this.wb.editMode) ui.datagrid_set_view_only(g, !this.wb.editMode);
       this.follow();
-    });
+    }
     if (this.wb.panel !== this.#shownPanel || this.wb.split !== this.#shownSplit || (this.wb.zoom !== 100) !== this.#zoomedHeight) {
       this.#zoomedHeight = this.wb.zoom !== 100;
       for (const [n, h] of this.#panels) ui.set_visible(h, n === this.wb.panel);

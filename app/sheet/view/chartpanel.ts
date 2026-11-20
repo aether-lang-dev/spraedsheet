@@ -8,7 +8,7 @@ import type { SheetView } from "./view.ts";
 
 export function chartPanel(v: SheetView): void {
   const insert = (kind: string) => () => v.run("chart.insert", { kind, range: v.range() });
-  ui.hstack(() => {
+  ui.hstack {
     v.btn("Bar chart", insert("bar"));
     v.btn("Line chart", insert("line"));
     v.btn("Pie chart", insert("pie"));
@@ -36,9 +36,9 @@ export function chartPanel(v: SheetView): void {
     v.btn("Sparkline", spark("line"));
     v.btn("Win/loss sparkline", spark("winloss", "axis"));
     v.btn("Sparkline with high and low", spark("line", "high;low"));
-  });
+  }
   each(v.charts, (c: ChartView & { n: number }) => `${c.n}`, (c: ChartView & { n: number }) => {
-    ui.hstack(() => {
+    ui.hstack {
       ui.text(`${c.title}: ${c.kind} chart of ${c.range}`);
       ui.btn(`Move chart ${c.n} here`, () => v.run("chart.move", { index: String(c.n), at: v.here() }));
       ui.btn(`Delete chart ${c.n}`, () => v.run("chart.delete", { index: String(c.n) }));
@@ -50,6 +50,6 @@ export function chartPanel(v: SheetView): void {
       ui.btn(`Switch row/column ${c.n}`, () => v.run("chart.option", { index: String(c.n), byRows: o.byRows ? "0" : "1" }));
       ui.btn(`Use selection ${c.n}`, () => v.run("chart.data", { index: String(c.n), range: v.range() }));
       ui.btn(`Linear trendline ${c.n}`, () => v.run("chart.trendline", { index: String(c.n), series: "1", type: o.trendlines?.length ? "none" : "linear", equation: "1", r2: "1" }));
-    });
+    }
   });
 }

@@ -8,8 +8,8 @@ import type { SheetView } from "./view.ts";
 
 export function commandBar(v: SheetView): void {
   const line = state(""), script = state(""), said = state("");
-  ui.wrap(() => {
-    ui.on_submit(bind(ui.textfield("command", () => {}), line), async () => {
+  ui.wrap {
+    ui.on_submit(bind(ui.textfield("command"), line), async () => {
       const o = await v.runLine(line.value);
       said.set(o.output === undefined ? o.message : `${o.message} → ${JSON.stringify(o.output)}`);
     });
@@ -25,7 +25,7 @@ export function commandBar(v: SheetView): void {
       said.set([...lines, o.ok ? "" : `script failed: ${o.message}`].filter((l) => l).join(" | "));
     });
     v.btn("Commands", () => said.set(v.cmds.catalogue().map((c) => c.id).join(", ")));
-  });
+  }
   bind(ui.text_wrapped("", 720), said);
 }
 
@@ -35,8 +35,8 @@ export function commandBar(v: SheetView): void {
 export function macroBar(v: SheetView): void {
   const name = state("Macro1"), text = state(""), listed = state("");
   const list = async () => { const o = await v.run("macro.list"); listed.set(`Macros: ${o.message}`); };
-  ui.wrap(() => {
-    bind(ui.textfield("macro name", () => {}), name);
+  ui.wrap {
+    bind(ui.textfield("macro name"), name);
     v.btn("Record macro", () => v.run("macro.record", { name: name.value }));
     v.btn("Stop recording", async () => {
       const o = await v.run("macro.stop");
@@ -55,6 +55,6 @@ export function macroBar(v: SheetView): void {
     v.btn("Run macro on open", () => v.run("macro.trigger", { name: name.value, on: "open" }));
     v.btn("Run macro on a change here", () => v.run("macro.trigger", { name: name.value, on: "change", range: v.range() }));
     bind(ui.text(""), listed);
-  });
+  }
   bind(ui.textarea("macro REXX"), text);
 }

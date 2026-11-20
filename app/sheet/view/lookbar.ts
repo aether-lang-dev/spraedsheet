@@ -28,7 +28,7 @@ export function lookBar(v: SheetView): void {
   // Format Painter: the first click takes the selection's format, the
   // second paints it over the selection then.
   let painting: string | null = null;
-  ui.wrap(() => {
+  ui.wrap {
     v.btn("Format painter", async () => {
       if (painting === null) {
         painting = v.range();
@@ -54,13 +54,13 @@ export function lookBar(v: SheetView): void {
     v.btn("Merge & center", () => v.run("cells.merge", { range: v.range(), center: "1" }));
     v.btn("Merge", () => v.run("cells.merge", { range: v.range() }));
     v.btn("Unmerge", () => v.run("cells.unmerge", { range: v.range() }));
-  });
+  };
   // Fonts and alignment beyond the toolbar's (4.2).
-  ui.wrap(() => {
+  ui.wrap {
     v.btn("Double underline", () => fontPart(v, "underline", "double"));
     v.btn("Superscript", () => fontPart(v, "script", "super"));
     v.btn("Subscript", () => fontPart(v, "script", "sub"));
-    bind(ui.textfield("font family", () => {}), family);
+    bind(ui.textfield("font family"), family);
     v.btn("Font family", () => v.run("format.font", { range: v.range(), family: family.value.trim() }));
     v.btn("Align top", () => v.run("format.align", { range: v.range(), vertical: "top" }));
     v.btn("Align middle", () => v.run("format.align", { range: v.range(), vertical: "middle" }));
@@ -74,11 +74,11 @@ export function lookBar(v: SheetView): void {
     v.btn("Rotate text up", turn(90));
     v.btn("Rotate text down", turn(-90));
     v.btn("Horizontal text", turn(0));
-  });
+  };
   // Cell Styles: the gallery's commonest, on the selection.
-  ui.wrap(() => {
+  ui.wrap {
     for (const name of ["Normal", "Good", "Bad", "Neutral", "Title", "Heading 1", "Total", "Input", "Note"]) v.btn(`Style ${name}`, () => v.run("style.apply", { range: v.range(), name }));
     // Themes: what names a theme's colours re-coloured.
     for (const name of ["Office", "Greyscale", "Harbour", "Ember"]) v.btn(`Theme ${name}`, () => v.run("theme.set", { name }));
-  });
+  }
 }

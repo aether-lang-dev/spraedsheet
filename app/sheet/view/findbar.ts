@@ -14,11 +14,11 @@ export function findBar(v: SheetView): void {
     if (next) v.address.set(next);
     v.status.set(keys.length ? `${keys.length} found: ${keys.join(", ")}` : `"${text.value}" not found`);
   };
-  ui.wrap(() => {
-    const field = bind(ui.textfield("find", () => {}), text);
+  ui.wrap {
+    const field = bind(ui.textfield("find"), text);
     // Ctrl+F and Ctrl+H: the panel opened, the field focused.
     v.action("Find field", () => ui.focus(field));
-    bind(ui.textfield("replace with", () => {}), by);
+    bind(ui.textfield("replace with"), by);
     v.btn("Find", find);
     // Go To Special: the kind typed in the find field (blanks, formulas,
     // constants, errors, comments, validation, conditional), its cells
@@ -33,5 +33,5 @@ export function findBar(v: SheetView): void {
     ui.toggle("Match case", (on: boolean) => { options.matchCase = !!on; });
     ui.toggle("Whole cell", (on: boolean) => { options.wholeCell = !!on; });
     ui.toggle("In formulas", (on: boolean) => { options.inFormulas = !!on; });
-  });
+  }
 }

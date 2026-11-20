@@ -14,8 +14,8 @@ export function editorBar(v: SheetView): void {
     if (kind === "checkbox") return v.run("cell.toggle", { cell });
     return v.run("cell.set", { cell, input: kind === "date" ? new Date().toISOString().slice(0, 10) : choice });
   };
-  ui.hstack(() => {
-    bind(ui.text(""), computed(() => (v.editor.value ? `${v.here()} is a ${v.editor.value.kind}:` : ""), v.editor, v.address));
-    each(computed(() => choicesOf(v.editor.value), v.editor), (c: string) => c, (c: string) => ui.btn(c, () => choose(c)));
-  });
+  ui.hstack {
+    bind(ui.text(""), computed(v.editor, v.address, () => (v.editor.value ? `${v.here()} is a ${v.editor.value.kind}:` : "")));
+    each(computed(v.editor, () => choicesOf(v.editor.value)), (c: string) => c, (c: string) => ui.btn(c, () => choose(c)));
+  }
 }

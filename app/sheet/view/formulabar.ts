@@ -12,10 +12,10 @@ import { complete, completed, cycleRef } from "../complete.ts";
 import type { SheetView } from "./view.ts";
 
 export function formulaBar(v: SheetView): void {
-  v.formulaRow = ui.hstack(() => {
-    const cell = ui.tooltip(bind(ui.textfield("cell", () => {}), v.address), "Name Box: a cell, or a name, to go to");
+  v.formulaRow = ui.hstack {
+    const cell = ui.tooltip(bind(ui.textfield("cell"), v.address), "Name Box: a cell, or a name, to go to");
     ui.text("fx");
-    const formula = ui.tooltip(bind(ui.textfield("formula", () => {}), v.input), "Formula bar: Return sets the cell");
+    const formula = ui.tooltip(bind(ui.textfield("formula"), v.input), "Formula bar: Return sets the cell");
     // The Name Box as wide as an address or a name, the formula taking the
     // rest of the row and growing with the window (sae's set_width and
     // fill_width): left to the stack, the two shared it and the formula
@@ -38,16 +38,16 @@ export function formulaBar(v: SheetView): void {
       await v.run("formulas.style", { style: v.wb.referenceStyle === "A1" ? "R1C1" : "A1" });
       v.follow();
     });
-  });
+  };
   // As a formula is typed: the names that complete it, each a button that
   // takes it, and the call its end is in; F4 (the grid not focused) cycles
   // the reference at its end.
-  const hints = computed(() => complete(v.input.value, v.wb.sheet.language.functions()), v.input);
-  ui.hstack(() => {
-    bind(ui.text(""), computed(() => (hints.value.call ? `${hints.value.call}( argument ${hints.value.arg}` : ""), hints));
-    each(computed(() => hints.value.names.map((n) => ({ n, prefix: hints.value.prefix })), hints), (h: { n: string }) => h.n,
+  const hints = computed(v.input, () => complete(v.input.value, v.wb.sheet.language.functions()));
+  ui.hstack {
+    bind(ui.text(""), computed(hints, () => (hints.value.call ? `${hints.value.call}( argument ${hints.value.arg}` : "")));
+    each(computed(hints, () => hints.value.names.map((n) => ({ n, prefix: hints.value.prefix }))), (h: { n: string }) => h.n,
       (h: { n: string; prefix: string }) => ui.btn(`${h.n}(`, () => v.input.set(completed(v.input.value, h.prefix, h.n))));
-  });
+  };
   // F4: the grid's on_key runs it (a page has one key handler).
   v.action("Cycle reference", () => {
     if (v.input.value.startsWith("=")) v.input.set(cycleRef(v.input.value).text);

@@ -14,12 +14,12 @@ export function namesBar(v: SheetView): void {
     await o;
     list.set([...v.wb.names(), ...v.wb.sheet.names().map(([n, r]) => [`${v.wb.active}!${n}`, r])].map(([n, r]) => `${n} = ${r}`).join(", ") || "No names");
   };
-  ui.wrap(() => {
-    bind(ui.textfield("name", () => {}), name);
+  ui.wrap {
+    bind(ui.textfield("name"), name);
     v.btn("Name the selection", () => listed(v.run("names.define", { name: name.value, range: v.range() })));
-    bind(ui.textfield("refers to =LAMBDA(...)", () => {}), refers);
+    bind(ui.textfield("refers to =LAMBDA(...)"), refers);
     v.btn("Name the formula", () => listed(v.run("names.define", { name: name.value, formula: refers.value })));
     v.btn("Delete name", () => listed(v.run("names.delete", { name: name.value })));
     bind(ui.text(""), list);
-  });
+  }
 }

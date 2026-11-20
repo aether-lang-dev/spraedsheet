@@ -20,15 +20,15 @@ export function fileBar(v: SheetView): void {
     const o = await v.cmds.execute("file.list");
     saved.set(o.message);
   };
-  ui.wrap(() => {
-    bind(ui.textfield("file name", () => {}), name);
+  ui.wrap {
+    bind(ui.textfield("file name"), name);
     v.btn("Save", async () => { await v.run("file.save", name.value.trim() ? { name: name.value } : {}); await listed(); });
     v.btn("Open", () => v.run("file.open", { name: name.value }));
     v.btn("Delete file", async () => { await v.run("file.delete", { name: name.value }); await listed(); });
     v.btn("New", () => v.run("file.new"));
     bind(ui.text(""), saved);
-  });
-  ui.wrap(() => {
+  }
+  ui.wrap {
     v.btn("Export CSV", async () => {
       const s = v.selection(), many = s && (s[0].col !== s[1].col || s[0].row !== s[1].row);
       const o = await v.run("file.exportCsv", many ? { range: v.range() } : {});
@@ -51,18 +51,18 @@ export function fileBar(v: SheetView): void {
       const o = await v.run("file.exportHtml", { ...(many ? { range: v.range() } : {}), header: "1" });
       shown.set(String(o.output ?? ""));
     });
-  });
+  }
   bind(ui.text_wrapped("", 720), shown);
   pageSetupRow(v);
   if (typeof documents !== "undefined") documentsRow(v);
-  ui.wrap(() => {
+  ui.wrap {
     v.btn("Paste example", () => v.run("example.paste"));
     v.btn("Budget (RexxJS)", () => v.run("file.open", { sample: "budget" }));
     v.btn("Test sheet (RexxJS)", () => v.run("file.open", { sample: "test" }));
     v.btn("Formatted (RexxJS)", () => v.run("file.open", { sample: "formatted" }));
     v.btn("Clear all", () => v.run("sheet.clear"));
     v.btn("Home", () => browserContext.changePage("/"));
-  });
+  }
   listed();
 }
 
@@ -74,27 +74,27 @@ function pageSetupRow(v: SheetView): void {
   const said = state(""), margin = state(""), scale = state(""), fitWide = state(""), fitTall = state(""), area = state(""), titles = state(""), titleCols = state(""), header = state(""), footer = state("");
   const refresh = async () => { said.set((await v.cmds.execute("page.layout")).message); };
   const set = async (p: Record<string, string>) => { await v.run("page.setup", p); await refresh(); };
-  ui.wrap(() => {
+  ui.wrap {
     v.btn("Paper A4", () => set({ paper: "a4" }));
     v.btn("Paper Letter", () => set({ paper: "letter" }));
     v.btn("Portrait", () => set({ landscape: "0" }));
     v.btn("Landscape", () => set({ landscape: "1" }));
-    bind(ui.textfield("margin points", () => {}), margin);
-    bind(ui.textfield("scale percent", () => {}), scale);
-    bind(ui.textfield("print area", () => {}), area);
-    bind(ui.textfield("fit pages wide", () => {}), fitWide);
-    bind(ui.textfield("fit pages tall", () => {}), fitTall);
-    bind(ui.textfield("rows to repeat", () => {}), titles);
-    bind(ui.textfield("columns to repeat", () => {}), titleCols);
-    bind(ui.textfield("header", () => {}), header);
-    bind(ui.textfield("footer", () => {}), footer);
+    bind(ui.textfield("margin points"), margin);
+    bind(ui.textfield("scale percent"), scale);
+    bind(ui.textfield("print area"), area);
+    bind(ui.textfield("fit pages wide"), fitWide);
+    bind(ui.textfield("fit pages tall"), fitTall);
+    bind(ui.textfield("rows to repeat"), titles);
+    bind(ui.textfield("columns to repeat"), titleCols);
+    bind(ui.textfield("header"), header);
+    bind(ui.textfield("footer"), footer);
     v.btn("Apply page setup", () => {
       const p: Record<string, string> = {};
       for (const [k, f] of [["margin", margin], ["scale", scale], ["fitWide", fitWide], ["fitTall", fitTall], ["area", area], ["titles", titles], ["titleCols", titleCols], ["header", header], ["footer", footer]] as const) if (f.value.trim()) p[k] = f.value.trim();
       return set(p);
     });
     bind(ui.text(""), said);
-  });
+  }
   refresh();
 }
 
@@ -188,16 +188,16 @@ function documentsRow(v: SheetView): void {
 // sample: budget, test, formatted), the active one closed.
 export function booksBar(v: SheetView): void {
   const which = state("");
-  ui.hstack(() => {
+  ui.hstack {
     ui.text("Workbooks:");
-    each(v.bookNames, (n: string) => n, (n: string) => ui.button(n, () => {
+    each(v.bookNames, (n: string) => n, (n: string) => ui.button(n) {
       ui.onclick(() => v.run("book.activate", { name: n.replace(/ \(active\)$/, "") }));
-    }));
-    bind(ui.textfield("workbook to open", () => {}), which);
+    });
+    bind(ui.textfield("workbook to open"), which);
     v.btn("New workbook", () => v.run("book.new"));
     v.btn("Open workbook", () => v.run("book.open", /^(budget|test|formatted)$/i.test(which.value.trim()) ? { sample: which.value.trim() } : { name: which.value }));
     v.btn("Close workbook", () => v.run("book.close"));
-  });
+  }
 }
 
 // Versions kept in a git repository (gitstore.ts): a message, Save version
@@ -215,16 +215,16 @@ export function versionsBar(v: SheetView): void {
     const found = o.ok ? o.output as Change[] : [];
     changes.set(o.ok ? [found.length ? `${found.length} changed:` : "No changes", ...found.map(changeLine)] : []);
   };
-  ui.wrap(() => {
-    ui.on_submit(bind(ui.textfield("version message", () => {}), message), async () => { await v.run("version.save", { message: message.value }); message.set(""); await listed(); });
+  ui.wrap {
+    ui.on_submit(bind(ui.textfield("version message"), message), async () => { await v.run("version.save", { message: message.value }); message.set(""); await listed(); });
     v.btn("Save version", async () => { await v.run("version.save", { message: message.value }); message.set(""); await listed(); });
     v.btn("Show versions", listed);
     v.btn("Diff last", () => diff());
-  });
-  each(versions, (x: { id: string; message: string }) => x.id, (x: { id: string; message: string }) => ui.wrap(() => {
+  }
+  each(versions, (x: { id: string; message: string }) => x.id, (x: { id: string; message: string }) => ui.wrap {
     ui.text(`${x.id.slice(0, 7)} ${x.message.split("\n")[0]}`);
     ui.btn(`Diff ${x.id.slice(0, 7)}`, () => diff(x.id));
     ui.btn(`Restore ${x.id.slice(0, 7)}`, async () => { await v.run("version.restore", { id: x.id }); await listed(); });
-  }));
+  });
   each(changes, (l: string) => l, (l: string) => ui.text(l));
 }
