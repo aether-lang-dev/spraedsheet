@@ -28,6 +28,15 @@ struct Who {
     token: string
 }
 
+// Who won B2 when both changed it at once, and with what: the server keeps
+// whichever op reaches it first, which is not always the one sent first.
+struct Race {
+    winner: ptr
+    loser: ptr
+    wv: string
+    lv: string
+}
+
 as_(w: *Who) {
     _p = os.setenv("AETHER_UI_TEST_PORT", w.port)
     _l = os.setenv("SAE_TEST_LOG", w.log)
@@ -76,6 +85,11 @@ main() {
     bob.log = env_("SHEET_TEAM_BOB_LOG")
     bob.token = env_("SHEET_TEAM_BOB")
     token_field = "your team token (from whoever runs the server)"
+    race = heap.new(Race)
+    race.winner = ann as ptr
+    race.loser = bob as ptr
+    race.wv = "100"
+    race.lv = "200"
 
     spec.describe(fw, "a team workbook over HTTP: two people, two sae") {
         spec.it("each signs in once with their token; the page keeps it and opens the workbook") callback {
@@ -139,22 +153,46 @@ main() {
             uidriver.post_ok("/widget/${ann_field}/submit", "Ann presses Return")
             as_(bob)
             uidriver.post_ok("/widget/${bob_field}/submit", "Bob presses Return")
-            // Bob's came second: refused, in words, and his grid shows Ann's.
-            spec.assert_true(wait_part("Not kept: your B2 = 200. ann changed Sheet1!B2 (B2 = 100) at ", 15), "Bob is told plainly")
+            // The one whose op reached the server second is refused, in
+            // words, and shown the other's. Ann's is sent first, but each
+            // sae sends its op from a thread of its own, so on a slower host
+            // (FreeBSD's lab host, 2026-11-20) Bob's can arrive first: the
+            // spec holds whichever won to the same rules.
+            n = 0
+            while n < 300 {
+                as_(bob)
+                if string.contains(b.page_texts(), "Not kept") == 1 { break }
+                as_(ann)
+                if string.contains(b.page_texts(), "Not kept") == 1 {
+                    race.winner = bob as ptr
+                    race.loser = ann as ptr
+                    race.wv = "200"
+                    race.lv = "100"
+                    break
+                }
+                sleep(50)
+                n = n + 1
+            }
+            winner = race.winner as *Who
+            loser = race.loser as *Who
+            println("spec_team: B2 kept for ${winner.name} (${race.wv}), refused for ${loser.name} (${race.lv})")
+            as_(loser)
+            spec.assert_true(wait_part("Not kept: your B2 = ${race.lv}. ${winner.name} changed Sheet1!B2 (B2 = ${race.wv}) at ", 15), "the one refused is told plainly")
             spec.assert_true(wait_part("the sheet shows theirs now. Make your change again to replace it.", 5), "and what to do")
-            spec.assert_true(g.wait_cell("B", 2, "100"), "Bob's grid shows Ann's B2")
-            shot(bob, "3-conflict")
-            as_(ann)
-            spec.assert_true(g.wait_cell("B", 2, "100"), "Ann's too")
-            spec.assert_false(string.contains(b.page_texts(), "Not kept"), "Ann's was kept")
-            shot(ann, "3-conflict")
-            // Bob types his again: now it replaces Ann's, and his line clears.
-            as_(bob)
-            g.enter("B2", "200")
-            as_(ann)
-            spec.assert_true(g.wait_cell("B", 2, "200"), "Ann gets Bob's second try")
-            as_(bob)
-            spec.assert_true(wait_no_part("Not kept", 10), "Bob's notice gone after his next edit")
+            spec.assert_true(g.wait_cell("B", 2, race.wv), "the refused one's grid shows the kept B2")
+            shot(loser, "3-conflict")
+            as_(winner)
+            spec.assert_true(g.wait_cell("B", 2, race.wv), "the kept one's too")
+            spec.assert_false(string.contains(b.page_texts(), "Not kept"), "the kept one is told nothing")
+            shot(winner, "3-conflict")
+            // The refused one types theirs again: now it replaces the kept
+            // one, and their line clears.
+            as_(loser)
+            g.enter("B2", race.lv)
+            as_(winner)
+            spec.assert_true(g.wait_cell("B", 2, race.lv), "the other gets the second try")
+            as_(loser)
+            spec.assert_true(wait_no_part("Not kept", 10), "the notice gone after the next edit")
         }
         spec.it("Undo takes back Ann's own last edit, for everyone; Bob's later edit stays") callback {
             as_(ann)
@@ -188,8 +226,10 @@ main() {
             b.click("Who changed this cell")
             spec.assert_true(b.wait_for_console("sheet: history of B2: 3 changes"), "asked")
             spec.assert_true(wait_part("B2, oldest first:", 10), "listed")
-            spec.assert_true(wait_part(", ann, ", 5) == 1 && wait_part(": 100\n", 5) == 1, "Ann's 100 is there (B2 was empty before it)")
-            spec.assert_true(wait_part(", bob, ", 5) == 1 && wait_part(": 200 (was 100)", 5) == 1, "and Bob's 200 after it")
+            winner = race.winner as *Who
+            loser = race.loser as *Who
+            spec.assert_true(wait_part(", ${winner.name}, ", 5) == 1 && wait_part(": ${race.wv}\n", 5) == 1, "the kept ${race.wv} is there (B2 was empty before it)")
+            spec.assert_true(wait_part(", ${loser.name}, ", 5) == 1 && wait_part(": ${race.lv} (was ${race.wv})", 5) == 1, "and the second try's ${race.lv} after it")
             shot(ann, "5-history")
             b.set_field_by("revision", "4")
             b.click("Look at revision")
