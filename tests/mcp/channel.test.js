@@ -25,7 +25,12 @@ const args = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'args', n
 // An MCP client over the server's stdio: call(method, params) is a promise
 // for the reply to that request.
 function client(env) {
-  const server = spawn(process.execPath, [path.join(ROOT, 'mcp', 'spreadsheet-mcp.js'), '--headless'], { env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
+  // The app it starts is a release sae with no UI driver: AETHER_UI_TEST_PORT
+  // (set for the specs when run_tests.sh runs beside another checkout's, on
+  // other ports) is not passed on, or the app would look for a driver there.
+  const inherited = { ...process.env };
+  delete inherited.AETHER_UI_TEST_PORT;
+  const server = spawn(process.execPath, [path.join(ROOT, 'mcp', 'spreadsheet-mcp.js'), '--headless'], { env: { ...inherited, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
   let stderr = '';
   server.stderr.on('data', (d) => (stderr += d));
   const waiting = new Map();
